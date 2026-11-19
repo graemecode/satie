@@ -1,0 +1,130 @@
+import AppKit
+import Foundation
+import ServiceManagement
+
+public enum SensitivityMode: String, CaseIterable, Identifiable, Sendable {
+    case calm
+    case balanced
+    case vivid
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .calm: return "Calm"
+        case .balanced: return "Balanced"
+        case .vivid: return "Vivid"
+        }
+    }
+
+    /// Gain offset in dB applied to the perceptual FFT curve.
+    public var gainOffsetDB: Float {
+        switch self {
+        case .calm: return -5.0
+        case .balanced: return 0.0
+        case .vivid: return +6.5
+        }
+    }
+
+    /// Multiplier for beat & flux onset responsiveness.
+    public var transientScale: Float {
+        switch self {
+        case .calm: return 0.72
+        case .balanced: return 1.0
+        case .vivid: return 1.32
+        }
+    }
+}
+
+/// Persistent preferences backed by UserDefaults + native macOS Login Item (SMAppService).
+public final class SettingsStore: @unchecked Sendable {
+    private let defaults: UserDefaults
+
+    private enum Keys {
+        static let presetRaw = "ac.preset"
+        static let amberPhosphor = "ac.amberPhosphor"
+        static let showMenuBarKey = "ac.showMenuBarKey"
+        static let sensitivity = "ac.sensitivity"
+        static let miniHUDFrame = "ac.miniHUDFrame"
+        static let studioFrame = "ac.studioFrame"
+    }
+
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    public var presetRaw: Int {
+        get { defaults.object(forKey: Keys.presetRaw) as? Int ?? 0 }
+        set { defaults.set(newValue, forKey: Keys.presetRaw) }
+    }
+
+    public var amberPhosphor: Bool {
+        get { defaults.bool(forKey: Keys.amberPhosphor) }
+        set { defaults.set(newValue, forKey: Keys.amberPhosphor) }
+    }
+
+    public var showMenuBarKey: Bool {
+        get {
+            if defaults.object(forKey: Keys.showMenuBarKey) == nil { return true }
+            return defaults.bool(forKey: Keys.showMenuBarKey)
+        }
+        set { defaults.set(newValue, forKey: Keys.showMenuBarKey) }
+    }
+
+    public var sensitivity: SensitivityMode {
+        get {
+            guard let raw = defaults.string(forKey: Keys.sensitivity),
+                  let mode = SensitivityMode(rawValue: raw) else { return .balanced }
+            return mode
+        }
+        set { defaults.set(newValue.rawValue, forKey: Keys.sensitivity) }
+    }
+
+    public var miniHUDOrigin: NSPoint? {
+        get {
+            guard let str = defaults.string(forKey: Keys.miniHUDFrame) else { return nil }
+            let pt = NSPointFromString(str)
+            return (pt == .zero && str != "{0, 0}") ? nil : pt
+        }
+        set {
+            if let pt = newValue {
+                defaults.set(NSStringFromPoint(pt), forKey: Keys.miniHUDFrame)
+            }
+        }
+    }
+
+    public var studioFrame: NSRect? {
+        get {
+            guard let str = defaults.string(forKey: Keys.studioFrame) else { return nil }
+            let rect = NSRectFromString(str)
+            return (rect.width >= 600 && rect.height >= 400) ? rect : nil
+        }
+        set {
+            if let rect = newValue {
+                defaults.set(NSStringFromRect(rect), forKey: Keys.studioFrame)
+            }
+        }
+    }
+
+    // MARK: - Native macOS Login Item (SMAppService)
+
+    public var launchAtLogin: Bool {
+        SMAppService.mainApp.status == .enabled
+    }
+
+    @discardableResult
+    public func setLaunchAtLogin(_ enabled: Bool) -> Bool {
+        do {
+            if enabled {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+            Log.app.info("Launch at login set to \(enabled, privacy: .public) (status: \(String(describing: SMAppService.mainApp.status), privacy: .public))")
+            return true
+        } catch {
+            Log.app.error("Failed to update Launch at Login: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+}

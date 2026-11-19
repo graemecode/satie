@@ -1,0 +1,498 @@
+#include <metal_stdlib>
+using namespace metal;
+
+struct AcousticUniforms {
+    float2 resolution;
+    float2 coreCenter;     // Normalized [0..1] center for Circuit / Ecology focal region
+    float  coreScale;      // Scale multiplier for core radius
+    float  time;
+    float  dt;
+    float  bass;
+    float  mid;
+    float  treble;
+    float  energy;
+    float  flux;
+    float  beat;
+    float  stereoCorr;
+    float  centroid;
+    float  amberMode;      // 0 = P31 Emerald, 1 = P39 Amber (Phosphor Scope)
+    float  isCompact;      // 1 = Popover/MiniHUD, 0 = Studio/Fullscreen
+    float  _pad0;
+    float  _pad1;
+    float  _pad2;
+    float4 bands[6];       // 24 log-spaced perceptual bands packed into 6 float4s (offset 80)
+    float4 impulses[6];    // 24 per-band transient impulses
+};
+
+static inline float getBand(constant AcousticUniforms& u, int idx) {
+    int i = clamp(idx, 0, 23);
+    return u.bands[i / 4][i % 4];
+}
+
+struct FullscreenOut {
+    float4 position [[position]];
+    float2 uv;
+};
+
+vertex FullscreenOut fullscreenVertex(uint vid [[vertex_id]]) {
+    const float2 pos[3] = {
+        float2(-1.0, -1.0),
+        float2( 3.0, -1.0),
+        float2(-1.0,  3.0)
+    };
+    FullscreenOut out;
+    out.position = float4(pos[vid], 0.0, 1.0);
+    out.uv = pos[vid] * 0.5 + 0.5;
+    out.uv.y = 1.0 - out.uv.y; // Top-left origin matching AppKit / CoreGraphics
+    return out;
+}
+
+// ============================================================================
+// UTILITY: HASH, NOISE, SEGMENT DISTANCE, PALETTE
+// ============================================================================
+static inline float hash12(float2 p) {
+    float3 p3 = fract(float3(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
+
+static inline float2 hash22(float2 p) {
+    p = float2(dot(p, float2(127.1, 311.7)), dot(p, float2(269.5, 183.3)));
+    return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
+}
+
+static inline float gradNoise(float2 p) {
+    float2 i = floor(p);
+    float2 f = fract(p);
+    float2 u = f * f * (3.0 - 2.0 * f);
+    return mix(
+        mix(dot(hash22(i + float2(0.0, 0.0)), f - float2(0.0, 0.0)),
+            dot(hash22(i + float2(1.0, 0.0)), f - float2(1.0, 0.0)), u.x),
+        mix(dot(hash22(i + float2(0.0, 1.0)), f - float2(0.0, 1.0)),
+            dot(hash22(i + float2(1.0, 1.0)), f - float2(1.0, 1.0)), u.x),
+        u.y
+    );
+}
+
+static inline float sdSegment(float2 p, float2 a, float2 b) {
+    float2 pa = p - a, ba = b - a;
+    float h = clamp(dot(pa, ba) / max(1e-6, dot(ba, ba)), 0.0, 1.0);
+    return length(pa - ba * h);
+}
+
+static inline float3 cosinePalette(float t) {
+    float3 a = float3(0.55, 0.45, 0.66);
+    float3 b = float3(0.45, 0.42, 0.46);
+    float3 c = float3(1.00, 0.92, 0.84);
+    float3 d = float3(0.08, 0.34, 0.64);
+    return a + b * cos(6.2831853 * (c * t + d));
+}
+
+// ============================================================================
+// PRESET 01: THE CIRCUIT — BACKGROUND + 160-RIBBON 3D CONNECTOME CORE + SPIKES
+// ============================================================================
+fragment float4 circuitBackgroundFragment(FullscreenOut in [[stage_in]],
+                                          constant AcousticUniforms& u [[buffer(0)]]) {
+    float2 aspect = float2(u.resolution.x / max(1.0, u.resolution.y), 1.0);
+    float2 d = (in.uv - u.coreCenter) * aspect;
+    float dist = length(d);
+
+    // Midnight-slate Room C architectural gradient
+    float3 inner = float3(0.086, 0.133, 0.212);
+    float3 midC  = float3(0.043, 0.067, 0.110);
+    float3 outer = float3(0.024, 0.039, 0.067);
+
+    float3 col = mix(inner, midC, smoothstep(0.05, 0.48, dist));
+    col = mix(col, outer, smoothstep(0.42, 0.95, dist));
+
+    // Soft volumetric luminous halo breathing behind the 3D filament core
+    float haloR = max(0.12, u.coreScale * 0.56);
+    float halo = exp(-(dist * dist) / (haloR * haloR * (0.65 + u.beat * 0.22)));
+    col += float3(0.24, 0.34, 0.52) * halo * (0.28 + u.energy * 0.38);
+    col += float3(0.68, 0.78, 0.94) * exp(-(dist * dist) / (haloR * haloR * 0.18)) * (0.12 + u.beat * 0.18);
+
+    // Subtle film dither so 10-bit / OLED dark slate never bands
+    float grain = (hash12(in.position.xy + fract(u.time)) - 0.5) * 0.012;
+    return float4(max(col + grain, 0.0), 1.0);
+}
+
+struct RibbonVertOut {
+    float4 position [[position]];
+    float4 color;
+};
+
+// 160 strands x 96 segments (drawn as line-list: 2 vertices per segment)
+vertex RibbonVertOut circuitRibbonVertex(uint vid [[vertex_id]],
+                                         uint iid [[instance_id]],
+                                         constant AcousticUniforms& u [[buffer(0)]]) {
+    const uint segs = 96;
+    uint segIdx = vid / 2;
+    uint endBit = vid & 1;
+    float frac = float(segIdx + endBit) / float(segs);
+
+    float fi = float(iid);
+    const float totalStrands = 160.0;
+    float strandNorm = fi / totalStrands;
+
+    int band = int(iid % 24);
+    float bv = getBand(u, band);
+    float imp = u.impulses[band / 4][band % 4];
+
+    float t = u.time;
+    float phaseA = strandNorm * 6.2831853;
+    float phaseB = fract(fi * 0.6180339) * 6.2831853;
+    float freq1 = 1.0 + float(iid % 5) * 0.34;
+    float freq2 = 2.0 + float(iid % 7) * 0.26;
+    float tilt  = (float(iid % 9) - 4.0) * 0.22;
+
+    // Two intertwined neural lobes / toroidal shells for dense Room-C volume
+    float shell = (iid % 3 == 0) ? 0.54 : ((iid % 3 == 1) ? 0.78 : 0.98);
+    float baseR = shell * (0.84 + 0.24 * fract(fi * 0.381966));
+    float pulse = 1.0 + bv * 0.30 + u.beat * 0.09 + imp * 0.08;
+
+    float angle = frac * 6.2831853;
+    float wobble = 0.24 + 0.15 * sin(angle * freq2 + t * 0.72 + phaseB) + bv * 0.19;
+    float theta = angle + phaseA + t * (0.14 + 0.06 * sin(phaseB));
+    float phi = angle * freq1 + phaseB - t * 0.28;
+
+    float rTube = baseR * pulse;
+    float x = (rTube + wobble * cos(phi)) * cos(theta);
+    float y = (rTube + wobble * cos(phi)) * sin(theta) * 0.88 + sin(phi * 1.5) * 0.22;
+    float z = wobble * sin(phi) + cos(theta * 2.0 + tilt) * 0.36;
+
+    // Subtle harmonic curl fold modulated by stereo width & bass
+    float curl = (0.14 + u.mid * 0.22) * sin(y * 2.4 + t * 0.55 + phaseA);
+    x += curl * cos(phaseB);
+    z += curl * sin(phaseB);
+
+    // 3D rotation
+    float rotY = t * 0.22 + u.bass * 0.30;
+    float rotX = 0.38 + sin(t * 0.18) * 0.24;
+    float cY = cos(rotY), sY = sin(rotY);
+    float cX = cos(rotX), sX = sin(rotX);
+
+    float x1 = x * cY - z * sY;
+    float z1 = x * sY + z * cY;
+    float y2 = y * cX - z1 * sX;
+    float z2 = y * sX + z1 * cX;
+
+    float persp = 2.55 / (3.15 - z2 * 0.68);
+    float aspect = u.resolution.x / max(1.0, u.resolution.y);
+
+    // Convert center from top-left UV to Metal NDC
+    float2 centerNDC = float2(u.coreCenter.x * 2.0 - 1.0, 1.0 - u.coreCenter.y * 2.0);
+    float radiusNDC = u.coreScale * 0.54;
+    float2 pos = centerNDC + float2((x1 * persp * radiusNDC) / max(0.5, aspect), y2 * persp * radiusNDC);
+
+    // Depth-cued luminous gossamer white + faint sapphire accent on energetic peaks
+    float depthFade = clamp(0.45 + 0.55 * (z2 * 0.5 + 0.5), 0.18, 1.0);
+    float baseAlpha = (iid % 7 == 0) ? 0.36 : ((iid % 3 == 0) ? 0.18 : 0.085);
+    float alpha = clamp((baseAlpha + bv * 0.28 + imp * 0.24) * depthFade, 0.02, 0.78);
+
+    float blueGlint = smoothstep(0.60, 0.95, bv) * ((iid % 5 == 0) ? 1.0 : 0.25);
+    float3 col = mix(float3(0.92, 0.95, 1.00), float3(0.50, 0.74, 1.00), blueGlint);
+
+    RibbonVertOut out;
+    out.position = float4(pos, 0.0, 1.0);
+    out.color = float4(col * alpha, alpha);
+    return out;
+}
+
+fragment float4 circuitRibbonFragment(RibbonVertOut in [[stage_in]]) {
+    return in.color;
+}
+
+struct SpikeVertOut {
+    float4 position [[position]];
+    float  pointSize [[point_size]];
+    float4 color;
+};
+
+vertex SpikeVertOut circuitSpikeVertex(uint vid [[vertex_id]],
+                                       constant AcousticUniforms& u [[buffer(0)]]) {
+    float fi = float(vid);
+    int band = int(vid % 24);
+    float bv = getBand(u, band);
+    float imp = u.impulses[band / 4][band % 4];
+
+    // Golden-angle Fibonacci sphere distribution with radial breathing
+    float u1 = fract(fi * 0.6180339887);
+    float u2 = fract(fi * 0.3819660113);
+    float phi = acos(1.0 - 2.0 * u1);
+    float theta = u2 * 6.2831853 + u.time * (0.12 + 0.42 * fract(fi * 0.1731)) * (0.55 + bv);
+
+    float rad = (0.48 + 0.62 * fract(fi * 0.7548776)) * (0.86 + bv * 0.34 + u.beat * 0.12);
+    float x = rad * sin(phi) * cos(theta);
+    float y = rad * cos(phi) * 0.88;
+    float z = rad * sin(phi) * sin(theta);
+
+    float rotY = u.time * 0.22 + u.bass * 0.30;
+    float rotX = 0.38 + sin(u.time * 0.18) * 0.24;
+    float cY = cos(rotY), sY = sin(rotY);
+    float cX = cos(rotX), sX = sin(rotX);
+
+    float x1 = x * cY - z * sY;
+    float z1 = x * sY + z * cY;
+    float y2 = y * cX - z1 * sX;
+    float z2 = y * sX + z1 * cX;
+
+    float persp = 2.55 / (3.15 - z2 * 0.68);
+    float aspect = u.resolution.x / max(1.0, u.resolution.y);
+    float2 centerNDC = float2(u.coreCenter.x * 2.0 - 1.0, 1.0 - u.coreCenter.y * 2.0);
+    float radiusNDC = u.coreScale * 0.57;
+
+    float2 pos = centerNDC + float2((x1 * persp * radiusNDC) / max(0.5, aspect), y2 * persp * radiusNDC);
+    float alpha = clamp((0.16 + bv * 0.62 + imp * 0.40) * (0.45 + 0.55 * (z2 * 0.5 + 0.5)), 0.05, 0.95);
+
+    SpikeVertOut out;
+    out.position = float4(pos, 0.0, 1.0);
+    out.pointSize = (1.6 + bv * 3.4 + imp * 2.4) * persp * (u.isCompact > 0.5 ? 0.82 : 1.0);
+    out.color = float4(float3(0.94, 0.97, 1.0) * alpha, alpha);
+    return out;
+}
+
+fragment float4 softParticleFragment(SpikeVertOut in [[stage_in]],
+                                     float2 pc [[point_coord]]) {
+    float r = length(pc - 0.5) * 2.0;
+    float mask = smoothstep(1.0, 0.1, r);
+    return float4(in.color.rgb * mask, in.color.a * mask);
+}
+
+// ============================================================================
+// PRESET 02: ECOLOGY WALL — TERRITORY FIELD + 5,000 STIPPLED COLONY AGENTS
+// ============================================================================
+static inline float2 colonyAttractor(int idx, float t) {
+    if (idx == 0) return float2(0.28 + sin(t * 0.36) * 0.09, 0.48 + cos(t * 0.31) * 0.11);
+    if (idx == 1) return float2(0.54 + cos(t * 0.28) * 0.10, 0.35 + sin(t * 0.42) * 0.10);
+    if (idx == 2) return float2(0.73 + sin(t * 0.46) * 0.08, 0.58 + cos(t * 0.37) * 0.11);
+    if (idx == 3) return float2(0.43 + cos(t * 0.34) * 0.09, 0.69 + sin(t * 0.29) * 0.09);
+    return float2(0.65 + sin(t * 0.39) * 0.08, 0.28 + cos(t * 0.48) * 0.08);
+}
+
+static inline float3 colonyColor(int idx) {
+    if (idx == 0) return float3(0.91, 0.93, 0.96); // Chalk white
+    if (idx == 1) return float3(0.85, 0.55, 0.37); // Warm terracotta ochre
+    if (idx == 2) return float3(0.50, 0.72, 0.63); // Lichen sage
+    if (idx == 3) return float3(0.84, 0.71, 0.42); // Desert gold
+    return float3(0.54, 0.66, 0.84);               // Mineral slate blue
+}
+
+fragment float4 ecologyFieldFragment(FullscreenOut in [[stage_in]],
+                                     constant AcousticUniforms& u [[buffer(0)]]) {
+    // Deep charcoal gallery backdrop
+    float3 col = float3(0.055, 0.067, 0.086);
+
+    // Map active colony box (center panel in Studio mode, full frame in compact mode)
+    float2 minB = (u.isCompact > 0.5) ? float2(0.0, 0.0) : float2(0.265, 0.055);
+    float2 maxB = (u.isCompact > 0.5) ? float2(1.0, 1.0) : float2(0.745, 0.945);
+
+    if (in.uv.x >= minB.x && in.uv.x <= maxB.x && in.uv.y >= minB.y && in.uv.y <= maxB.y) {
+        float2 p = (in.uv - minB) / (maxB - minB);
+        col = float3(0.045, 0.056, 0.074);
+
+        // Subtle gold survey crosshair matching the ecology wall installation
+        float crossH = smoothstep(0.0022, 0.0, abs(p.y - 0.55));
+        float crossV = smoothstep(0.0018, 0.0, abs(p.x - 0.62));
+        col += float3(0.84, 0.71, 0.42) * max(crossH, crossV) * 0.22;
+
+        float energies[5] = { u.bass, u.mid, u.treble, u.energy, u.flux };
+        for (int i = 0; i < 5; i++) {
+            float2 c = colonyAttractor(i, u.time);
+            float2 d = p - c;
+            float ang = atan2(d.y, d.x);
+            float wobble = 1.0 + 0.16 * sin(ang * 3.0 + u.time + float(i)) + 0.10 * cos(ang * 5.0 - u.time * 1.3);
+            float rad = (0.10 + energies[i] * 0.15 + u.beat * 0.03) * wobble;
+            float dist = length(d);
+
+            float fill = smoothstep(rad, rad * 0.25, dist);
+            float rim  = exp(-abs(dist - rad) * 145.0);
+            float3 cc = colonyColor(i);
+            col += cc * fill * 0.11 + cc * rim * 0.55;
+        }
+    }
+
+    return float4(col, 1.0);
+}
+
+vertex SpikeVertOut ecologyAgentVertex(uint vid [[vertex_id]],
+                                       constant AcousticUniforms& u [[buffer(0)]]) {
+    int cluster = int(vid % 5);
+    int band = int(vid % 24);
+    float bv = getBand(u, band);
+    float fi = float(vid);
+
+    float2 att = colonyAttractor(cluster, u.time);
+    float baseAngle = fract(fi * 0.6180339) * 6.2831853;
+    float orbitSpeed = (0.22 + 0.65 * fract(fi * 0.381966)) * ((vid % 2 == 0) ? 1.0 : -1.0);
+    float ang = baseAngle + u.time * orbitSpeed * (0.4 + bv * 1.15);
+
+    float radialSeed = pow(fract(fi * 0.7548776), 0.62);
+    float wobble = 1.0 + 0.16 * sin(ang * 3.0 + u.time + float(cluster));
+    float rad = radialSeed * (0.10 + bv * 0.17 + u.beat * 0.035) * wobble;
+
+    float2 p = att + float2(cos(ang), sin(ang)) * rad;
+    // Slight curl drift
+    p += float2(gradNoise(p * 5.0 + u.time * 0.25), gradNoise(p * 5.0 - u.time * 0.22 + 4.1)) * 0.025;
+    p = clamp(p, 0.02, 0.98);
+
+    float2 minB = (u.isCompact > 0.5) ? float2(0.02, 0.02) : float2(0.27, 0.065);
+    float2 maxB = (u.isCompact > 0.5) ? float2(0.98, 0.98) : float2(0.74, 0.935);
+    float2 uv = mix(minB, maxB, p);
+    float2 ndc = float2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
+
+    float3 cc = colonyColor(cluster);
+    float alpha = clamp(0.45 + bv * 0.55, 0.35, 0.98);
+
+    SpikeVertOut out;
+    out.position = float4(ndc, 0.0, 1.0);
+    out.pointSize = (2.0 + bv * 2.8 + fract(fi * 0.13) * 1.4) * (u.isCompact > 0.5 ? 0.85 : 1.0);
+    out.color = float4(cc * alpha, alpha);
+    return out;
+}
+
+// ============================================================================
+// PRESET 03: PHOSPHOR SCOPE — TRUE GPU RGBA16F PING-PONG CRT LISSAJOUS
+// ============================================================================
+fragment float4 phosphorUpdateFragment(FullscreenOut in [[stage_in]],
+                                       texture2d<float> prevTex [[texture(0)]],
+                                       constant AcousticUniforms& u [[buffer(0)]],
+                                       constant float2* waveLR [[buffer(1)]]) {
+    constexpr sampler s(filter::linear, address::clamp_to_edge);
+    float3 prev = prevTex.sample(s, in.uv).rgb;
+
+    // Frame-rate independent exponential phosphor persistence decay
+    float decay = pow(0.00018, clamp(u.dt, 0.004, 0.05));
+    float3 col = prev * clamp(decay, 0.72, 0.91);
+
+    float aspect = u.resolution.x / max(1.0, u.resolution.y);
+    float2 p = (in.uv - 0.5) * float2(aspect, 1.0);
+
+    float3 beamCol = (u.amberMode > 0.5)
+        ? float3(1.00, 0.64, 0.18)   // P39 Warm Amber
+        : float3(0.24, 1.00, 0.56);  // P31 Emerald Phosphor
+
+    float scale = 0.42 * (1.0 + u.beat * 0.10);
+    float accum = 0.0;
+    float haloAccum = 0.0;
+
+    // Evaluate 128 stereo Lissajous beam segments with velocity-dependent intensity
+    float2 a = waveLR[0] * scale;
+    for (int i = 1; i < 128; i++) {
+        float2 b = waveLR[i * 2] * scale;
+        float d = sdSegment(p, a, b);
+        float vel = length(b - a);
+        // Real CRT physics: slower beam dwells longer -> hotter phosphor excitation
+        float dwell = clamp(0.022 / (vel + 0.012), 0.35, 2.2);
+        accum += exp(-d * 210.0) * dwell;
+        haloAccum += exp(-d * 42.0) * dwell * 0.14;
+        a = b;
+    }
+
+    // Subtle horizontal L-channel time-domain waveform behind the Lissajous knot
+    float wIdx = clamp(in.uv.x * 255.0, 0.0, 254.0);
+    int wi = int(wIdx);
+    float wy = mix(waveLR[wi].x, waveLR[wi + 1].x, fract(wIdx)) * 0.32;
+    float wDist = abs((in.uv.y - 0.5) - wy);
+    float trace = exp(-wDist * 140.0) * 0.32;
+
+    float3 coreHot = mix(beamCol, float3(0.95, 1.0, 0.96), 0.65);
+    col += coreHot * min(accum, 2.5) * 0.62 + beamCol * min(haloAccum, 1.8) * 0.35 + beamCol * trace;
+
+    return float4(min(col, 4.0), 1.0);
+}
+
+fragment float4 phosphorDisplayFragment(FullscreenOut in [[stage_in]],
+                                        texture2d<float> scopeTex [[texture(0)]],
+                                        constant AcousticUniforms& u [[buffer(0)]]) {
+    constexpr sampler s(filter::linear, address::clamp_to_edge);
+    float3 beam = scopeTex.sample(s, in.uv).rgb;
+
+    float3 bg = (u.amberMode > 0.5) ? float3(0.036, 0.026, 0.014) : float3(0.018, 0.036, 0.024);
+    float3 grCol = (u.amberMode > 0.5) ? float3(1.0, 0.72, 0.30) : float3(0.36, 1.0, 0.60);
+
+    // Crisp calibration CRT graticule
+    float2 gridUV = in.uv * float2(12.0, 8.0);
+    float2 gv = abs(fract(gridUV - 0.5) - 0.5) / max(float2(1e-4), fwidth(gridUV));
+    float gridLine = 1.0 - min(min(gv.x, gv.y), 1.0);
+
+    float2 axis = abs(in.uv - 0.5) * u.resolution;
+    float centerAxis = max(smoothstep(1.3, 0.0, axis.x), smoothstep(1.3, 0.0, axis.y));
+
+    float3 col = bg + grCol * (gridLine * 0.055 + centerAxis * 0.14) + beam;
+
+    // Gentle CRT glass vignette + filmic curve
+    float vig = smoothstep(1.3, 0.25, length((in.uv - 0.5) * 1.45));
+    col *= mix(0.75, 1.0, vig);
+    col = col / (1.0 + col * 0.35);
+    return float4(col, 1.0);
+}
+
+// ============================================================================
+// PRESET 04: LIQUID WARP — TRUE GPU RGBA16F HDR MILKDROP FEEDBACK SHADER
+// ============================================================================
+fragment float4 liquidUpdateFragment(FullscreenOut in [[stage_in]],
+                                     texture2d<float> prevTex [[texture(0)]],
+                                     constant AcousticUniforms& u [[buffer(0)]],
+                                     constant float2* waveLR [[buffer(1)]]) {
+    constexpr sampler s(filter::linear, address::clamp_to_edge);
+    float aspect = u.resolution.x / max(1.0, u.resolution.y);
+    float2 p = (in.uv - 0.5) * float2(aspect, 1.0);
+
+    float r = length(p);
+    float ang = atan2(p.y, p.x);
+
+    // Curl-noise domain warp + bass-driven radial zoom (MilkDrop feedback DNA)
+    float n1 = gradNoise(p * 2.4 + float2(u.time * 0.22, -u.time * 0.17));
+    float n2 = gradNoise(p * 2.4 + float2(-u.time * 0.19, u.time * 0.25) + 5.2);
+
+    float zoom = 0.985 - u.bass * 0.014 - u.beat * 0.015;
+    float rot = 0.007 * sin(u.time * 0.42) + 0.011 * u.mid * sin(r * 3.0);
+    float cR = cos(rot), sR = sin(rot);
+
+    float2 centered = (in.uv - 0.5) * zoom;
+    centered = float2(centered.x * cR - centered.y * sR, centered.x * sR + centered.y * cR);
+    float2 sampleUV = centered + 0.5 + float2(n1, n2) * (0.0045 + u.treble * 0.007);
+
+    // Radial chromatic dispersion
+    float2 disp = normalize(p + 1e-4) * (0.0022 + u.beat * 0.0048);
+    float3 prev;
+    prev.r = prevTex.sample(s, sampleUV + disp).r;
+    prev.g = prevTex.sample(s, sampleUV).g;
+    prev.b = prevTex.sample(s, sampleUV - disp).b;
+    prev *= (0.935 + u.bass * 0.02);
+
+    // Audio waveform ribbon
+    float wIdx = clamp(in.uv.x * 255.0, 0.0, 254.0);
+    int wi = int(wIdx);
+    float wave = mix(waveLR[wi].x, waveLR[wi + 1].x, fract(wIdx)) * (0.42 + u.bass * 0.35);
+    float ribbon = exp(-abs((in.uv.y - 0.5) - wave * 0.65) * (34.0 - u.beat * 10.0));
+
+    // Spectral harmonic ring
+    float normAng = fract(ang / 6.2831853 + 0.5 + u.time * 0.06);
+    int bIdx = int(normAng * 23.0);
+    float spec = getBand(u, bIdx);
+    float ringR = 0.22 + spec * 0.18 + u.bass * 0.08;
+    float ring = exp(-abs(r - ringR) * (28.0 - u.beat * 8.0));
+
+    float3 col1 = cosinePalette(u.time * 0.075 + in.uv.x * 0.65 + u.bass * 0.28);
+    float3 col2 = cosinePalette(u.time * 0.075 + 0.42 + spec * 0.48);
+
+    float3 inject = col1 * ribbon * (0.58 + u.mid * 0.72) + col2 * ring * (0.55 + u.beat * 0.85);
+    float3 outCol = prev + inject * 0.25;
+
+    float vig = smoothstep(1.28, 0.24, length((in.uv - 0.5) * 1.4));
+    outCol *= mix(0.86, 1.0, vig);
+
+    return float4(clamp(outCol, 0.0, 3.0), 1.0);
+}
+
+fragment float4 liquidDisplayFragment(FullscreenOut in [[stage_in]],
+                                      texture2d<float> tex [[texture(0)]]) {
+    constexpr sampler s(filter::linear, address::clamp_to_edge);
+    float3 c = tex.sample(s, in.uv).rgb;
+    // ACES filmic HDR tonemapping
+    c = (c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14);
+    c = pow(max(c, 0.0), float3(0.95));
+    c = mix(float3(0.026, 0.032, 0.052), c, smoothstep(0.0, 0.12, length(c)));
+    return float4(c, 1.0);
+}
