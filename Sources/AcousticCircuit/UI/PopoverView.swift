@@ -147,14 +147,10 @@ struct PopoverView: View {
                                 .lineLimit(1)
                                 .truncationMode(.tail)
 
-                            HStack(spacing: 5) {
-                                Text(heroSubtitle)
-                                Text("·")
-                                Text(state.effectiveKeyBadge)
-                            }
-                            .font(.system(size: 9.2, weight: .regular, design: .monospaced))
-                            .foregroundColor(inkSoft)
-                            .lineLimit(1)
+                            Text(heroSubtitle)
+                                .font(.system(size: 9.2, weight: .regular, design: .monospaced))
+                                .foregroundColor(inkSoft)
+                                .lineLimit(1)
                         }
 
                         Spacer(minLength: 4)
