@@ -212,7 +212,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onOpenMiniHUD: { [weak self] in self?.openMiniHUD() },
             onOpenStudio: { [weak self] in self?.openStudio(fullscreen: false) },
             onOpenFullscreen: { [weak self] in self?.openStudio(fullscreen: true) },
-            onQuit: { NSApp.terminate(nil) }
+            onQuit: { NSApp.terminate(nil) },
+            onRequestResize: { [weak self] in self?.repositionFloatingPanel() }
         )
 
         let hc = NSHostingController(rootView: rootView)

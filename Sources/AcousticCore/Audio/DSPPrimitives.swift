@@ -687,3 +687,50 @@ struct AudiophileMasterBus: Sendable {
         laIdx = 0; limGain = 1.0
     }
 }
+
+// MARK: - Velvet Brown-Pink Acoustic Speech-Masking Curtain (Endel Colored Noise / Cafe Cocoon)
+
+/// Stereo-decorrelated warm brown/pink noise sculpted specifically for zero-fatigue speech masking:
+/// - 90 Hz HPF removes muddy boom
+/// - Silky 1.35 kHz Cytomic lowpass + warm 280 Hz acoustic warmth removes all white-noise hiss
+/// - Gentle incommensurate atmospheric breathing so it feels like a warm wooden room or distant surf
+struct VelvetBrownNoise: Sendable {
+    private var rng = FastNoiseRNG(seed: 0xB804_704E_CAFE)
+    private var brL: Float = 0
+    private var brR: Float = 0
+    private var lpL = CytomicSVF(cutoffHz: 1250, q: 0.62)
+    private var lpR = CytomicSVF(cutoffHz: 1250, q: 0.62)
+    private var hpL = CytomicSVF(cutoffHz: 95, q: 0.707)
+    private var hpR = CytomicSVF(cutoffHz: 95, q: 0.707)
+    private var tick: Int = 0
+
+    mutating func reset() {
+        brL = 0; brR = 0
+        lpL.reset(); lpR.reset()
+        hpL.reset(); hpR.reset()
+    }
+
+    @inline(__always)
+    mutating func step(clockSec: Double, brightnessScale: Double = 1.0, sampleRate: Double = 48_000.0) -> (Float, Float) {
+        if (tick & 127) == 0 {
+            let breath = 0.5 + 0.5 * sin(clockSec * 0.09) * cos(clockSec * 0.041)
+            let cut = (780.0 + breath * 520.0) * max(0.55, min(1.35, brightnessScale))
+            lpL.set(cutoffHz: cut, q: 0.60, sampleRate: sampleRate)
+            lpR.set(cutoffHz: cut * 0.96, q: 0.60, sampleRate: sampleRate)
+        }
+        tick &+= 1
+
+        // Independent leaky Brownian integrators for rich natural stereo decorrelation
+        let wL = rng.nextBipolar()
+        let wR = rng.nextBipolar()
+        brL = brL * 0.986 + wL * 0.045
+        brR = brR * 0.986 + wR * 0.045
+
+        // Soft warm cross-mix (keeps center cozy, peripherals wide)
+        let fL = hpL.highpass(lpL.lowpass(brL))
+        let fR = hpR.highpass(lpR.lowpass(brR))
+        let outL = (fL * 0.84 + fR * 0.16) * 0.16
+        let outR = (fR * 0.84 + fL * 0.16) * 0.16
+        return (outL, outR)
+    }
+}

@@ -203,6 +203,16 @@ public enum SatieScore {
     ]
     private static let driftGlints: [Int] = [83, 86, 88, 90, 93, 95]
 
+    // MARK: - Still (58 BPM Zero-Ego Study: Non-Resolving Pentatonic & Suspended 9ths — Dmitry Evgrafov / Endel Study)
+
+    private static let stillForm: [ChordDef] = [
+        chordCmaj9, chordCmaj9, chordG6, chordG6, chordAm9, chordAm9, chordFmaj9, chordFmaj9,
+        chordDm11, chordDm11, chordAm9, chordAm9, chordCmaj9, chordCmaj9, chordG6, chordG6,
+        chordFmaj9, chordFmaj9, chordCmaj9, chordCmaj9, chordAm9, chordAm9, chordG6, chordG6,
+        chordDm11, chordDm11, chordFmaj9, chordFmaj9, chordCmaj9, chordCmaj9, chordG6, chordCmaj9,
+    ]
+    private static let stillGlints: [Int] = [72, 74, 76, 79, 81, 84]
+
     // MARK: - Timing
 
     public static func tempoBPM(for mode: FocusSoundscape) -> Double {
@@ -211,6 +221,7 @@ public enum SatieScore {
         case .pulse: return 104.0
         case .rain:  return 60.0
         case .drift: return 54.0
+        case .still: return 58.0
         }
     }
 
@@ -231,6 +242,7 @@ public enum SatieScore {
         case (.pulse, .morning): return 2
         case (.pulse, .night):   return -2
         case (.drift, .night):   return -2
+        case (.still, .night):   return -2
         default:               return 0
         }
     }
@@ -249,6 +261,7 @@ public enum SatieScore {
         mode: FocusSoundscape,
         barIndex: Int,
         circadian: CircadianPhase = .afternoon,
+        intensity: SoundIntensity = .flow,
         rng: inout SeededRNG
     ) -> ComposedBar {
         let bar = ((barIndex % barsPerForm) + barsPerForm) % barsPerForm
@@ -273,6 +286,9 @@ public enum SatieScore {
         case .drift:
             form = driftForm
             glints = driftGlints
+        case .still:
+            form = stillForm
+            glints = stillGlints
         }
 
         // Brian Eno incommensurate prime-length macro cycles (5, 7, 11, 13 bars -> 5,005-bar non-repeating arc)
@@ -320,11 +336,14 @@ public enum SatieScore {
             }
         }
 
-        // Mode-specific rhythmic & textural orchestration
+        // Mode-specific rhythmic & textural orchestration (modulated live by SoundIntensity)
+        let extraSparse = (intensity == .still)
+        let extraDeep   = (intensity == .deep)
         switch mode {
         case .focus:
             for (step, rawMidi) in figure.enumerated() {
                 if (section == 0 || section == 3) && (step == 2 || step == 5) { continue }
+                if extraSparse && (step == 1 || step == 4 || step == 7) { continue }
                 let accent = (step == 0 || step == 3 || step == 6) ? 1.0 : 0.68
                 let velocity = accent * rng.between(0.86, 1.0)
                 let at = max(0.0, Double(step) * 0.5 * spb + rng.between(-0.004, 0.008))
@@ -504,6 +523,39 @@ public enum SatieScore {
                     velocity: 0.26,
                     level: rng.between(0.010, 0.019),
                     pan: rng.between(-0.72, 0.72)
+                ))
+            }
+
+        case .still:
+            // Zero-ego Study / Deep Reading: strictly non-resolving suspended pentatonic clouds,
+            // zero melody hook, ultra-gentle harmonic presence so prefrontal cortex stays 100% on text/code
+            if !maSilenceWindow && (bar % 2 == 0 || extraDeep) {
+                let noteCount = extraSparse ? 1 : (extraDeep ? 2 : 1)
+                for n in 0..<noteCount {
+                    let idx = rng.nextInt(min(4, figure.count))
+                    let midi = figure[idx] + shift
+                    let at = (n == 0 ? rng.between(0.15, 0.85) : rng.between(barLen * 0.48, barLen * 0.75))
+                    bells.append(ScoredBellEvent(
+                        kind: .melody,
+                        at: at,
+                        midi: midi,
+                        duration: 2.2,
+                        velocity: rng.between(0.42, 0.65),
+                        level: 0.088 * fullness,
+                        pan: n == 0 ? -0.26 : 0.26
+                    ))
+                }
+            }
+            if rng.nextUnit() < (extraSparse ? 0.25 : 0.45) {
+                let midi = glints[rng.nextInt(glints.count)] + shift
+                bells.append(ScoredBellEvent(
+                    kind: .glint,
+                    at: rng.between(0.2, barLen * 0.85),
+                    midi: midi,
+                    duration: 0.45,
+                    velocity: 0.22,
+                    level: rng.between(0.010, 0.018),
+                    pan: rng.between(-0.62, 0.62)
                 ))
             }
         }

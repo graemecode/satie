@@ -82,6 +82,26 @@ final class AppState: ObservableObject {
             focusSound.setVolume(focusVolume)
         }
     }
+    @Published var soundIntensity: SoundIntensity {
+        didSet {
+            settings.soundIntensity = soundIntensity
+            focusSound.setIntensity(soundIntensity)
+        }
+    }
+    @Published var maskingBed: MaskingBed {
+        didSet {
+            settings.maskingBed = maskingBed
+            focusSound.setMaskingBed(maskingBed)
+        }
+    }
+    @Published var circadianOverride: CircadianOverride {
+        didSet {
+            settings.circadianOverride = circadianOverride
+            let resolved = circadianOverride.resolvedPhase()
+            circadianPhase = resolved
+            focusSound.setCircadianPhase(resolved)
+        }
+    }
     @Published var autoDuckEnabled: Bool {
         didSet {
             settings.autoDuck = autoDuckEnabled
@@ -100,7 +120,19 @@ final class AppState: ObservableObject {
     @Published var duckedByAppName: String? = nil
     @Published var circadianPhase: CircadianPhase = .current()
     @Published var flowDuration: FlowDuration = .infinite
+    @Published var flowMinutes: Int = 0
     @Published var flowRemainingSeconds: Double? = nil
+
+    var effectiveCircadianPhase: CircadianPhase {
+        circadianOverride.resolvedPhase()
+    }
+
+    var sessionProgress: Float? {
+        guard flowMinutes > 0, let rem = flowRemainingSeconds else { return nil }
+        let total = Double(flowMinutes * 60)
+        guard total > 1 else { return nil }
+        return Float(max(0.0, min(1.0, (total - rem) / total)))
+    }
 
     @Published var launchAtLogin: Bool = false
     @Published var tapTarget: TapTarget = .systemAll
@@ -193,6 +225,10 @@ final class AppState: ObservableObject {
         self.sensitivity = settings.sensitivity
         self.focusMode = settings.focusMode
         self.focusVolume = settings.focusVolume
+        self.soundIntensity = settings.soundIntensity
+        self.maskingBed = settings.maskingBed
+        self.circadianOverride = settings.circadianOverride
+        self.flowMinutes = settings.flowMinutes
         self.autoDuckEnabled = settings.autoDuck
         self.launchAtLogin = settings.launchAtLogin
 
@@ -201,6 +237,11 @@ final class AppState: ObservableObject {
         self.focusSound = FocusSoundEngine(ringBuffer: focusRingBuffer)
         self.focusSound.setMode(settings.focusMode)
         self.focusSound.setVolume(settings.focusVolume)
+        self.focusSound.setIntensity(settings.soundIntensity)
+        self.focusSound.setMaskingBed(settings.maskingBed)
+        let initPhase = settings.circadianOverride.resolvedPhase()
+        self.circadianPhase = initPhase
+        self.focusSound.setCircadianPhase(initPhase)
         self.dsp = AcousticDSP()
         self.media = MediaController()
 
@@ -292,14 +333,21 @@ final class AppState: ObservableObject {
             stopFocusSound()
         } else {
             focusMode = mode
-            circadianPhase = .current()
+            let phase = circadianOverride.resolvedPhase()
+            circadianPhase = phase
+            focusSound.setCircadianPhase(phase)
             autoDuckGate.reset()
             isAutoDucked = false
             duckedByAppName = nil
             focusSound.start(mode: mode)
             isFocusPlaying = true
-            if flowDuration != .infinite && flowRemainingSeconds == nil {
-                flowRemainingSeconds = Double(flowDuration.rawValue)
+            if flowMinutes > 0 {
+                if flowRemainingSeconds == nil {
+                    flowRemainingSeconds = Double(flowMinutes * 60)
+                }
+                focusSound.setSessionProgress(sessionProgress)
+            } else {
+                focusSound.setSessionProgress(nil)
             }
             syncNowPlaying()
         }
@@ -307,12 +355,39 @@ final class AppState: ObservableObject {
 
     func stopFocusSound() {
         focusSound.stop()
+        focusSound.setSessionProgress(nil)
         autoDuckGate.reset()
         isFocusPlaying = false
         isAutoDucked = false
         duckedByAppName = nil
         flowRemainingSeconds = nil
         syncNowPlaying()
+    }
+
+    func reseedFocusPhrase() {
+        performHaptic()
+        if !isFocusPlaying {
+            toggleFocusSound(focusMode)
+        } else {
+            focusSound.reseedPhrase()
+        }
+    }
+
+    func setFlowMinutes(_ minutes: Int) {
+        let clamped = max(0, min(120, minutes))
+        flowMinutes = clamped
+        settings.flowMinutes = clamped
+        if clamped == 0 {
+            flowDuration = .infinite
+            flowRemainingSeconds = nil
+            focusSound.setSessionProgress(nil)
+        } else {
+            flowDuration = clamped == 25 ? .min25 : (clamped == 50 ? .min50 : .min25)
+            flowRemainingSeconds = Double(clamped * 60)
+            if isFocusPlaying {
+                focusSound.setSessionProgress(0.0)
+            }
+        }
     }
 
     func cycleFocusMode(forward: Bool = true) {
@@ -360,12 +435,14 @@ final class AppState: ObservableObject {
     }
 
     func cycleFlowDuration() {
-        flowDuration = flowDuration.next
-        if flowDuration == .infinite {
-            flowRemainingSeconds = nil
-        } else if isFocusPlaying {
-            flowRemainingSeconds = Double(flowDuration.rawValue)
+        let cycle = [0, 15, 25, 45, 60, 90]
+        let next: Int
+        if let idx = cycle.firstIndex(of: flowMinutes) {
+            next = cycle[(idx + 1) % cycle.count]
+        } else {
+            next = 25
         }
+        setFlowMinutes(next)
     }
 
     func togglePrimaryPlayback() {
@@ -436,19 +513,20 @@ final class AppState: ObservableObject {
             refreshAudioProcesses()
         }
 
-        // Update circadian harmonic voicing if hour crossed boundary
-        let nowPhase = CircadianPhase.current()
+        // Update circadian harmonic voicing if hour crossed boundary (respecting manual override)
+        let nowPhase = circadianOverride.resolvedPhase()
         if nowPhase != circadianPhase {
             circadianPhase = nowPhase
             focusSound.setCircadianPhase(nowPhase)
         }
 
-        // Flow Session Timer countdown (pauses gracefully while auto-ducked on a call)
+        // Flow Session Timer countdown + Session-Arc audio choreography (pauses while auto-ducked on a call)
         if isFocusPlaying && !isAutoDucked, let rem = flowRemainingSeconds {
             let next = rem - 1.0
             if next <= 0 {
                 flowRemainingSeconds = nil
                 flowDuration = .infinite
+                focusSound.setSessionProgress(1.0)
                 focusSound.triggerSessionChime()
                 settings.completedFocusSessions += 1
                 Log.app.info("Flow session completed (#\(self.settings.completedFocusSessions)) — playing resolving fifth chime")
@@ -466,6 +544,7 @@ final class AppState: ObservableObject {
                 }
             } else {
                 flowRemainingSeconds = next
+                focusSound.setSessionProgress(sessionProgress)
             }
         }
     }

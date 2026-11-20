@@ -46,6 +46,10 @@ public final class SettingsStore: @unchecked Sendable {
         static let sensitivity = "ac.sensitivity"
         static let focusMode = "ac.focusMode"
         static let focusVolume = "ac.focusVolume"
+        static let soundIntensity = "ac.soundIntensity"
+        static let maskingBed = "ac.maskingBed"
+        static let circadianOverride = "ac.circadianOverride"
+        static let flowMinutes = "ac.flowMinutes"
         static let autoDuck = "ac.autoDuck"
         static let miniHUDFrame = "ac.miniHUDFrame"
         static let studioFrame = "ac.studioFrame"
@@ -91,6 +95,38 @@ public final class SettingsStore: @unchecked Sendable {
             return max(0.05, min(1.0, defaults.float(forKey: Keys.focusVolume)))
         }
         set { defaults.set(max(0.05, min(1.0, newValue)), forKey: Keys.focusVolume) }
+    }
+
+    public var soundIntensity: SoundIntensity {
+        get {
+            guard let raw = defaults.string(forKey: Keys.soundIntensity),
+                  let val = SoundIntensity(rawValue: raw) else { return .flow }
+            return val
+        }
+        set { defaults.set(newValue.rawValue, forKey: Keys.soundIntensity) }
+    }
+
+    public var maskingBed: MaskingBed {
+        get {
+            guard let raw = defaults.string(forKey: Keys.maskingBed),
+                  let val = MaskingBed(rawValue: raw) else { return .off }
+            return val
+        }
+        set { defaults.set(newValue.rawValue, forKey: Keys.maskingBed) }
+    }
+
+    public var circadianOverride: CircadianOverride {
+        get {
+            guard let raw = defaults.string(forKey: Keys.circadianOverride),
+                  let val = CircadianOverride(rawValue: raw) else { return .auto }
+            return val
+        }
+        set { defaults.set(newValue.rawValue, forKey: Keys.circadianOverride) }
+    }
+
+    public var flowMinutes: Int {
+        get { defaults.integer(forKey: Keys.flowMinutes) }
+        set { defaults.set(max(0, min(120, newValue)), forKey: Keys.flowMinutes) }
     }
 
     public var autoDuck: Bool {

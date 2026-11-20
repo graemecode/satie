@@ -7,6 +7,7 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
     case pulse
     case rain
     case drift
+    case still
 
     public var id: String { rawValue }
 
@@ -16,6 +17,7 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .pulse: return "Kinetic Pulse"
         case .rain: return "Rain & Glass"
         case .drift: return "Gymnopédie"
+        case .still: return "Still"
         }
     }
 
@@ -25,6 +27,92 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .pulse: return "PULSE"
         case .rain: return "RAIN"
         case .drift: return "DRIFT"
+        case .still: return "STILL"
+        }
+    }
+
+    public var subtitle: String {
+        switch self {
+        case .focus: return "Felt Piano · Vibraphone · Halo"
+        case .pulse: return "Hypnotic Analog · 3D Rings"
+        case .rain: return "Kyoto Rain · Wine Glasses"
+        case .drift: return "Nocturnal Piano · Cello"
+        case .still: return "Zero-Ego Study · Suspended"
+        }
+    }
+}
+
+/// Live cognitive-load / modulation-depth control (real-time atomic modulation).
+public enum SoundIntensity: String, CaseIterable, Identifiable, Sendable {
+    case still
+    case flow
+    case deep
+
+    public var id: String { rawValue }
+
+    public var rawIndex: Int {
+        switch self {
+        case .still: return 0
+        case .flow: return 1
+        case .deep: return 2
+        }
+    }
+
+    public var label: String {
+        switch self {
+        case .still: return "STILL"
+        case .flow: return "FLOW"
+        case .deep: return "DEEP"
+        }
+    }
+}
+
+/// Optional independent acoustic speech-masking layer underneath any soundscape.
+public enum MaskingBed: String, CaseIterable, Identifiable, Sendable {
+    case off
+    case rain
+    case brown
+
+    public var id: String { rawValue }
+
+    public var rawIndex: Int {
+        switch self {
+        case .off: return 0
+        case .rain: return 1
+        case .brown: return 2
+        }
+    }
+
+    public var label: String {
+        switch self {
+        case .off: return "OFF"
+        case .rain: return "RAIN"
+        case .brown: return "BROWN"
+        }
+    }
+}
+
+/// Optional user override for circadian tone voicing (Auto follows local biological clock).
+public enum CircadianOverride: String, CaseIterable, Identifiable, Sendable {
+    case auto
+    case crisp
+    case warm
+
+    public var id: String { rawValue }
+
+    public var label: String {
+        switch self {
+        case .auto: return "AUTO"
+        case .crisp: return "CRISP"
+        case .warm: return "WARM"
+        }
+    }
+
+    public func resolvedPhase(date: Date = Date()) -> CircadianPhase {
+        switch self {
+        case .auto: return CircadianPhase.current(date: date)
+        case .crisp: return .morning
+        case .warm: return .night
         }
     }
 }
@@ -47,6 +135,24 @@ public enum CircadianPhase: Int, Sendable {
         case .afternoon: return "DAY"
         case .night: return "NIGHT"
         }
+    }
+
+    public var detailedLabel: String {
+        switch self {
+        case .morning: return "MORNING RISE"
+        case .afternoon: return "DAY FLOW"
+        case .night: return "NOCTURNAL · WARM"
+        }
+    }
+
+    /// Normalized biological alertness curve ∈ [0, 1] across a 24-hour day (for hairline circadian graph).
+    public static func energyCurve(hour: Double) -> Double {
+        // Classic two-peak human circadian alertness wave: rise 7-11am, gentle dip 2-3pm, evening wind-down 9pm+
+        let h = ((hour.truncatingRemainder(dividingBy: 24.0)) + 24.0).truncatingRemainder(dividingBy: 24.0)
+        let morningPeak = exp(-pow((h - 10.5) / 3.8, 2.0)) * 0.92
+        let lateAfternoon = exp(-pow((h - 17.5) / 3.2, 2.0)) * 0.76
+        let baseline = 0.14
+        return max(0.08, min(1.0, baseline + max(morningPeak, lateAfternoon)))
     }
 }
 
@@ -238,9 +344,11 @@ public final class FocusSoundEngine: @unchecked Sendable {
     private let producerQueue = DispatchQueue(label: "com.strangechances.satie.score-producer", qos: .utility)
     private var producerTimer: DispatchSourceTimer?
     private var producerRNG = SeededRNG(seed: 42)
+    private var producerSeed: UInt32 = 42
     private var producerNextBarIndex: Int = 0
     private var producerMode: FocusSoundscape = .focus
     private var producerCircadian: CircadianPhase = .afternoon
+    private var producerIntensity: SoundIntensity = .flow
 
     public var isPlaying: Bool {
         renderState.isActiveAtom.load(ordering: .acquiring) != 0
@@ -330,22 +438,61 @@ public final class FocusSoundEngine: @unchecked Sendable {
         renderState.isDuckedAtom.store(ducked ? 1 : 0, ordering: .releasing)
     }
 
+    public func setIntensity(_ intensity: SoundIntensity) {
+        let prev = renderState.intensityAtom.load(ordering: .acquiring)
+        renderState.intensityAtom.store(intensity.rawIndex, ordering: .releasing)
+        if prev != intensity.rawIndex {
+            let phase = CircadianPhase(rawValue: renderState.circadianAtom.load(ordering: .acquiring)) ?? .afternoon
+            refillScoreQueueFromStart(mode: currentMode, circadian: phase, intensity: intensity, seed: producerSeed, startBar: nil)
+        }
+    }
+
+    public func setMaskingBed(_ bed: MaskingBed) {
+        renderState.maskingBedAtom.store(bed.rawIndex, ordering: .releasing)
+    }
+
+    /// Pass `nil` for infinite sessions, or normalized progress ∈ [0, 1] for timed session-arc audio choreography.
+    public func setSessionProgress(_ progress: Float?) {
+        let val: Float = progress.map { max(0.0, min(1.0, $0)) } ?? -1.0
+        renderState.sessionProgressBitsAtom.store(val.bitPattern, ordering: .releasing)
+    }
+
+    /// Smoothly shifts to a fresh deterministic harmonic phrase & seed without interrupting playback.
+    public func reseedPhrase() {
+        let newSeed = UInt32.random(in: 100...999_999)
+        let phase = CircadianPhase(rawValue: renderState.circadianAtom.load(ordering: .acquiring)) ?? .afternoon
+        let intensity = SoundIntensity.allCases[max(0, min(SoundIntensity.allCases.count - 1, renderState.intensityAtom.load(ordering: .acquiring)))]
+        // Jump into Pass 2+ on a fresh section boundary so the room refreshes organically immediately
+        let freshStartBar = 32 + Int.random(in: 0..<4) * 8
+        refillScoreQueueFromStart(mode: currentMode, circadian: phase, intensity: intensity, seed: newSeed, startBar: freshStartBar)
+        renderState.softReseedAtom.store(1, ordering: .releasing)
+    }
+
     public func triggerSessionChime() {
         renderState.chimeTriggerAtom.store(1, ordering: .releasing)
     }
 
-    private func refillScoreQueueFromStart(mode: FocusSoundscape, circadian: CircadianPhase) {
+    private func refillScoreQueueFromStart(
+        mode: FocusSoundscape,
+        circadian: CircadianPhase,
+        intensity: SoundIntensity? = nil,
+        seed: UInt32 = 42,
+        startBar: Int? = 0
+    ) {
         producerQueue.sync {
             producerMode = mode
             producerCircadian = circadian
-            producerNextBarIndex = 0
-            producerRNG = SeededRNG(seed: 42)
+            if let intensity { producerIntensity = intensity }
+            producerSeed = seed
+            if let startBar { producerNextBarIndex = startBar }
+            producerRNG = SeededRNG(seed: seed)
             renderState.barQueue.clearProducerSide()
             for _ in 0..<10 {
                 let composed = SatieScore.composeBar(
                     mode: producerMode,
                     barIndex: producerNextBarIndex,
                     circadian: producerCircadian,
+                    intensity: producerIntensity,
                     rng: &producerRNG
                 )
                 if renderState.barQueue.enqueue(composed) {
@@ -366,6 +513,7 @@ public final class FocusSoundEngine: @unchecked Sendable {
                     mode: self.producerMode,
                     barIndex: self.producerNextBarIndex,
                     circadian: self.producerCircadian,
+                    intensity: self.producerIntensity,
                     rng: &self.producerRNG
                 )
                 if self.renderState.barQueue.enqueue(composed) {
@@ -561,10 +709,14 @@ private final class FocusRenderState: @unchecked Sendable {
     let isDuckedAtom = Atomic<Int>(0)
     let modeAtom = Atomic<Int>(0)
     let circadianAtom = Atomic<Int>(1)
+    let intensityAtom = Atomic<Int>(1)        // 0 = still, 1 = flow, 2 = deep
+    let maskingBedAtom = Atomic<Int>(0)       // 0 = off, 1 = rain, 2 = brown
+    let sessionProgressBitsAtom = Atomic<UInt32>(Float(-1.0).bitPattern)
     let volumeBitsAtom = Atomic<UInt32>(Float(0.65).bitPattern)
     let chimeTriggerAtom = Atomic<Int>(0)
     let wakeResetAtom = Atomic<Int>(0)
     let scoreResetAtom = Atomic<Int>(0)
+    let softReseedAtom = Atomic<Int>(0)
     let telemetryPackedAtom = Atomic<UInt64>(0)
 
     let barQueue = LockFreeBarQueue()
@@ -617,6 +769,8 @@ private final class FocusRenderState: @unchecked Sendable {
     private var melodyChorus = StereoChorus()
     private var stringChorus = StereoChorus()
     private var space = StudioAcousticSpace()
+    private var studioRain = StudioRainPlayer()
+    private var velvetBrown = VelvetBrownNoise()
     private var rainEngine = PhysicalRainEngine()
     private var grooveEngine = HypnoticGrooveEngine()
     private var masterBus = AudiophileMasterBus()
@@ -665,6 +819,8 @@ private final class FocusRenderState: @unchecked Sendable {
         melodyChorus.clear()
         stringChorus.clear()
         space.clear()
+        studioRain.reset()
+        velvetBrown.reset()
         grooveEngine.reset()
         masterBus.clear()
         strHpL.reset(); strHpR.reset()
@@ -715,7 +871,39 @@ private final class FocusRenderState: @unchecked Sendable {
         let mode = FocusSoundscape.allCases[modeIdx]
         let circadianRaw = circadianAtom.load(ordering: .acquiring)
         let circadian = CircadianPhase(rawValue: circadianRaw) ?? .afternoon
+        let intensityRaw = max(0, min(2, intensityAtom.load(ordering: .acquiring)))
+        let intensity: SoundIntensity = intensityRaw == 0 ? .still : (intensityRaw == 2 ? .deep : .flow)
+        let maskingRaw = max(0, min(2, maskingBedAtom.load(ordering: .acquiring)))
+        let maskingBed: MaskingBed = maskingRaw == 1 ? .rain : (maskingRaw == 2 ? .brown : .off)
+        let sessionProg = Float(bitPattern: sessionProgressBitsAtom.load(ordering: .acquiring))
         let targetVol = Float(bitPattern: volumeBitsAtom.load(ordering: .acquiring))
+
+        // Session-Arc Audio Choreography: Arrival (0..12%) -> Deep Lock (12..88%) -> Soft Landing (88..100%)
+        let arcBrightness: Double
+        let arcGainScale: Float
+        if sessionProg >= 0.0 && sessionProg <= 1.0 {
+            let p = Double(sessionProg)
+            if p < 0.12 {
+                let t = AudioMath.smoothstep(p / 0.12)
+                arcBrightness = 0.72 + 0.28 * t
+                arcGainScale = Float(0.84 + 0.16 * t)
+            } else if p > 0.88 {
+                let t = AudioMath.smoothstep((1.0 - p) / 0.12)
+                arcBrightness = 0.50 + 0.50 * t
+                arcGainScale = Float(0.76 + 0.24 * t)
+            } else {
+                arcBrightness = 1.0
+                arcGainScale = 1.0
+            }
+        } else {
+            arcBrightness = 1.0
+            arcGainScale = 1.0
+        }
+
+        // Intensity / Modulation-Depth live multipliers (STILL / FLOW / DEEP)
+        let intBrightScale: Double = intensity == .still ? 0.68 : (intensity == .deep ? 1.24 : 1.0)
+        let intCloudScale: Float   = intensity == .still ? 0.62 : (intensity == .deep ? 1.28 : 1.0)
+        let intGrooveScale: Float  = intensity == .still ? 0.45 : (intensity == .deep ? 1.22 : 1.0)
 
         if chimeTriggerAtom.exchange(0, ordering: .acquiring) != 0 {
             chimeVoiceA.trigger(
@@ -735,6 +923,12 @@ private final class FocusRenderState: @unchecked Sendable {
             resetVoicesAndBuses()
             activeModeIdx = modeIdx
             activeCircadianRaw = circadianRaw
+            pullNextBar(mode: mode, circadian: circadian, allowSyncFallback: allowSyncFallback)
+        }
+
+        if softReseedAtom.exchange(0, ordering: .acquiring) != 0 && wantActive {
+            // Smooth musical phrase pivot: keeps reverb & granular tails blooming while loading fresh seed bar
+            currentBarStartSec = clockSec
             pullNextBar(mode: mode, circadian: circadian, allowSyncFallback: allowSyncFallback)
         }
 
@@ -819,14 +1013,25 @@ private final class FocusRenderState: @unchecked Sendable {
             tapeWowMs = 1.45
             figEchoSend = 0.14
             melEchoSend = 0.20
+        case .still:
+            preDelayMs = 28.0
+            roomDecay = Float(0.89 + 0.03 * spaceBloom)
+            roomDampLP = 0.28
+            roomWet = 0.44
+            erMix = 0.38
+            tapeToneHz = 2100.0
+            tapeWowMs = 1.20
+            figEchoSend = 0.12
+            melEchoSend = 0.18
         }
 
-        let airCeilingHz: Double
+        let baseAirHz: Double
         switch circadian {
-        case .morning:   airCeilingHz = 7800.0
-        case .afternoon: airCeilingHz = 6800.0
-        case .night:     airCeilingHz = 5000.0
+        case .morning:   baseAirHz = 7800.0
+        case .afternoon: baseAirHz = 6800.0
+        case .night:     baseAirHz = 5000.0
         }
+        let airCeilingHz = max(2600.0, min(9200.0, baseAirHz * intBrightScale * arcBrightness))
 
         let figDelayL = 0.75 * spb
         let figDelayR = 0.75 * spb * 1.014 // Slight stereo head offset for natural width
@@ -969,6 +1174,23 @@ private final class FocusRenderState: @unchecked Sendable {
                             feltPianos[nextPianoSlot].trigger(event: ev, rng: &noiseRNG, sampleRate: sampleRate)
                             nextPianoSlot = (nextPianoSlot + 1) % feltPianos.count
                         }
+
+                    case .still:
+                        // Zero-Ego Study: Friction-Bowed Wine Glasses + Whisper Felt Piano (no melody hook, pure suspended field)
+                        if sampleBank.isAvailable {
+                            let inst: AcousticInstrumentID = (ev.kind == .glint) ? .glass : ((barBellCursor % 2 == 0) ? .piano : .glass)
+                            _ = samplerVoices[nextSamplerSlot].trigger(
+                                bank: sampleBank, instrument: inst, midi: ev.midi, rootMidi: root,
+                                velocity: ev.velocity * 0.82, duration: ev.duration * 1.2,
+                                level: ev.level * (inst == .piano ? 1.45 : 1.65), pan: ev.pan,
+                                feltMuffle: true, justSweeten: true, sustainedLayer: false,
+                                rng: &noiseRNG, sampleRate: sampleRate
+                            )
+                            nextSamplerSlot = (nextSamplerSlot + 1) % samplerVoices.count
+                        } else {
+                            glassBowls[nextBowlSlot].trigger(event: ev, rng: &noiseRNG)
+                            nextBowlSlot = (nextBowlSlot + 1) % glassBowls.count
+                        }
                     }
                     barBellCursor += 1
                 }
@@ -1077,11 +1299,12 @@ private final class FocusRenderState: @unchecked Sendable {
             // Mutable Instruments Beads Live Granular Cloud (feeds on real acoustic piano / vibe / harp / rings!)
             let cloudInL = melL + figL * 0.65
             let cloudInR = melR + figR * 0.65
-            let cloudDens: Double = (mode == .drift) ? 6.0 : (mode == .rain ? 7.2 : 6.5)
-            let cloudShim: Double = (mode == .rain) ? 0.36 : (mode == .pulse ? 0.12 : (mode == .drift ? 0.18 : 0.28))
-            let cloudRev: Double  = (mode == .drift) ? 0.48 : (mode == .focus ? 0.34 : 0.28)
-            let cloudSub: Double  = (mode == .pulse) ? 0.36 : (mode == .drift ? 0.28 : 0.14)
-            let cloudWet: Float   = (mode == .drift) ? 0.34 : (mode == .rain ? 0.30 : (mode == .pulse ? 0.16 : 0.24))
+            let cloudDens: Double = (mode == .drift || mode == .still) ? 5.8 : (mode == .rain ? 7.2 : 6.5)
+            let cloudShim: Double = (mode == .rain) ? 0.36 : (mode == .pulse ? 0.12 : (mode == .drift ? 0.18 : (mode == .still ? 0.14 : 0.28)))
+            let cloudRev: Double  = (mode == .drift || mode == .still) ? 0.48 : (mode == .focus ? 0.34 : 0.28)
+            let cloudSub: Double  = (mode == .pulse) ? 0.36 : ((mode == .drift || mode == .still) ? 0.30 : 0.14)
+            let baseCloudWet: Float = (mode == .drift || mode == .still) ? 0.34 : (mode == .rain ? 0.30 : (mode == .pulse ? 0.16 : 0.24))
+            let cloudWet: Float = baseCloudWet * intCloudScale
             let (beadsL, beadsR) = beads.process(
                 cloudInL, cloudInR,
                 densityHz: cloudDens,
@@ -1120,20 +1343,38 @@ private final class FocusRenderState: @unchecked Sendable {
                     clockSec: clockSec, spb: spb, dt: dt, sampleRate: sampleRate,
                     sineTable: bank.sineTable, noise: &noiseRNG
                 )
-                pulseSub = grv.sub
-                percL = grv.percL
-                percR = grv.percR
-                sidechainGain = grv.sidechainGain
+                pulseSub = grv.sub * intGrooveScale
+                percL = grv.percL * intGrooveScale
+                percR = grv.percR * intGrooveScale
+                sidechainGain = 1.0 - (1.0 - grv.sidechainGain) * intGrooveScale
                 // Pad & cello gently breathe around the analog sub-kick
                 filtPadL *= sidechainGain
                 filtPadR *= sidechainGain
             }
 
+            // Independent Acoustic Masking Bed:
+            // - Rain & Glass always includes Kyoto velvet rain (unless user switches bed to Brown)
+            // - Any other mode can layer Kyoto Rain or Velvet Brown speech masking seamlessly underneath!
             var rainTexL: Float = 0, rainTexR: Float = 0
-            if mode == .rain {
-                let (rL, rR) = rainEngine.step(clockSec: clockSec, dt: dt, sampleRate: sampleRate, sineTable: bank.sineTable)
-                rainTexL = rL
-                rainTexR = rR
+            let wantRainBed = (mode == .rain && maskingBed != .brown) || (maskingBed == .rain)
+            let wantBrownBed = (maskingBed == .brown) || (mode == .still && maskingBed == .off)
+            if wantRainBed {
+                let rainGain: Float = (mode == .rain) ? 1.0 : 0.78
+                if studioRain.isAvailable {
+                    let (rL, rR) = studioRain.step(clockSec: clockSec, spaceBloom: spaceBloom, sampleRate: sampleRate)
+                    rainTexL += rL * rainGain
+                    rainTexR += rR * rainGain
+                } else {
+                    let (rL, rR) = rainEngine.step(clockSec: clockSec, dt: dt, sampleRate: sampleRate, sineTable: bank.sineTable)
+                    rainTexL += rL * 0.30 * rainGain
+                    rainTexR += rR * 0.30 * rainGain
+                }
+            }
+            if wantBrownBed {
+                let brownScale: Float = (maskingBed == .brown) ? 1.0 : 0.42 // subtle cozy cocoon on Still by default
+                let (bL, bR) = velvetBrown.step(clockSec: clockSec, brightnessScale: intBrightScale * arcBrightness, sampleRate: sampleRate)
+                rainTexL += bL * brownScale
+                rainTexR += bR * brownScale
             }
 
             // 5. Studio Acoustic Space (Pre-Delay + Early Reflections + 4-Stage Allpass + 8x8 Modulated FDN)
@@ -1166,12 +1407,13 @@ private final class FocusRenderState: @unchecked Sendable {
             case .pulse: modeMakeup = 5.4
             case .rain:  modeMakeup = 7.4
             case .drift: modeMakeup = 6.2
+            case .still: modeMakeup = 7.1
             }
             var (finalL, finalR) = masterBus.process(
                 mixL, mixR,
                 airCeilingHz: airCeilingHz,
-                stereoWidthBoost: mode == .drift ? 0.15 : 0.11,
-                outputGain: modeMakeup * masterEnv * smoothVol,
+                stereoWidthBoost: (mode == .drift || mode == .still) ? 0.15 : 0.11,
+                outputGain: modeMakeup * masterEnv * smoothVol * arcGainScale,
                 sampleRate: sampleRate
             )
 

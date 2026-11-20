@@ -30,18 +30,17 @@ final class BarsStripNSView: NSView {
         let bw = (w - gap * 23.0) / 24.0
         guard bw > 0.5 else { return }
 
-        let hair = NSColor(calibratedRed: 0.86, green: 0.91, blue: 0.98, alpha: 0.22).cgColor
-        let fill = NSColor(calibratedRed: 0.94, green: 0.96, blue: 1.0, alpha: 0.96).cgColor
+        let fill = NSColor(calibratedWhite: 1.0, alpha: 0.78).cgColor
+        let base = NSColor(calibratedWhite: 1.0, alpha: 0.14).cgColor
 
         for i in 0..<24 {
             let x = CGFloat(i) * (bw + gap)
-            ctx.setStrokeColor(hair)
-            ctx.setLineWidth(0.75)
-            ctx.stroke(CGRect(x: x + 0.3, y: 0.5, width: bw - 0.6, height: h - 1.0))
+            ctx.setFillColor(base)
+            ctx.fill(CGRect(x: x, y: 0, width: bw, height: 1.5))
 
-            let fh = max(2.0, CGFloat(bands[i]) * (h - 2.0))
+            let fh = max(1.5, CGFloat(bands[i]) * h)
             ctx.setFillColor(fill)
-            ctx.fill(CGRect(x: x + 0.8, y: 1.0, width: max(1.0, bw - 1.6), height: fh))
+            ctx.fill(CGRect(x: x, y: 0, width: bw, height: fh))
         }
     }
 }
@@ -92,55 +91,142 @@ struct BarsStripRepresentable: NSViewRepresentable {
     }
 }
 
+private enum PopoverDrawer: Equatable {
+    case none
+    case timer
+    case sculpt
+}
+
 struct PopoverView: View {
     @ObservedObject var state: AppState
     let onOpenMiniHUD: () -> Void
     let onOpenStudio: () -> Void
     let onOpenFullscreen: () -> Void
     let onQuit: () -> Void
+    var onRequestResize: (() -> Void)? = nil
 
-    private let hairColor = Color(red: 0.86, green: 0.91, blue: 0.98).opacity(0.22)
-    private let hairSoft = Color(red: 0.86, green: 0.91, blue: 0.98).opacity(0.11)
-    private let inkSoft = Color(red: 0.88, green: 0.92, blue: 0.98).opacity(0.70)
-    private let inkDim = Color(red: 0.84, green: 0.89, blue: 0.96).opacity(0.42)
+    @State private var activeDrawer: PopoverDrawer = .none
+    @State private var reseedSpinAngle: Double = 0
+
+    private let hair = Color.white.opacity(0.14)
+    private let hairSoft = Color.white.opacity(0.08)
+    private let inkSoft = Color.white.opacity(0.72)
+    private let inkDim = Color.white.opacity(0.42)
 
     var body: some View {
-        VStack(spacing: 10) {
-            // Top header: Source kicker + Title + Detected Key Pill
-            HStack(alignment: .top, spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 5) {
-                        Text(state.activeSourceLabel)
-                        Text("·")
-                        Text("\(Int(round((state.isFocusPlaying ? 48_000 : state.audioTap.sampleRate) / 1000))) KHZ")
-                    }
-                    .font(.system(size: 9.5, weight: .regular, design: .monospaced))
-                    .foregroundColor(inkDim)
+        VStack(spacing: 12) {
+            // 1. Hero OLED Metal Stage with Floating Editorial Typography + Quiet Corner Utility Chrome
+            ZStack {
+                MetalVisualizerRepresentable(compactMode: true, isActive: state.isPopoverOpen)
+                    .frame(height: 174)
+                    .clipped()
 
-                    Text(state.activeTitle)
-                        .font(.system(size: 13.5, weight: .medium))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                // Subtle top & bottom dark scrims for effortless text legibility
+                VStack(spacing: 0) {
+                    LinearGradient(
+                        colors: [Color.black.opacity(0.78), Color.black.opacity(0.0)],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                    .frame(height: 62)
+                    Spacer()
+                    LinearGradient(
+                        colors: [Color.black.opacity(0.0), Color.black.opacity(0.84)],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                    .frame(height: 52)
                 }
+                .allowsHitTesting(false)
 
-                Spacer(minLength: 4)
+                VStack(spacing: 0) {
+                    // Floating Header Overlay: Title + Circadian Phase on left, Quiet Window Icons on right
+                    HStack(alignment: .top, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(heroTitle)
+                                .font(.system(size: 16.5, weight: .medium))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
 
-                Text(state.effectiveKeyBadge)
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Color.white.opacity(0.05))
-                    .overlay(Rectangle().stroke(hairColor, lineWidth: 1))
-                    .accessibilityLabel("Current musical key or chord: \(state.effectiveKeyBadge)")
+                            HStack(spacing: 5) {
+                                Text(heroSubtitle)
+                                Text("·")
+                                Text(state.effectiveKeyBadge)
+                            }
+                            .font(.system(size: 9.2, weight: .regular, design: .monospaced))
+                            .foregroundColor(inkSoft)
+                            .lineLimit(1)
+                        }
+
+                        Spacer(minLength: 4)
+
+                        // Quiet utility icons (never compete with playback)
+                        HStack(spacing: 4) {
+                            QuietIconButton(systemName: "pip", help: "Mini HUD (⌘M)", action: onOpenMiniHUD)
+                            QuietIconButton(systemName: "macwindow", help: "Studio Window", action: onOpenStudio)
+                            QuietIconButton(systemName: "arrow.up.left.and.arrow.down.right", help: "Fullscreen (⌘F)", action: onOpenFullscreen)
+                            QuietIconButton(systemName: "power", help: "Quit Satie (⌘Q)", action: onQuit)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 10)
+
+                    Spacer()
+
+                    // Bottom of Stage: Subtle 24-band level hairline / 32-bar form strip + 1-4 visual mode dots
+                    HStack(alignment: .bottom, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            if state.isFocusAudible {
+                                HStack(alignment: .bottom, spacing: 2) {
+                                    ForEach(0..<SatieScore.barsPerForm, id: \.self) { idx in
+                                        let fullness = SatieScore.fullnessCurve[idx]
+                                        let isCurrent = idx == state.scoreTelemetry.barInForm
+                                        let isPast = idx < state.scoreTelemetry.barInForm
+                                        Rectangle()
+                                            .fill(isCurrent ? Color.white : (isPast ? Color.white.opacity(0.45) : Color.white.opacity(0.16)))
+                                            .frame(height: max(2.0, CGFloat(fullness) * 7.0))
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                }
+                                .frame(height: 7, alignment: .bottom)
+                            } else {
+                                BarsStripRepresentable(isActive: state.isPopoverOpen)
+                                    .frame(height: 14)
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+
+                        HStack(spacing: 3) {
+                            ForEach(VisualPreset.allCases) { p in
+                                Button {
+                                    state.preset = p
+                                    state.performHaptic()
+                                } label: {
+                                    Circle()
+                                        .fill(state.preset == p ? Color.white : Color.white.opacity(0.28))
+                                        .frame(width: state.preset == p ? 6 : 4.5, height: state.preset == p ? 6 : 4.5)
+                                        .frame(width: 14, height: 14)
+                                }
+                                .buttonStyle(.plain)
+                                .help(p.title)
+                            }
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+                }
             }
+            .frame(height: 174)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(hairSoft, lineWidth: 1)
+            )
 
-            // Permission banner if Core Audio Process Tap failed
+            // Permission banner if Core Audio Process Tap needs approval
             if case .permissionOrError = state.tapStatus {
                 HStack(spacing: 8) {
-                    Text("Grant System Audio Recording permission to tap live sound.")
-                        .font(.system(size: 10.5))
+                    Text("Enable System Audio Recording for auto-ducking & live visuals.")
+                        .font(.system(size: 10))
                         .foregroundColor(Color(red: 1.0, green: 0.86, blue: 0.62))
                         .lineLimit(2)
                     Spacer()
@@ -157,275 +243,160 @@ struct PopoverView: View {
                 }
                 .padding(8)
                 .background(Color.orange.opacity(0.10))
-                .overlay(Rectangle().stroke(Color.orange.opacity(0.35), lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.orange.opacity(0.35), lineWidth: 1))
             }
 
-            // Ruthlessly quiet, pure Metal stage (pauses to 0% GPU the instant popover closes)
-            ZStack(alignment: .bottomTrailing) {
-                MetalVisualizerRepresentable(compactMode: true, isActive: state.isPopoverOpen)
-                    .frame(height: 176)
-                    .clipped()
-                    .overlay(Rectangle().stroke(hairSoft, lineWidth: 1))
-
-                // Subtle preset dot switcher on bottom-right corner
-                HStack(spacing: 4) {
-                    ForEach(VisualPreset.allCases) { p in
-                        Button {
-                            state.preset = p
-                        } label: {
-                            Text("\(p.rawValue + 1)")
-                                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                                .frame(width: 18, height: 18)
-                                .background(state.preset == p ? Color.white : Color(red: 0.04, green: 0.06, blue: 0.10).opacity(0.75))
-                                .foregroundColor(state.preset == p ? Color(red: 0.04, green: 0.06, blue: 0.10) : inkSoft)
-                                .overlay(Rectangle().stroke(hairColor, lineWidth: 0.75))
+            // 2. Five Iconic Circular Geometric Soundscape Glyphs (Focus · Pulse · Rain · Drift · Still)
+            HStack(spacing: 0) {
+                ForEach(FocusSoundscape.allCases) { mode in
+                    let isSelected = (state.focusMode == mode)
+                    let isActive = state.isFocusPlaying && isSelected
+                    Button {
+                        if isActive {
+                            state.stopFocusSound()
+                        } else {
+                            state.toggleFocusSound(mode)
                         }
-                        .buttonStyle(.plain)
-                        .help(p.title)
+                    } label: {
+                        VStack(spacing: 5) {
+                            SoundscapeGlyph(mode: mode, isActive: isActive, size: 38)
+                                .overlay(
+                                    Circle()
+                                        .stroke(isSelected && !isActive ? Color.white.opacity(0.55) : Color.clear, lineWidth: 1)
+                                        .frame(width: 34, height: 34)
+                                )
+                            Text(mode.shortLabel)
+                                .font(.system(size: 8.6, weight: isActive ? .semibold : .regular, design: .monospaced))
+                                .foregroundColor(isActive ? .white : (isSelected ? inkSoft : inkDim))
+                                .tracking(0.5)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .help("\(mode.title) — \(mode.subtitle)")
                 }
-                .padding(7)
             }
+            .padding(.top, 1)
 
-            // 24-band stark-white architectural level strip
-            BarsStripRepresentable(isActive: state.isPopoverOpen)
-                .frame(height: 24)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 3)
-                .background(Color.black.opacity(0.38))
-                .overlay(Rectangle().stroke(hairSoft, lineWidth: 1))
-
-            // Transport + Immediate Stop/Mute + Scrub / Flow Arc bar
-            HStack(spacing: 8) {
-                if state.isFocusAudible {
-                    Button { state.stopFocusSound() } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "stop.fill").font(.system(size: 8.5))
-                            Text("STOP")
-                                .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
-                        }
-                        .padding(.horizontal, 9)
-                        .frame(height: 26)
-                    }
-                    .buttonStyle(HairlineIconButtonStyle(prominent: true))
-                    .help("Stop focus soundscape immediately (Space)")
-                } else if state.metadata.canControlPlayback {
-                    HStack(spacing: 4) {
-                        Button { state.media.previousTrack() } label: {
-                            Image(systemName: "backward.fill").font(.system(size: 10))
-                                .frame(width: 24, height: 26)
-                        }
-                        .buttonStyle(HairlineIconButtonStyle())
-
-                        Button { state.togglePrimaryPlayback() } label: {
-                            Image(systemName: state.isPrimaryPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 11))
-                                .frame(width: 28, height: 26)
-                        }
-                        .buttonStyle(HairlineIconButtonStyle(prominent: true))
-                        .help(state.isPrimaryPlaying ? "Pause playback (Space)" : "Resume playback (Space)")
-
-                        Button { state.media.nextTrack() } label: {
-                            Image(systemName: "forward.fill").font(.system(size: 10))
-                                .frame(width: 24, height: 26)
-                        }
-                        .buttonStyle(HairlineIconButtonStyle())
-
-                        Button { state.toggleSystemMute() } label: {
-                            Image(systemName: state.isSystemMuted ? "speaker.slash.fill" : "speaker.wave.2")
-                                .font(.system(size: 10))
-                                .foregroundColor(state.isSystemMuted ? Color(red: 1.0, green: 0.62, blue: 0.56) : .white)
-                                .frame(width: 26, height: 26)
-                        }
-                        .buttonStyle(HairlineIconButtonStyle())
-                        .help(state.isSystemMuted ? "Unmute Mac audio" : "Mute Mac audio immediately")
+            // 3. Iconic Centered Transport Row: [↻ Refresh]  [▶/⏸ Hero White]  [⏱ Timer]  [≡ Sculpt]
+            HStack(spacing: 14) {
+                // Re-seed / Refresh harmonic phrase (or Previous Track for external media)
+                if !state.isFocusAudible && state.metadata.canControlPlayback {
+                    CircularControlButton(systemName: "backward.fill", isActive: false, help: "Previous Track") {
+                        state.media.previousTrack()
                     }
                 } else {
-                    HStack(spacing: 4) {
-                        Button { state.toggleSystemMute() } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: state.isSystemMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                                    .font(.system(size: 9.5))
-                                Text(state.isSystemMuted ? "MUTED" : "MUTE")
-                                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
-                            }
-                            .foregroundColor(state.isSystemMuted ? Color(red: 1.0, green: 0.72, blue: 0.66) : .white)
-                            .padding(.horizontal, 8)
-                            .frame(height: 26)
+                    Button {
+                        withAnimation(.easeOut(duration: 0.42)) {
+                            reseedSpinAngle += 360
                         }
-                        .buttonStyle(HairlineIconButtonStyle(prominent: true))
-                        .help(state.isSystemMuted ? "Unmute Mac audio (Space)" : "Silence Mac audio immediately (Space)")
-
-                        #if !APP_STORE
-                        if !state.snapshot.isSilent && !MediaController.hasMediaKeyPermission {
-                            Button {
-                                MediaController.requestMediaKeyPermission()
-                            } label: {
-                                Image(systemName: "playpause.fill")
-                                    .font(.system(size: 9.5))
-                                    .frame(width: 26, height: 26)
-                            }
-                            .buttonStyle(HairlineIconButtonStyle())
-                            .help("Enable browser Play/Pause via macOS Accessibility")
-                        }
-                        #endif
+                        state.reseedFocusPhrase()
+                    } label: {
+                        Image(systemName: "arrow.trianglehead.2.clockwise")
+                            .font(.system(size: 12.5, weight: .medium))
+                            .rotationEffect(.degrees(reseedSpinAngle))
+                            .foregroundColor(state.isFocusPlaying ? .white : inkDim)
+                            .frame(width: 34, height: 34)
+                            .background(Color.white.opacity(0.06))
+                            .clipShape(Circle())
+                            .overlay(Circle().stroke(hairSoft, lineWidth: 1))
                     }
+                    .buttonStyle(.plain)
+                    .help("Refresh phrase & harmonic variation")
                 }
 
-                VStack(spacing: 4) {
-                    if state.isFocusAudible {
-                        // 32-bar architectural micro-score strip tracking Soft Light / generative form
-                        HStack(alignment: .bottom, spacing: 2) {
-                            ForEach(0..<SatieScore.barsPerForm, id: \.self) { idx in
-                                let fullness = SatieScore.fullnessCurve[idx]
-                                let isCurrent = idx == state.scoreTelemetry.barInForm
-                                let isPast = idx < state.scoreTelemetry.barInForm
-                                Rectangle()
-                                    .fill(
-                                        isCurrent
-                                            ? Color.white
-                                            : (isPast ? Color.white.opacity(0.42) : Color.white.opacity(0.15))
-                                    )
-                                    .frame(height: max(2.5, CGFloat(fullness) * 9.0))
-                                    .frame(maxWidth: .infinity)
-                            }
-                        }
-                        .frame(height: 9, alignment: .bottom)
-                        .accessibilityLabel("Score progress: bar \(state.scoreTelemetry.barInForm + 1) of 32")
-                    } else {
-                        GeometryReader { geo in
-                            let frac = progressFraction
-                            ZStack(alignment: .leading) {
-                                Rectangle().fill(Color.white.opacity(0.14))
-                                Rectangle()
-                                    .fill(Color.white.opacity(0.94))
-                                    .frame(width: max(2, geo.size.width * frac))
-                            }
-                            .contentShape(Rectangle())
-                            .gesture(
-                                DragGesture(minimumDistance: 0)
-                                    .onEnded { val in
-                                        guard !state.isFocusAudible, state.metadata.canSeek, geo.size.width > 1 else { return }
-                                        state.media.seek(to: Double(val.location.x / geo.size.width))
-                                    }
-                            )
-                        }
-                        .frame(height: 3)
-                    }
-
-                    HStack {
-                        Text(elapsedLabel)
-                        Spacer()
-                        Text(remainingLabel)
-                    }
-                    .font(.system(size: 9.5, design: .monospaced))
-                    .foregroundColor(inkDim)
-                }
-            }
-
-            // Generative Work Soundscape strip (FOCUS / PULSE / RAIN / DRIFT + inline volume + flow timer)
-            VStack(spacing: 7) {
-                HStack(spacing: 6) {
-                    HStack(spacing: 2) {
-                        ForEach(FocusSoundscape.allCases) { mode in
-                            let active = state.isFocusPlaying && state.focusMode == mode
-                            Button {
-                                state.toggleFocusSound(mode)
-                            } label: {
-                                Text(mode.shortLabel)
-                                    .font(.system(size: 9.2, weight: active ? .semibold : .regular, design: .monospaced))
-                                    .foregroundColor(active ? Color(red: 0.03, green: 0.05, blue: 0.09) : inkDim)
-                                    .padding(.horizontal, 7.5)
-                                    .frame(height: 22)
-                                    .background(active ? Color(red: 0.93, green: 0.96, blue: 1.0) : Color.clear)
-                            }
-                            .buttonStyle(.plain)
-                            .help("Play \(mode.title) generative work soundscape")
-                        }
-                    }
-                    .padding(2)
-                    .background(Color.white.opacity(0.025))
-                    .overlay(Rectangle().stroke(hairSoft, lineWidth: 1))
-
-                    Spacer()
-
+                // Hero High-Contrast White Play / Pause Circle
+                Button {
                     if state.isFocusPlaying {
-                        Button {
-                            state.cycleFlowDuration()
-                        } label: {
-                            Text(state.flowDuration.label)
-                                .font(.system(size: 9.2, weight: .medium, design: .monospaced))
-                                .foregroundColor(state.flowDuration == .infinite ? inkDim : .white)
-                                .padding(.horizontal, 7)
-                                .frame(height: 24)
-                                .background(Color.white.opacity(state.flowDuration == .infinite ? 0.03 : 0.10))
-                                .overlay(Rectangle().stroke(hairSoft, lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                        .help("Cycle flow session timer (∞ / 25m / 50m)")
+                        state.performHaptic()
+                        state.stopFocusSound()
+                    } else if state.metadata.canControlPlayback && !state.snapshot.isSilent {
+                        state.media.playPause()
                     } else {
-                        Text("WORK SOUND")
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundColor(inkDim)
+                        state.toggleFocusSound(state.focusMode)
                     }
+                } label: {
+                    Image(systemName: heroPlayIcon)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.black)
+                        .offset(x: heroPlayIcon == "play.fill" ? 1.5 : 0)
+                        .frame(width: 46, height: 46)
+                        .background(Color.white)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help(state.isFocusPlaying ? "Pause \(state.focusMode.title) (Space)" : "Play \(state.focusMode.title) (Space)")
+
+                // Radial Focus Timer Toggle
+                Button {
+                    toggleDrawer(.timer)
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "timer")
+                            .font(.system(size: 12.5, weight: .medium))
+                        if let countdown = compactCountdown {
+                            Text(countdown)
+                                .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                        }
+                    }
+                    .foregroundColor(activeDrawer == .timer ? .black : (state.flowMinutes > 0 ? .white : inkSoft))
+                    .padding(.horizontal, compactCountdown != nil ? 10 : 0)
+                    .frame(minWidth: 34, minHeight: 34)
+                    .frame(height: 34)
+                    .background(activeDrawer == .timer ? Color.white : Color.white.opacity(state.flowMinutes > 0 ? 0.13 : 0.06))
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(activeDrawer == .timer ? Color.clear : hairSoft, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .help("Focus Timer & Circadian Curve")
+
+                // Live Sound Sculptor Toggle (Intensity + Rain/Brown Masking + Auto-Duck)
+                CircularControlButton(
+                    systemName: "slider.horizontal.3",
+                    isActive: activeDrawer == .sculpt,
+                    hasIndicatorDot: state.soundIntensity != .flow || state.maskingBed != .off,
+                    help: "Sculpt sound (Depth, Rain/Brown Masking, Auto-Duck)"
+                ) {
+                    toggleDrawer(.sculpt)
                 }
 
-                if state.isFocusPlaying {
-                    HStack(spacing: 8) {
-                        Image(systemName: state.isAutoDucked ? "speaker.slash" : "speaker.wave.2")
-                            .font(.system(size: 9.5))
-                            .foregroundColor(inkDim)
-                            .frame(width: 12)
-                        Slider(
-                            value: Binding(
-                                get: { Double(state.focusVolume) },
-                                set: { state.focusVolume = Float($0) }
-                            ),
-                            in: 0.05...1.0
-                        )
-                        .controlSize(.mini)
-                        .tint(.white)
-                        Text(state.isAutoDucked ? "AUTO-DUCKED" : "\(Int(round(state.focusVolume * 100)))%")
-                            .font(.system(size: 9, design: .monospaced))
-                            .foregroundColor(inkDim)
-                            .frame(minWidth: 30, alignment: .trailing)
+                // Instant Core Audio Mute (visible when muted or external audio active)
+                if state.isSystemMuted || (!state.isFocusAudible && !state.snapshot.isSilent) {
+                    CircularControlButton(
+                        systemName: state.isSystemMuted ? "speaker.slash.fill" : "speaker.wave.2",
+                        isActive: state.isSystemMuted,
+                        tintWarning: state.isSystemMuted,
+                        help: state.isSystemMuted ? "Unmute Mac audio" : "Mute Mac audio immediately"
+                    ) {
+                        state.toggleSystemMute()
                     }
                 }
             }
+            .padding(.vertical, 2)
 
-            // Expansion action strip
-            HStack(spacing: 6) {
-                Button(action: onOpenMiniHUD) {
-                    Label("Mini HUD", systemImage: "pip")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(HairlineButtonStyle())
-
-                Button(action: onOpenStudio) {
-                    Label("Studio Window", systemImage: "macwindow")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(HairlineButtonStyle())
-
-                Button(action: onOpenFullscreen) {
-                    Label("Fullscreen", systemImage: "arrow.up.left.and.arrow.down.right")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(HairlineButtonStyle())
-
-                Button(action: onQuit) {
-                    Image(systemName: "power")
-                        .font(.system(size: 10))
-                        .frame(width: 26, height: 25)
-                }
-                .buttonStyle(HairlineIconButtonStyle())
-                .help("Quit Satie")
+            // 4. Inline Volume Hairline (always 1 drag away when playing and sculptor drawer is closed)
+            if state.isFocusPlaying && activeDrawer != .sculpt {
+                volumeSliderRow
+                    .padding(.horizontal, 4)
             }
-            .padding(.top, 2)
 
+            // 5. Expandable Contextual Drawer: Braun/Leica Radial Timer OR Live Sound Sculptor
+            if activeDrawer == .timer {
+                RadialTimerView(state: state) {
+                    toggleDrawer(.none)
+                }
+                .transition(.opacity)
+            } else if activeDrawer == .sculpt {
+                liveSculptorDrawer
+                    .transition(.opacity)
+            }
+
+            // Notch hint only when status bar icon is genuinely hidden behind the camera notch
             if state.isStatusItemBehindNotch {
                 Text("⌥⌘S summon · ⌥⌘Space play/stop · ⌘-drag icon right of notch")
-                    .font(.system(size: 9, design: .monospaced))
+                    .font(.system(size: 8.8, design: .monospaced))
                     .foregroundColor(inkDim)
                     .lineLimit(1)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -433,70 +404,244 @@ struct PopoverView: View {
         }
         .padding(14)
         .frame(width: 392)
-        .background(
-            RadialGradient(
-                colors: [
-                    Color(red: 0.075, green: 0.118, blue: 0.188),
-                    Color(red: 0.038, green: 0.062, blue: 0.106),
-                    Color(red: 0.025, green: 0.040, blue: 0.068)
-                ],
-                center: .center,
-                startRadius: 10,
-                endRadius: 260
-            )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(Color(red: 0.032, green: 0.036, blue: 0.044))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(hairColor, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(hair, lineWidth: 1)
         )
     }
 
-    private var progressFraction: CGFloat {
-        if state.isFocusAudible, let rem = state.flowRemainingSeconds, state.flowDuration.rawValue > 0 {
-            let total = Double(state.flowDuration.rawValue)
-            return CGFloat(max(0.02, min(1.0, (total - rem) / total)))
+    // MARK: - Live Sound Sculptor Drawer (Intensity + Rain/Brown Masking + Auto-Duck + Volume)
+
+    private var liveSculptorDrawer: some View {
+        VStack(spacing: 10) {
+            // Depth / Intensity (Modulation Depth)
+            sculptRow(title: "DEPTH") {
+                HStack(spacing: 3) {
+                    ForEach(SoundIntensity.allCases) { level in
+                        let on = state.soundIntensity == level
+                        Button {
+                            state.soundIntensity = level
+                            state.performHaptic()
+                        } label: {
+                            Text(level.label)
+                                .font(.system(size: 9, weight: on ? .semibold : .regular, design: .monospaced))
+                                .foregroundColor(on ? .black : inkSoft)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 23)
+                                .background(on ? Color.white : Color.white.opacity(0.05))
+                                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            // Independent Acoustic Masking Bed (OFF / RAIN / BROWN)
+            sculptRow(title: "MASKING") {
+                HStack(spacing: 3) {
+                    ForEach(MaskingBed.allCases) { bed in
+                        let on = state.maskingBed == bed
+                        Button {
+                            state.maskingBed = bed
+                            state.performHaptic()
+                        } label: {
+                            Text(bed.label)
+                                .font(.system(size: 9, weight: on ? .semibold : .regular, design: .monospaced))
+                                .foregroundColor(on ? .black : inkSoft)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 23)
+                                .background(on ? Color.white : Color.white.opacity(0.05))
+                                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            // Auto-Ducking toggle (Blend vs Step Aside for calls & music)
+            HStack {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("AUTO-DUCK")
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(inkSoft)
+                    Text("Steps aside for calls & music · ignores pings")
+                        .font(.system(size: 9))
+                        .foregroundColor(inkDim)
+                }
+                Spacer()
+                Toggle("", isOn: $state.autoDuckEnabled)
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .labelsHidden()
+            }
+
+            Divider().background(hairSoft)
+
+            volumeSliderRow
         }
-        if !state.isFocusAudible, let el = state.metadata.elapsed, let dur = state.metadata.duration, dur > 0 {
-            return CGFloat(max(0, min(1, el / dur)))
-        }
-        return CGFloat(max(0.02, min(1, state.displayEnergy * 1.15)))
+        .padding(12)
+        .background(Color.white.opacity(0.035))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.white.opacity(0.11), lineWidth: 1)
+        )
     }
 
-    private var elapsedLabel: String {
-        if state.isFocusAudible, let rem = state.flowRemainingSeconds, state.flowDuration.rawValue > 0 {
-            return "FLOW \(formatClock(Double(state.flowDuration.rawValue) - rem))"
+    private func sculptRow<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        HStack(spacing: 10) {
+            Text(title)
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .foregroundColor(inkDim)
+                .frame(width: 54, alignment: .leading)
+            content()
         }
-        if state.isFocusAudible { return "FLOW · \(state.circadianPhase.label)" }
-        if let el = state.metadata.elapsed { return formatClock(el) }
-        return state.snapshot.isSilent ? "STANDBY" : "LIVE"
     }
 
-    private var remainingLabel: String {
-        if state.isFocusAudible, let rem = state.flowRemainingSeconds {
-            return "-" + formatClock(rem)
+    private var volumeSliderRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: state.isAutoDucked ? "speaker.slash" : "speaker.wave.2")
+                .font(.system(size: 9.5))
+                .foregroundColor(inkDim)
+                .frame(width: 12)
+            Slider(
+                value: Binding(
+                    get: { Double(state.focusVolume) },
+                    set: { state.focusVolume = Float($0) }
+                ),
+                in: 0.05...1.0
+            )
+            .controlSize(.mini)
+            .tint(.white)
+            Text(state.isAutoDucked ? "DUCKED" : "\(Int(round(state.focusVolume * 100)))%")
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(inkDim)
+                .frame(minWidth: 32, alignment: .trailing)
         }
-        if !state.isFocusAudible, let el = state.metadata.elapsed, let dur = state.metadata.duration {
-            return "-" + formatClock(max(0, dur - el))
-        }
-        return "\(state.displayFPS) FPS"
     }
 
-    private func formatClock(_ seconds: Double) -> String {
-        let s = max(0, Int(seconds))
-        return String(format: "%02d:%02d", s / 60, s % 60)
+    // MARK: - Helpers
+
+    private func toggleDrawer(_ target: PopoverDrawer) {
+        state.performHaptic()
+        activeDrawer = (activeDrawer == target) ? .none : target
+        DispatchQueue.main.async {
+            onRequestResize?()
+        }
+    }
+
+    private var heroTitle: String {
+        if state.isFocusPlaying && !state.isAutoDucked {
+            return state.focusMode.title
+        }
+        if !state.isFocusPlaying && state.snapshot.isSilent {
+            return state.focusMode.title
+        }
+        return state.activeTitle
+    }
+
+    private var heroSubtitle: String {
+        if state.isFocusPlaying && state.isAutoDucked, let app = state.duckedByAppName {
+            return "AUTO-DUCKED · \(app.uppercased())"
+        }
+        if state.isFocusPlaying {
+            let phase = state.effectiveCircadianPhase.detailedLabel
+            if state.maskingBed != .off {
+                return "\(phase) · \(state.maskingBed.label)"
+            }
+            if state.soundIntensity != .flow {
+                return "\(phase) · \(state.soundIntensity.label)"
+            }
+            return phase
+        }
+        if state.snapshot.isSilent {
+            return state.effectiveCircadianPhase.detailedLabel
+        }
+        return state.metadata.sourceApp
+    }
+
+    private var heroPlayIcon: String {
+        if state.isFocusPlaying { return "pause.fill" }
+        if state.metadata.canControlPlayback && state.metadata.isPlaying && !state.snapshot.isSilent {
+            return "pause.fill"
+        }
+        return "play.fill"
+    }
+
+    private var compactCountdown: String? {
+        guard state.isFocusPlaying, let rem = state.flowRemainingSeconds else { return nil }
+        let sec = max(0, Int(ceil(rem)))
+        return String(format: "%d:%02d", sec / 60, sec % 60)
+    }
+}
+
+// MARK: - Editorial Button Chrome
+
+private struct QuietIconButton: View {
+    let systemName: String
+    let help: String
+    let action: () -> Void
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 10.5, weight: .medium))
+                .foregroundColor(Color.white.opacity(hovered ? 0.95 : 0.48))
+                .frame(width: 24, height: 24)
+                .background(Color.white.opacity(hovered ? 0.12 : 0.04))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovered = $0 }
+        .help(help)
+    }
+}
+
+private struct CircularControlButton: View {
+    let systemName: String
+    let isActive: Bool
+    var hasIndicatorDot: Bool = false
+    var tintWarning: Bool = false
+    let help: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: systemName)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundColor(tintWarning ? Color(red: 1.0, green: 0.62, blue: 0.56) : (isActive ? .black : Color.white.opacity(0.76)))
+                    .frame(width: 34, height: 34)
+                    .background(isActive && !tintWarning ? Color.white : Color.white.opacity(0.06))
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(isActive ? Color.clear : Color.white.opacity(0.10), lineWidth: 1))
+
+                if hasIndicatorDot && !isActive {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 5, height: 5)
+                        .offset(x: -2, y: 2)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 }
 
 struct HairlineButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
-            .foregroundColor(configuration.isPressed ? .white : Color(red: 0.88, green: 0.92, blue: 0.98).opacity(0.84))
-            .padding(.horizontal, 7)
-            .frame(height: 25)
-            .background(Color.white.opacity(configuration.isPressed ? 0.16 : 0.04))
-            .overlay(Rectangle().stroke(Color(red: 0.86, green: 0.91, blue: 0.98).opacity(0.20), lineWidth: 1))
+            .font(.system(size: 10.5, weight: .medium))
+            .foregroundColor(.white)
+            .padding(.horizontal, 8)
+            .frame(height: 24)
+            .background(Color.white.opacity(configuration.isPressed ? 0.14 : 0.05))
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(Color.white.opacity(0.18), lineWidth: 1))
     }
 }
 
@@ -505,8 +650,9 @@ struct HairlineIconButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundColor(prominent ? .white : Color(red: 0.88, green: 0.92, blue: 0.98).opacity(0.82))
-            .background(Color.white.opacity(configuration.isPressed ? 0.20 : (prominent ? 0.08 : 0.03)))
-            .overlay(Rectangle().stroke(Color(red: 0.86, green: 0.91, blue: 0.98).opacity(prominent ? 0.34 : 0.14), lineWidth: 1))
+            .foregroundColor(.white)
+            .background(Color.white.opacity(configuration.isPressed ? 0.18 : (prominent ? 0.10 : 0.04)))
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(Color.white.opacity(prominent ? 0.34 : 0.18), lineWidth: 1))
     }
 }
