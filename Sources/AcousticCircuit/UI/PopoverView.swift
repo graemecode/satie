@@ -2,95 +2,6 @@ import AcousticCore
 import AppKit
 import SwiftUI
 
-/// Lightweight 24-band stark-white architectural bar strip rendered cleanly via CoreGraphics.
-final class BarsStripNSView: NSView {
-    private var bands: [Float] = [Float](repeating: 0, count: 24)
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        wantsLayer = true
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    func update(_ bands24: [Float]) {
-        self.bands = bands24
-        needsDisplay = true
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
-        ctx.clear(bounds)
-        let w = bounds.width
-        let h = bounds.height
-        let gap: CGFloat = 2.5
-        let bw = (w - gap * 23.0) / 24.0
-        guard bw > 0.5 else { return }
-
-        let fill = NSColor(calibratedWhite: 1.0, alpha: 0.78).cgColor
-        let base = NSColor(calibratedWhite: 1.0, alpha: 0.14).cgColor
-
-        for i in 0..<24 {
-            let x = CGFloat(i) * (bw + gap)
-            ctx.setFillColor(base)
-            ctx.fill(CGRect(x: x, y: 0, width: bw, height: 1.5))
-
-            let fh = max(1.5, CGFloat(bands[i]) * h)
-            ctx.setFillColor(fill)
-            ctx.fill(CGRect(x: x, y: 0, width: bw, height: fh))
-        }
-    }
-}
-
-struct BarsStripRepresentable: NSViewRepresentable {
-    var isActive: Bool
-
-    func makeNSView(context: Context) -> BarsStripNSView {
-        let v = BarsStripNSView(frame: .zero)
-        context.coordinator.view = v
-        context.coordinator.setActive(isActive)
-        return v
-    }
-
-    func updateNSView(_ nsView: BarsStripNSView, context: Context) {
-        context.coordinator.setActive(isActive)
-    }
-
-    static func dismantleNSView(_ nsView: BarsStripNSView, coordinator: Coordinator) {
-        coordinator.stop()
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    @MainActor
-    final class Coordinator {
-        weak var view: BarsStripNSView?
-        private var timer: Timer?
-
-        func setActive(_ active: Bool) {
-            if active {
-                guard timer == nil else { return }
-                timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
-                    Task { @MainActor [weak self] in
-                        guard let self, let v = self.view, v.window?.isVisible == true else { return }
-                        v.update(AppState.shared.snapshot.bands24)
-                    }
-                }
-            } else {
-                stop()
-            }
-        }
-
-        func stop() {
-            timer?.invalidate()
-            timer = nil
-        }
-    }
-}
-
 private enum PopoverDrawer: Equatable {
     case none
     case timer
@@ -107,6 +18,7 @@ struct PopoverView: View {
 
     @State private var activeDrawer: PopoverDrawer = .none
     @State private var reseedSpinAngle: Double = 0
+    @State private var presetWhisper: String? = nil
 
     private let hair = Color.white.opacity(0.14)
     private let hairSoft = Color.white.opacity(0.08)
@@ -114,35 +26,63 @@ struct PopoverView: View {
     private let inkDim = Color.white.opacity(0.42)
 
     var body: some View {
-        VStack(spacing: 12) {
-            // 1. Hero OLED Metal Stage with Floating Editorial Typography + Quiet Corner Utility Chrome
+        VStack(spacing: 13) {
+            // 1. Pure Unobstructed Full-Bleed OLED Metal Stage
             ZStack {
                 MetalVisualizerRepresentable(compactMode: true, isActive: state.isPopoverOpen)
-                    .frame(height: 174)
+                    .frame(height: 192)
                     .clipped()
 
-                // Subtle top & bottom dark scrims for effortless text legibility
+                // Whisper-subtle atmospheric light temperature matched to the active soundscape
+                RadialGradient(
+                    colors: [soundscapeAuraColor.opacity(0.22), Color.clear],
+                    center: .center,
+                    startRadius: 16,
+                    endRadius: 185
+                )
+                .blendMode(.screen)
+                .animation(.easeInOut(duration: 0.9), value: state.focusMode)
+                .allowsHitTesting(false)
+
+                // Soft top vignette so floating typography reads cleanly over bright peaks
                 VStack(spacing: 0) {
                     LinearGradient(
-                        colors: [Color.black.opacity(0.78), Color.black.opacity(0.0)],
+                        colors: [Color.black.opacity(0.74), Color.black.opacity(0.0)],
                         startPoint: .top, endPoint: .bottom
                     )
-                    .frame(height: 62)
+                    .frame(height: 68)
                     Spacer()
-                    LinearGradient(
-                        colors: [Color.black.opacity(0.0), Color.black.opacity(0.84)],
-                        startPoint: .top, endPoint: .bottom
-                    )
-                    .frame(height: 52)
                 }
                 .allowsHitTesting(false)
 
+                // Tap anywhere on the stage to cycle 120Hz Metal visual modes effortlessly
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        let all = VisualPreset.allCases
+                        let next = all[(state.preset.rawValue + 1) % all.count]
+                        state.preset = next
+                        state.performHaptic()
+                        withAnimation(.easeOut(duration: 0.16)) {
+                            presetWhisper = next.shortTitle.uppercased()
+                        }
+                        let currentLabel = next.shortTitle.uppercased()
+                        Task { @MainActor in
+                            try? await Task.sleep(for: .milliseconds(1100))
+                            if presetWhisper == currentLabel {
+                                withAnimation(.easeOut(duration: 0.35)) {
+                                    presetWhisper = nil
+                                }
+                            }
+                        }
+                    }
+
                 VStack(spacing: 0) {
-                    // Floating Header Overlay: Title + Circadian Phase on left, Quiet Window Icons on right
+                    // Floating Header: Title + Biological Phase on left, ONE quiet Studio expand button on right
                     HStack(alignment: .top, spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(heroTitle)
-                                .font(.system(size: 16.5, weight: .medium))
+                                .font(.system(size: 17, weight: .medium))
                                 .foregroundColor(.white)
                                 .lineLimit(1)
                                 .truncationMode(.tail)
@@ -152,69 +92,39 @@ struct PopoverView: View {
                                 .foregroundColor(inkSoft)
                                 .lineLimit(1)
                         }
+                        .allowsHitTesting(false)
 
                         Spacer(minLength: 4)
 
-                        // Quiet utility icons (never compete with playback)
-                        HStack(spacing: 4) {
-                            QuietIconButton(systemName: "pip", help: "Mini HUD (⌘M)", action: onOpenMiniHUD)
-                            QuietIconButton(systemName: "macwindow", help: "Studio Window", action: onOpenStudio)
-                            QuietIconButton(systemName: "arrow.up.left.and.arrow.down.right", help: "Fullscreen (⌘F)", action: onOpenFullscreen)
-                            QuietIconButton(systemName: "power", help: "Quit Satie (⌘Q)", action: onQuit)
-                        }
+                        QuietIconButton(
+                            systemName: "arrow.up.left.and.arrow.down.right",
+                            help: "Open Studio Visualizer (⌘F Fullscreen · ⌘M Mini HUD)",
+                            action: onOpenStudio
+                        )
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.top, 10)
+                    .padding(.horizontal, 13)
+                    .padding(.top, 11)
 
                     Spacer()
 
-                    // Bottom of Stage: Subtle 24-band level hairline / 32-bar form strip + 1-4 visual mode dots
-                    HStack(alignment: .bottom, spacing: 10) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            if state.isFocusAudible {
-                                HStack(alignment: .bottom, spacing: 2) {
-                                    ForEach(0..<SatieScore.barsPerForm, id: \.self) { idx in
-                                        let fullness = SatieScore.fullnessCurve[idx]
-                                        let isCurrent = idx == state.scoreTelemetry.barInForm
-                                        let isPast = idx < state.scoreTelemetry.barInForm
-                                        Rectangle()
-                                            .fill(isCurrent ? Color.white : (isPast ? Color.white.opacity(0.45) : Color.white.opacity(0.16)))
-                                            .frame(height: max(2.0, CGFloat(fullness) * 7.0))
-                                            .frame(maxWidth: .infinity)
-                                    }
-                                }
-                                .frame(height: 7, alignment: .bottom)
-                            } else {
-                                BarsStripRepresentable(isActive: state.isPopoverOpen)
-                                    .frame(height: 14)
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-
-                        HStack(spacing: 3) {
-                            ForEach(VisualPreset.allCases) { p in
-                                Button {
-                                    state.preset = p
-                                    state.performHaptic()
-                                } label: {
-                                    Circle()
-                                        .fill(state.preset == p ? Color.white : Color.white.opacity(0.28))
-                                        .frame(width: state.preset == p ? 6 : 4.5, height: state.preset == p ? 6 : 4.5)
-                                        .frame(width: 14, height: 14)
-                                }
-                                .buttonStyle(.plain)
-                                .help(p.title)
-                            }
-                        }
+                    if let whisper = presetWhisper {
+                        Text(whisper)
+                            .font(.system(size: 9, weight: .medium, design: .monospaced))
+                            .foregroundColor(Color.white.opacity(0.78))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color.black.opacity(0.55))
+                            .clipShape(Capsule())
+                            .padding(.bottom, 10)
+                            .transition(.opacity)
+                            .allowsHitTesting(false)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 8)
                 }
             }
-            .frame(height: 174)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .frame(height: 192)
+            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
                     .stroke(hairSoft, lineWidth: 1)
             )
 
@@ -276,34 +186,41 @@ struct PopoverView: View {
             }
             .padding(.top, 1)
 
-            // 3. Iconic Centered Transport Row: [↻ Refresh]  [▶/⏸ Hero White]  [⏱ Timer]  [≡ Sculpt]
-            HStack(spacing: 14) {
-                // Re-seed / Refresh harmonic phrase (or Previous Track for external media)
-                if !state.isFocusAudible && state.metadata.canControlPlayback {
-                    CircularControlButton(systemName: "backward.fill", isActive: false, help: "Previous Track") {
-                        state.media.previousTrack()
-                    }
-                } else {
-                    Button {
-                        withAnimation(.easeOut(duration: 0.42)) {
-                            reseedSpinAngle += 360
+            // 3. Dead-Center Braun Transport Triad: [⏱ Timer]   [▶/⏸ Hero White]   [≡ Sculpt]
+            HStack(spacing: 16) {
+                // Left wing (right-aligned so countdown pill expands leftward without shifting Play/Pause)
+                HStack(spacing: 10) {
+                    if !state.isFocusAudible && state.metadata.canControlPlayback {
+                        CircularControlButton(systemName: "backward.fill", isActive: false, help: "Previous Track") {
+                            state.media.previousTrack()
                         }
-                        state.reseedFocusPhrase()
-                    } label: {
-                        Image(systemName: "arrow.trianglehead.2.clockwise")
-                            .font(.system(size: 12.5, weight: .medium))
-                            .rotationEffect(.degrees(reseedSpinAngle))
-                            .foregroundColor(state.isFocusPlaying ? .white : inkDim)
-                            .frame(width: 34, height: 34)
-                            .background(Color.white.opacity(0.06))
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(hairSoft, lineWidth: 1))
+                    } else {
+                        Button {
+                            toggleDrawer(.timer)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "timer")
+                                    .font(.system(size: 12.5, weight: .medium))
+                                if let countdown = compactCountdown {
+                                    Text(countdown)
+                                        .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                                }
+                            }
+                            .foregroundColor(activeDrawer == .timer ? .black : (state.flowMinutes > 0 ? .white : inkSoft))
+                            .padding(.horizontal, compactCountdown != nil ? 10 : 0)
+                            .frame(minWidth: 34, minHeight: 34)
+                            .frame(height: 34)
+                            .background(activeDrawer == .timer ? Color.white : Color.white.opacity(state.flowMinutes > 0 ? 0.13 : 0.06))
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(activeDrawer == .timer ? Color.clear : hairSoft, lineWidth: 1))
+                        }
+                        .buttonStyle(.plain)
+                        .help("Focus Timer & Circadian Curve")
                     }
-                    .buttonStyle(.plain)
-                    .help("Refresh phrase & harmonic variation")
                 }
+                .frame(maxWidth: .infinity, alignment: .trailing)
 
-                // Hero High-Contrast White Play / Pause Circle
+                // Hero High-Contrast White Play / Pause Circle (100% dead-center beneath center glyph)
                 Button {
                     if state.isFocusPlaying {
                         state.performHaptic()
@@ -325,50 +242,35 @@ struct PopoverView: View {
                 .buttonStyle(.plain)
                 .help(state.isFocusPlaying ? "Pause \(state.focusMode.title) (Space)" : "Play \(state.focusMode.title) (Space)")
 
-                // Radial Focus Timer Toggle
-                Button {
-                    toggleDrawer(.timer)
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "timer")
-                            .font(.system(size: 12.5, weight: .medium))
-                        if let countdown = compactCountdown {
-                            Text(countdown)
-                                .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                // Right wing (left-aligned to mirror left wing)
+                HStack(spacing: 10) {
+                    if !state.isFocusAudible && state.metadata.canControlPlayback {
+                        CircularControlButton(systemName: "forward.fill", isActive: false, help: "Next Track") {
+                            state.media.nextTrack()
+                        }
+                    } else {
+                        CircularControlButton(
+                            systemName: "slider.horizontal.3",
+                            isActive: activeDrawer == .sculpt,
+                            hasIndicatorDot: state.soundIntensity != .flow || state.maskingBed != .off,
+                            help: "Sculpt sound (Depth, Rain/Brown Masking, Auto-Duck)"
+                        ) {
+                            toggleDrawer(.sculpt)
                         }
                     }
-                    .foregroundColor(activeDrawer == .timer ? .black : (state.flowMinutes > 0 ? .white : inkSoft))
-                    .padding(.horizontal, compactCountdown != nil ? 10 : 0)
-                    .frame(minWidth: 34, minHeight: 34)
-                    .frame(height: 34)
-                    .background(activeDrawer == .timer ? Color.white : Color.white.opacity(state.flowMinutes > 0 ? 0.13 : 0.06))
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(activeDrawer == .timer ? Color.clear : hairSoft, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .help("Focus Timer & Circadian Curve")
 
-                // Live Sound Sculptor Toggle (Intensity + Rain/Brown Masking + Auto-Duck)
-                CircularControlButton(
-                    systemName: "slider.horizontal.3",
-                    isActive: activeDrawer == .sculpt,
-                    hasIndicatorDot: state.soundIntensity != .flow || state.maskingBed != .off,
-                    help: "Sculpt sound (Depth, Rain/Brown Masking, Auto-Duck)"
-                ) {
-                    toggleDrawer(.sculpt)
-                }
-
-                // Instant Core Audio Mute (visible when muted or external audio active)
-                if state.isSystemMuted || (!state.isFocusAudible && !state.snapshot.isSilent) {
-                    CircularControlButton(
-                        systemName: state.isSystemMuted ? "speaker.slash.fill" : "speaker.wave.2",
-                        isActive: state.isSystemMuted,
-                        tintWarning: state.isSystemMuted,
-                        help: state.isSystemMuted ? "Unmute Mac audio" : "Mute Mac audio immediately"
-                    ) {
-                        state.toggleSystemMute()
+                    if state.isSystemMuted {
+                        CircularControlButton(
+                            systemName: "speaker.slash.fill",
+                            isActive: true,
+                            tintWarning: true,
+                            help: "Unmute Mac audio"
+                        ) {
+                            state.toggleSystemMute()
+                        }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.vertical, 2)
 
@@ -476,6 +378,18 @@ struct PopoverView: View {
             Divider().background(hairSoft)
 
             volumeSliderRow
+
+            // Quiet 1-line utility footer (keeps main face pure while leaving every window/quit action 1 click away)
+            HStack(spacing: 12) {
+                Button("MINI HUD") { onOpenMiniHUD() }
+                    .buttonStyle(QuietTextLinkStyle())
+                Button("FULLSCREEN") { onOpenFullscreen() }
+                    .buttonStyle(QuietTextLinkStyle())
+                Spacer()
+                Button("QUIT") { onQuit() }
+                    .buttonStyle(QuietTextLinkStyle())
+            }
+            .padding(.top, 2)
         }
         .padding(12)
         .background(Color.white.opacity(0.035))
@@ -515,6 +429,25 @@ struct PopoverView: View {
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(inkDim)
                 .frame(minWidth: 32, alignment: .trailing)
+
+            if state.isFocusPlaying {
+                Button {
+                    withAnimation(.easeOut(duration: 0.42)) {
+                        reseedSpinAngle += 360
+                    }
+                    state.reseedFocusPhrase()
+                } label: {
+                    Image(systemName: "arrow.trianglehead.2.clockwise")
+                        .font(.system(size: 10, weight: .medium))
+                        .rotationEffect(.degrees(reseedSpinAngle))
+                        .foregroundColor(inkSoft)
+                        .frame(width: 22, height: 22)
+                        .background(Color.white.opacity(0.05))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .help("New harmonic phrase")
+            }
         }
     }
 
@@ -576,6 +509,19 @@ struct PopoverView: View {
             return "pause.fill"
         }
         return "play.fill"
+    }
+
+    private var soundscapeAuraColor: Color {
+        guard state.isFocusPlaying else {
+            return Color(red: 0.72, green: 0.80, blue: 0.92)
+        }
+        switch state.focusMode {
+        case .focus: return Color(red: 1.00, green: 0.78, blue: 0.52) // Warm cedar tungsten
+        case .pulse: return Color(red: 0.62, green: 0.78, blue: 1.00) // Cool architectural indigo
+        case .rain:  return Color(red: 0.52, green: 0.82, blue: 0.84) // Kyoto rain sea-glass
+        case .drift: return Color(red: 0.92, green: 0.84, blue: 0.74) // Nocturnal lunar pearl
+        case .still: return Color(red: 0.78, green: 0.82, blue: 0.88) // Pure obsidian mist
+        }
     }
 
     private var compactCountdown: String? {
@@ -662,5 +608,15 @@ struct HairlineIconButtonStyle: ButtonStyle {
             .background(Color.white.opacity(configuration.isPressed ? 0.18 : (prominent ? 0.10 : 0.04)))
             .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(Color.white.opacity(prominent ? 0.34 : 0.18), lineWidth: 1))
+    }
+}
+
+private struct QuietTextLinkStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 8.8, weight: .medium, design: .monospaced))
+            .tracking(0.6)
+            .foregroundColor(Color.white.opacity(configuration.isPressed ? 0.95 : 0.44))
+            .contentShape(Rectangle())
     }
 }

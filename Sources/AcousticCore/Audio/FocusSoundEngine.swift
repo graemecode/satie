@@ -791,6 +791,7 @@ private final class FocusRenderState: @unchecked Sendable {
     // Smooth gains
     private var activeGain: Float = 0
     private var duckGain: Float = 1
+    private var dryTransitionGain: Float = 1
     private var smoothVol: Float = 0.65
     private(set) var isAudibleOutput: Bool = false
 
@@ -827,6 +828,26 @@ private final class FocusRenderState: @unchecked Sendable {
         strLpL.reset(); strLpR.reset()
         padLpL.reset(); padLpR.reset()
 
+        clockSec = 0
+        currentBarStartSec = 0
+        barBellCursor = 0
+        barSustainCursor = 0
+        hasCurrentBar = false
+        offlineNextBarIndex = 0
+        dryTransitionGain = 1.0
+    }
+
+    /// Room-preserving acoustic crossfade: keeps the 8x8 FDN hall and Beads granular cloud ringing
+    /// so the previous soundscape dissolves organically into the next without a hard cut or click.
+    private func softModeTransition() {
+        for i in 0..<analogs.count { analogs[i].active = false }
+        for i in 0..<pads.count { pads[i].active = false }
+        for i in 0..<strings.count { strings[i].active = false }
+        for i in 0..<samplerVoices.count where samplerVoices[i].isSustainedLayer {
+            samplerVoices[i].active = false
+        }
+        grooveEngine.reset()
+        dryTransitionGain = 0.0 // ramps smoothly 0 -> 1 over ~220ms while reverb/Beads carry the tail
         clockSec = 0
         currentBarStartSec = 0
         barBellCursor = 0
@@ -933,9 +954,14 @@ private final class FocusRenderState: @unchecked Sendable {
         }
 
         if scoreResetAtom.exchange(0, ordering: .acquiring) != 0 || (wantActive && (modeIdx != activeModeIdx || circadianRaw != activeCircadianRaw)) {
+            let wasAlreadyActive = (activeModeIdx >= 0 && activeGain > 0.05)
             activeModeIdx = modeIdx
             activeCircadianRaw = circadianRaw
-            resetVoicesAndBuses()
+            if wasAlreadyActive {
+                softModeTransition()
+            } else {
+                resetVoicesAndBuses()
+            }
             pullNextBar(mode: mode, circadian: circadian, allowSyncFallback: allowSyncFallback)
         }
 
@@ -1045,6 +1071,7 @@ private final class FocusRenderState: @unchecked Sendable {
         for i in 0..<frames {
             activeGain += (targetActiveGain - activeGain) * activeStep
             duckGain += (targetDuckGain - duckGain) * duckStep
+            dryTransitionGain += (1.0 - dryTransitionGain) * 0.00028 // ~220ms silky dry-bus bloom on mode switch
             smoothVol += (targetVol - smoothVol) * 0.0006
 
             let masterEnv = activeGain * duckGain
@@ -1378,12 +1405,12 @@ private final class FocusRenderState: @unchecked Sendable {
             }
 
             // 5. Studio Acoustic Space (Pre-Delay + Early Reflections + 4-Stage Allpass + 8x8 Modulated FDN)
-            let dryL = fcL + mcL + scL * sidechainGain + filtPadL + bsL + pulseSub + percL + rainTexL + beadsL * cloudWet * sidechainGain
-            let dryR = fcR + mcR + scR * sidechainGain + filtPadR + bsR + pulseSub + percR + rainTexR + beadsR * cloudWet * sidechainGain
+            let dryL = (fcL + mcL + scL * sidechainGain + filtPadL + bsL + pulseSub + percL + rainTexL) * dryTransitionGain + beadsL * cloudWet * sidechainGain
+            let dryR = (fcR + mcR + scR * sidechainGain + filtPadR + bsR + pulseSub + percR + rainTexR) * dryTransitionGain + beadsR * cloudWet * sidechainGain
 
             // Keep sub-bass & close rain sheet mostly out of the reverb tank for crystalline clarity
-            let revInL = fcL + mcL + strCleanL * 0.95 + filtPadL * 0.65 + beadsL * (cloudWet * 0.65) + percL * 0.40 + rainTexL * 0.20
-            let revInR = fcR + mcR + strCleanR * 0.95 + filtPadR * 0.65 + beadsR * (cloudWet * 0.65) + percR * 0.40 + rainTexR * 0.20
+            let revInL = (fcL + mcL + strCleanL * 0.95 + filtPadL * 0.65 + percL * 0.40 + rainTexL * 0.20) * dryTransitionGain + beadsL * (cloudWet * 0.65)
+            let revInR = (fcR + mcR + strCleanR * 0.95 + filtPadR * 0.65 + percR * 0.40 + rainTexR * 0.20) * dryTransitionGain + beadsR * (cloudWet * 0.65)
             let (wetL, wetR) = space.process(
                 revInL, revInR,
                 preDelayMs: preDelayMs,
