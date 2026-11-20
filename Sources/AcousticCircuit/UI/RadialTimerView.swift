@@ -2,7 +2,7 @@ import AcousticCore
 import AppKit
 import SwiftUI
 
-/// Braun / Leica-inspired stark monochrome circular focus timer dial + 24h Circadian Energy Curve.
+/// Braun / Leica-inspired stark monochrome circular focus timer dial.
 /// Supports smooth circular dragging with Force Touch tick haptics on every 5-minute notch (0 = ∞, 5..120m).
 struct RadialTimerView: View {
     @ObservedObject var state: AppState
@@ -14,20 +14,14 @@ struct RadialTimerView: View {
     var body: some View {
         VStack(spacing: 12) {
             HStack {
-                Text("FOCUS SESSION")
+                Text("TIMER")
                     .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
                     .foregroundColor(Color.white.opacity(0.50))
                     .tracking(1.1)
                 Spacer()
-                if state.flowMinutes > 0 {
-                    Text(sessionPhaseTag)
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
-                        .foregroundColor(Color.white.opacity(0.76))
-                } else {
-                    Text("CONTINUOUS")
-                        .font(.system(size: 9, design: .monospaced))
-                        .foregroundColor(Color.white.opacity(0.42))
-                }
+                Text(state.flowMinutes > 0 ? "FADES OUT WHEN DONE" : "NO LIMIT")
+                    .font(.system(size: 9, weight: .medium, design: .monospaced))
+                    .foregroundColor(Color.white.opacity(state.flowMinutes > 0 ? 0.70 : 0.42))
             }
 
             // Interactive Circular Tick-Wheel Dial
@@ -131,7 +125,7 @@ struct RadialTimerView: View {
                         state.setFlowMinutes(mins)
                         state.performHaptic()
                     } label: {
-                        Text(mins == 0 ? "∞" : "\(mins)M")
+                        Text(mins == 0 ? "∞" : "\(mins)m")
                             .font(.system(size: 9.5, weight: selected ? .semibold : .regular, design: .monospaced))
                             .foregroundColor(selected ? .black : Color.white.opacity(0.62))
                             .frame(maxWidth: .infinity)
@@ -142,41 +136,6 @@ struct RadialTimerView: View {
                     .buttonStyle(.plain)
                 }
             }
-
-            // Minimal 24-hour Circadian Energy Curve
-            VStack(spacing: 5) {
-                HStack {
-                    Text("CIRCADIAN · \(state.effectiveCircadianPhase.detailedLabel)")
-                        .font(.system(size: 8.5, weight: .medium, design: .monospaced))
-                        .foregroundColor(Color.white.opacity(0.48))
-                    Spacer()
-                    HStack(spacing: 2) {
-                        ForEach(CircadianOverride.allCases) { opt in
-                            let on = state.circadianOverride == opt
-                            Button {
-                                state.circadianOverride = opt
-                                state.performHaptic()
-                            } label: {
-                                Text(opt.label)
-                                    .font(.system(size: 8.2, weight: on ? .semibold : .regular, design: .monospaced))
-                                    .foregroundColor(on ? .black : Color.white.opacity(0.50))
-                                    .padding(.horizontal, 6)
-                                    .frame(height: 17)
-                                    .background(on ? Color.white : Color.clear)
-                                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(2)
-                    .background(Color.white.opacity(0.05))
-                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                }
-
-                CircadianCurveCanvas()
-                    .frame(height: 24)
-            }
-            .padding(.top, 2)
         }
         .padding(12)
         .background(Color.white.opacity(0.035))
@@ -197,54 +156,5 @@ struct RadialTimerView: View {
             return String(format: "%02d:%02d", total / 60, total % 60)
         }
         return "\(state.flowMinutes):00"
-    }
-
-    private var sessionPhaseTag: String {
-        guard state.isFocusPlaying, let p = state.sessionProgress else {
-            return "ARC READY"
-        }
-        if p < 0.12 { return "ARRIVAL" }
-        if p > 0.88 { return "SOFT LANDING" }
-        return "DEEP LOCK"
-    }
-}
-
-private struct CircadianCurveCanvas: View {
-    var body: some View {
-        Canvas { ctx, sz in
-            let now = Date()
-            let comps = Calendar.current.dateComponents([.hour, .minute], from: now)
-            let nowHour = Double(comps.hour ?? 12) + Double(comps.minute ?? 0) / 60.0
-
-            // Baseline hairline
-            var base = Path()
-            base.move(to: CGPoint(x: 0, y: sz.height - 2))
-            base.addLine(to: CGPoint(x: sz.width, y: sz.height - 2))
-            ctx.stroke(base, with: .color(Color.white.opacity(0.10)), lineWidth: 0.75)
-
-            // 24-hour circadian alertness wave
-            var curve = Path()
-            let steps = 64
-            for i in 0...steps {
-                let h = (Double(i) / Double(steps)) * 24.0
-                let e = CircadianPhase.energyCurve(hour: h)
-                let x = CGFloat(i) / CGFloat(steps) * sz.width
-                let y = sz.height - 3 - CGFloat(e) * (sz.height - 6)
-                if i == 0 { curve.move(to: CGPoint(x: x, y: y)) }
-                else { curve.addLine(to: CGPoint(x: x, y: y)) }
-            }
-            ctx.stroke(curve, with: .color(Color.white.opacity(0.42)), lineWidth: 1.0)
-
-            // Current time marker dot + vertical drop hairline
-            let cx = CGFloat(nowHour / 24.0) * sz.width
-            let cy = sz.height - 3 - CGFloat(CircadianPhase.energyCurve(hour: nowHour)) * (sz.height - 6)
-            var drop = Path()
-            drop.move(to: CGPoint(x: cx, y: cy))
-            drop.addLine(to: CGPoint(x: cx, y: sz.height - 2))
-            ctx.stroke(drop, with: .color(Color.white.opacity(0.35)), lineWidth: 0.75)
-
-            let dot = Path(ellipseIn: CGRect(x: cx - 3, y: cy - 3, width: 6, height: 6))
-            ctx.fill(dot, with: .color(.white))
-        }
     }
 }

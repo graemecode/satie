@@ -33,11 +33,11 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
 
     public var subtitle: String {
         switch self {
-        case .focus: return "Felt Piano · Vibraphone · Halo"
-        case .pulse: return "Hypnotic Analog · 3D Rings"
-        case .rain: return "Kyoto Rain · Wine Glasses"
+        case .focus: return "Felt Piano · Vibraphone"
+        case .pulse: return "Analog Pulse · Warm Sub"
+        case .rain: return "Gentle Rain · Wine Glasses"
         case .drift: return "Nocturnal Piano · Cello"
-        case .still: return "Zero-Ego Study · Suspended"
+        case .still: return "Quiet Ambient · No Melody"
         }
     }
 }
@@ -85,9 +85,9 @@ public enum MaskingBed: String, CaseIterable, Identifiable, Sendable {
 
     public var label: String {
         switch self {
-        case .off: return "OFF"
-        case .rain: return "RAIN"
-        case .brown: return "BROWN"
+        case .off: return "None"
+        case .rain: return "Rain"
+        case .brown: return "Brown Noise"
         }
     }
 }

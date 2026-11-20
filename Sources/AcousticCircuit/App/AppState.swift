@@ -235,9 +235,9 @@ final class AppState: ObservableObject {
         self.sensitivity = settings.sensitivity
         self.focusMode = settings.focusMode
         self.focusVolume = settings.focusVolume
-        self.soundIntensity = settings.soundIntensity
+        self.soundIntensity = .flow
         self.maskingBed = settings.maskingBed
-        self.circadianOverride = settings.circadianOverride
+        self.circadianOverride = .auto
         self.flowMinutes = settings.flowMinutes
         self.autoDuckEnabled = settings.autoDuck
         self.launchAtLogin = settings.launchAtLogin
@@ -247,9 +247,9 @@ final class AppState: ObservableObject {
         self.focusSound = FocusSoundEngine(ringBuffer: focusRingBuffer)
         self.focusSound.setMode(settings.focusMode)
         self.focusSound.setVolume(settings.focusVolume)
-        self.focusSound.setIntensity(settings.soundIntensity)
+        self.focusSound.setIntensity(.flow)
         self.focusSound.setMaskingBed(settings.maskingBed)
-        let initPhase = settings.circadianOverride.resolvedPhase()
+        let initPhase = CircadianOverride.auto.resolvedPhase()
         self.circadianPhase = initPhase
         self.focusSound.setCircadianPhase(initPhase)
         self.dsp = AcousticDSP()

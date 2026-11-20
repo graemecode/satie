@@ -252,8 +252,8 @@ struct PopoverView: View {
                         CircularControlButton(
                             systemName: "slider.horizontal.3",
                             isActive: activeDrawer == .sculpt,
-                            hasIndicatorDot: state.soundIntensity != .flow || state.maskingBed != .off,
-                            help: "Sculpt sound (Depth, Rain/Brown Masking, Auto-Duck)"
+                            hasIndicatorDot: state.maskingBed != .off,
+                            help: "Sound options (Background noise, Pause for calls)"
                         ) {
                             toggleDrawer(.sculpt)
                         }
@@ -310,35 +310,22 @@ struct PopoverView: View {
         )
     }
 
-    // MARK: - Live Sound Sculptor Drawer (Intensity + Rain/Brown Masking + Auto-Duck + Volume)
+    // MARK: - Sound Options Drawer (Background Noise + Pause for Calls + Volume + Window Actions)
 
     private var liveSculptorDrawer: some View {
-        VStack(spacing: 10) {
-            // Depth / Intensity (Modulation Depth)
-            sculptRow(title: "DEPTH") {
-                HStack(spacing: 3) {
-                    ForEach(SoundIntensity.allCases) { level in
-                        let on = state.soundIntensity == level
-                        Button {
-                            state.soundIntensity = level
-                            state.performHaptic()
-                        } label: {
-                            Text(level.label)
-                                .font(.system(size: 9, weight: on ? .semibold : .regular, design: .monospaced))
-                                .foregroundColor(on ? .black : inkSoft)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 23)
-                                .background(on ? Color.white : Color.white.opacity(0.05))
-                                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-                    }
+        VStack(spacing: 11) {
+            // Optional Rain or Brown Noise layer underneath any soundscape
+            VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("BACKGROUND NOISE")
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(inkSoft)
+                    Text("Layer gentle rain or brown noise under any mode")
+                        .font(.system(size: 9.5))
+                        .foregroundColor(inkDim)
                 }
-            }
 
-            // Independent Acoustic Masking Bed (OFF / RAIN / BROWN)
-            sculptRow(title: "MASKING") {
-                HStack(spacing: 3) {
+                HStack(spacing: 4) {
                     ForEach(MaskingBed.allCases) { bed in
                         let on = state.maskingBed == bed
                         Button {
@@ -346,10 +333,10 @@ struct PopoverView: View {
                             state.performHaptic()
                         } label: {
                             Text(bed.label)
-                                .font(.system(size: 9, weight: on ? .semibold : .regular, design: .monospaced))
+                                .font(.system(size: 10, weight: on ? .semibold : .regular))
                                 .foregroundColor(on ? .black : inkSoft)
                                 .frame(maxWidth: .infinity)
-                                .frame(height: 23)
+                                .frame(height: 25)
                                 .background(on ? Color.white : Color.white.opacity(0.05))
                                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                         }
@@ -358,14 +345,14 @@ struct PopoverView: View {
                 }
             }
 
-            // Auto-Ducking toggle (Blend vs Step Aside for calls & music)
+            // Auto-Ducking toggle
             HStack {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("AUTO-DUCK")
+                    Text("PAUSE FOR CALLS & MUSIC")
                         .font(.system(size: 9, weight: .semibold, design: .monospaced))
                         .foregroundColor(inkSoft)
-                    Text("Steps aside for calls & music · ignores pings")
-                        .font(.system(size: 9))
+                    Text("Steps aside automatically · ignores notifications")
+                        .font(.system(size: 9.5))
                         .foregroundColor(inkDim)
                 }
                 Spacer()
@@ -398,16 +385,6 @@ struct PopoverView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(Color.white.opacity(0.11), lineWidth: 1)
         )
-    }
-
-    private func sculptRow<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        HStack(spacing: 10) {
-            Text(title)
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                .foregroundColor(inkDim)
-                .frame(width: 54, alignment: .leading)
-            content()
-        }
     }
 
     private var volumeSliderRow: some View {
@@ -488,19 +465,13 @@ struct PopoverView: View {
             return "MAC AUDIO ACTIVE"
         }
         if state.isFocusPlaying && state.isAutoDucked {
-            return "STEPPED ASIDE · MAC AUDIO"
+            return "PAUSED FOR MAC AUDIO"
         }
-        let phase = state.effectiveCircadianPhase.detailedLabel
-        if state.isFocusPlaying {
-            if state.maskingBed != .off {
-                return "\(phase) · \(state.maskingBed.label)"
-            }
-            if state.soundIntensity != .flow {
-                return "\(phase) · \(state.soundIntensity.label)"
-            }
-            return phase
+        let base = state.focusMode.subtitle.uppercased()
+        if state.isFocusPlaying && state.maskingBed != .off {
+            return "\(base) · +\(state.maskingBed.label.uppercased())"
         }
-        return "READY · \(phase)"
+        return base
     }
 
     private var heroPlayIcon: String {
