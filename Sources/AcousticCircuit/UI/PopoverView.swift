@@ -194,17 +194,27 @@ struct PopoverView: View {
                 .background(Color.black.opacity(0.38))
                 .overlay(Rectangle().stroke(hairSoft, lineWidth: 1))
 
-            // Transport + Scrub / Flow Arc bar (only shows transport buttons when a verified control path exists)
-            HStack(spacing: 10) {
-                if state.canTogglePrimaryPlayback {
-                    HStack(spacing: 4) {
-                        if !state.isFocusAudible {
-                            Button { state.media.previousTrack() } label: {
-                                Image(systemName: "backward.fill").font(.system(size: 10))
-                                    .frame(width: 26, height: 26)
-                            }
-                            .buttonStyle(HairlineIconButtonStyle())
+            // Transport + Immediate Stop/Mute + Scrub / Flow Arc bar
+            HStack(spacing: 8) {
+                if state.isFocusAudible {
+                    Button { state.stopFocusSound() } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "stop.fill").font(.system(size: 8.5))
+                            Text("STOP")
+                                .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
                         }
+                        .padding(.horizontal, 9)
+                        .frame(height: 26)
+                    }
+                    .buttonStyle(HairlineIconButtonStyle(prominent: true))
+                    .help("Stop focus soundscape immediately (Space)")
+                } else if state.metadata.canControlPlayback {
+                    HStack(spacing: 4) {
+                        Button { state.media.previousTrack() } label: {
+                            Image(systemName: "backward.fill").font(.system(size: 10))
+                                .frame(width: 24, height: 26)
+                        }
+                        .buttonStyle(HairlineIconButtonStyle())
 
                         Button { state.togglePrimaryPlayback() } label: {
                             Image(systemName: state.isPrimaryPlaying ? "pause.fill" : "play.fill")
@@ -212,13 +222,49 @@ struct PopoverView: View {
                                 .frame(width: 28, height: 26)
                         }
                         .buttonStyle(HairlineIconButtonStyle(prominent: true))
+                        .help(state.isPrimaryPlaying ? "Pause playback (Space)" : "Resume playback (Space)")
 
-                        if !state.isFocusAudible {
-                            Button { state.media.nextTrack() } label: {
-                                Image(systemName: "forward.fill").font(.system(size: 10))
+                        Button { state.media.nextTrack() } label: {
+                            Image(systemName: "forward.fill").font(.system(size: 10))
+                                .frame(width: 24, height: 26)
+                        }
+                        .buttonStyle(HairlineIconButtonStyle())
+
+                        Button { state.toggleSystemMute() } label: {
+                            Image(systemName: state.isSystemMuted ? "speaker.slash.fill" : "speaker.wave.2")
+                                .font(.system(size: 10))
+                                .foregroundColor(state.isSystemMuted ? Color(red: 1.0, green: 0.62, blue: 0.56) : .white)
+                                .frame(width: 26, height: 26)
+                        }
+                        .buttonStyle(HairlineIconButtonStyle())
+                        .help(state.isSystemMuted ? "Unmute Mac audio" : "Mute Mac audio immediately")
+                    }
+                } else {
+                    HStack(spacing: 4) {
+                        Button { state.toggleSystemMute() } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: state.isSystemMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                                    .font(.system(size: 9.5))
+                                Text(state.isSystemMuted ? "MUTED" : "MUTE")
+                                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                            }
+                            .foregroundColor(state.isSystemMuted ? Color(red: 1.0, green: 0.72, blue: 0.66) : .white)
+                            .padding(.horizontal, 8)
+                            .frame(height: 26)
+                        }
+                        .buttonStyle(HairlineIconButtonStyle(prominent: true))
+                        .help(state.isSystemMuted ? "Unmute Mac audio (Space)" : "Silence Mac audio immediately (Space)")
+
+                        if !state.snapshot.isSilent && !MediaController.hasMediaKeyPermission {
+                            Button {
+                                MediaController.requestMediaKeyPermission()
+                            } label: {
+                                Image(systemName: "playpause.fill")
+                                    .font(.system(size: 9.5))
                                     .frame(width: 26, height: 26)
                             }
                             .buttonStyle(HairlineIconButtonStyle())
+                            .help("Enable browser Play/Pause via macOS Accessibility")
                         }
                     }
                 }
@@ -352,6 +398,14 @@ struct PopoverView: View {
                 .help("Quit Satie")
             }
             .padding(.top, 2)
+
+            if state.isStatusItemBehindNotch {
+                Text("Menu bar icon tucked behind notch · ⌘-drag right or open via Spotlight")
+                    .font(.system(size: 9, design: .monospaced))
+                    .foregroundColor(inkDim)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
         .padding(14)
         .frame(width: 392)
@@ -366,6 +420,11 @@ struct PopoverView: View {
                 startRadius: 10,
                 endRadius: 260
             )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(hairColor, lineWidth: 1)
         )
     }
 

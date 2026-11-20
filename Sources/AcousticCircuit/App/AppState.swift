@@ -106,6 +106,8 @@ final class AppState: ObservableObject {
     @Published var isMiniHUDOpen: Bool = false
     @Published var isStudioOpen: Bool = false
     @Published var isFullscreen: Bool = false
+    @Published var isSystemMuted: Bool = SystemOutputMute.isMuted
+    @Published var isStatusItemBehindNotch: Bool = false
 
     private(set) var snapshot: AcousticSnapshot = .empty
     @Published var displayKey: String = "STANDBY"
@@ -270,7 +272,29 @@ final class AppState: ObservableObject {
             stopFocusSound()
         } else if metadata.canControlPlayback {
             media.playPause()
+        } else {
+            toggleSystemMute()
         }
+    }
+
+    func toggleSystemMute() {
+        let nowMuted = SystemOutputMute.toggle()
+        isSystemMuted = nowMuted
+    }
+
+    /// Stops or silences currently playing audio immediately with one action:
+    /// stops Satie focus audio if playing, pauses Spotify/Music/Accessibility media if controllable,
+    /// or toggles zero-permission Core Audio system mute for unscriptable browser audio.
+    func stopPlayingAudioImmediately() {
+        if isFocusPlaying {
+            stopFocusSound()
+            return
+        }
+        if metadata.canControlPlayback && metadata.isPlaying {
+            media.playPause()
+            return
+        }
+        toggleSystemMute()
     }
 
     func toggleLaunchAtLogin() {
@@ -299,6 +323,11 @@ final class AppState: ObservableObject {
 
     private func tickHousekeeping() {
         housekeepingTickCount += 1
+
+        let muted = SystemOutputMute.isMuted
+        if muted != isSystemMuted {
+            isSystemMuted = muted
+        }
 
         // Refresh process list every 2s (or every 1s while Focus sound is playing for snappy auto-ducking)
         if isFocusPlaying || housekeepingTickCount % 3 == 0 {

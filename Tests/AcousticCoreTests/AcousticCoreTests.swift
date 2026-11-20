@@ -242,4 +242,41 @@ struct AcousticCoreTests {
         let rmsDucked = sqrt(duckedL.reduce(0) { $0 + $1 * $1 } / Float(duckedL.count))
         #expect(rmsDucked < rmsActive * 0.25)
     }
+
+    @Test("MenuBarPositioner keeps floating panel strictly below notch even when status item is occluded")
+    func menuBarNotchPlacement() {
+        let screen = CGRect(x: 0, y: 0, width: 1728, height: 1117)
+        let visible = CGRect(x: 0, y: 0, width: 1728, height: 1084)
+        let auxL = CGRect(x: 0, y: 1085, width: 771, height: 32)
+        let auxR = CGRect(x: 956, y: 1085, width: 772, height: 32)
+        let panel = CGSize(width: 392, height: 420)
+
+        // Case 1: Status item pushed inside the notch dead zone (771..956)
+        let occludedBtn = CGRect(x: 858, y: 1085, width: 22, height: 32)
+        let p1 = MenuBarPositioner.computePlacement(
+            buttonScreenRect: occludedBtn,
+            screenFrame: screen,
+            visibleFrame: visible,
+            auxLeft: auxL,
+            auxRight: auxR,
+            panelSize: panel
+        )
+        #expect(p1.statusItemOccludedByNotch == true)
+        #expect(p1.origin.y + panel.height <= visible.maxY - 8)
+        #expect(p1.origin.x + panel.width <= visible.maxX - 10)
+
+        // Case 2: Status item clearly visible to the right of the notch
+        let visibleBtn = CGRect(x: 1320, y: 1085, width: 22, height: 32)
+        let p2 = MenuBarPositioner.computePlacement(
+            buttonScreenRect: visibleBtn,
+            screenFrame: screen,
+            visibleFrame: visible,
+            auxLeft: auxL,
+            auxRight: auxR,
+            panelSize: panel
+        )
+        #expect(p2.statusItemOccludedByNotch == false)
+        #expect(p2.origin.y + panel.height <= visible.maxY - 8)
+        #expect(abs((p2.origin.x + panel.width * 0.5) - visibleBtn.midX) <= 1.0)
+    }
 }

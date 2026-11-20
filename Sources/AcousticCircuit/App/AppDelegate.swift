@@ -1,14 +1,46 @@
 import AcousticCore
 import AppKit
+import Combine
 import SwiftUI
 
 private let wakeupNotificationName = Notification.Name("com.strangechances.Satie.wakeup")
 
+/// Borderless, notch-safe floating panel replacing NSPopover so Satie NEVER renders
+/// behind a MacBook camera notch or off the top edge of the display.
+final class SatieFloatingPanel: NSPanel {
+    var onEscape: (() -> Void)?
+    var onSpace: (() -> Void)?
+
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { false }
+
+    override func cancelOperation(_ sender: Any?) {
+        onEscape?()
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 { // Escape
+            onEscape?()
+            return
+        }
+        if event.keyCode == 49 { // Space -> instant stop/pause/mute
+            onSpace?()
+            return
+        }
+        super.keyDown(with: event)
+    }
+}
+
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var menuBarIconView: MenuBarIconView!
-    private var popover: NSPopover!
+    private var floatingPanel: SatieFloatingPanel!
+    private var hostingController: NSHostingController<PopoverView>!
+    private var globalMouseMonitor: Any?
+    private var localMouseMonitor: Any?
+    private var layoutCancellables: Set<AnyCancellable> = []
+
     private let miniHUD = MiniHUDPanelController()
     private let studio = StudioWindowController()
 
@@ -42,12 +74,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         setupMainMenu()
         setupMenuBar()
-        setupPopover()
+        setupFloatingPanel()
 
         let state = AppState.shared
         state.onFrameTick = { [weak self] snap in
             self?.menuBarIconView.update(snapshot: snap)
         }
+
+        // Keep panel height crisp and anchored downward whenever expandable rows appear/disappear
+        Publishers.CombineLatest3(
+            state.$isFocusPlaying.removeDuplicates(),
+            state.$tapStatus.map { if case .permissionOrError = $0 { return true } else { return false } }.removeDuplicates(),
+            state.$isStatusItemBehindNotch.removeDuplicates()
+        )
+        .receive(on: RunLoop.main)
+        .sink { [weak self] _, _, _ in
+            guard let self, self.floatingPanel.isVisible else { return }
+            DispatchQueue.main.async {
+                self.repositionFloatingPanel()
+            }
+        }
+        .store(in: &layoutCancellables)
 
         state.boot()
 
@@ -57,17 +104,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        removeDismissMonitors()
         DistributedNotificationCenter.default().removeObserver(self)
         AppState.shared.shutdown()
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        openStudio(fullscreen: false)
+        showPopover()
         return true
     }
 
     @objc private func handleExternalWakeup() {
-        openStudio(fullscreen: false)
+        showPopover()
     }
 
     // MARK: - Native macOS Main Menu
@@ -114,27 +162,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         NSApp.mainMenu = mainMenu
     }
 
-    // MARK: - Status Bar & Popover
+    // MARK: - Status Bar & Notch-Safe Floating Panel
 
     private func setupMenuBar() {
-        statusItem = NSStatusBar.system.statusItem(withLength: 30)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem.autosaveName = "SatieStatusItem"
         guard let button = statusItem.button else { return }
 
-        menuBarIconView = MenuBarIconView(frame: NSRect(x: 0, y: 0, width: 30, height: 22))
+        menuBarIconView = MenuBarIconView(frame: button.bounds)
         menuBarIconView.autoresizingMask = [.width, .height]
         button.addSubview(menuBarIconView)
         button.target = self
         button.action = #selector(handleStatusBarClick(_:))
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        button.toolTip = "Satie — Click to open · ⌥-Click to stop/mute · Right-click for menu"
     }
 
-    private func setupPopover() {
-        let p = NSPopover()
-        p.behavior = .transient
-        p.animates = true
-        p.appearance = NSAppearance(named: .darkAqua)
-        p.delegate = self
-
+    private func setupFloatingPanel() {
         let rootView = PopoverView(
             state: AppState.shared,
             onOpenMiniHUD: { [weak self] in self?.openMiniHUD() },
@@ -142,8 +186,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             onOpenFullscreen: { [weak self] in self?.openStudio(fullscreen: true) },
             onQuit: { NSApp.terminate(nil) }
         )
-        p.contentViewController = NSHostingController(rootView: rootView)
-        self.popover = p
+
+        let hc = NSHostingController(rootView: rootView)
+        hc.sizingOptions = [.preferredContentSize]
+        self.hostingController = hc
+
+        let panel = SatieFloatingPanel(
+            contentRect: NSRect(x: 0, y: 0, width: 392, height: 410),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.level = .statusBar
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
+        panel.isMovableByWindowBackground = false
+        panel.appearance = NSAppearance(named: .darkAqua)
+        panel.contentViewController = hc
+        panel.onEscape = { [weak self] in self?.closePopover() }
+        panel.onSpace = { AppState.shared.stopPlayingAudioImmediately() }
+        self.floatingPanel = panel
     }
 
     // MARK: - Actions
@@ -155,13 +219,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         if event.type == .rightMouseUp || event.modifierFlags.contains(.control) {
             showContextMenu()
+        } else if event.modifierFlags.contains(.option) {
+            AppState.shared.stopPlayingAudioImmediately()
         } else {
             togglePopover()
         }
     }
 
     private func togglePopover() {
-        if popover.isShown {
+        if floatingPanel.isVisible {
             closePopover()
         } else {
             showPopover()
@@ -169,16 +235,81 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     private func showPopover() {
-        guard let button = statusItem.button else { return }
-        NSApp.activate(ignoringOtherApps: true)
-        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        popover.contentViewController?.view.window?.makeKey()
         AppState.shared.isPopoverOpen = true
+        repositionFloatingPanel()
+        NSApp.activate(ignoringOtherApps: true)
+        floatingPanel.orderFrontRegardless()
+        floatingPanel.makeKey()
+        installDismissMonitors()
+    }
+
+    private func repositionFloatingPanel() {
+        hostingController.view.layoutSubtreeIfNeeded()
+        let fitting = hostingController.view.fittingSize
+        let size = CGSize(
+            width: max(392, ceil(fitting.width)),
+            height: max(320, ceil(fitting.height))
+        )
+
+        let btnWindow = statusItem.button?.window
+        let screen = btnWindow?.screen ?? NSScreen.main ?? NSScreen.screens.first
+        guard let screen else { return }
+
+        let btnRect: CGRect?
+        if let btn = statusItem.button, let win = btn.window {
+            let inWin = btn.convert(btn.bounds, to: nil)
+            btnRect = win.convertToScreen(inWin)
+        } else {
+            btnRect = nil
+        }
+
+        let placement = MenuBarPositioner.computePlacement(
+            buttonScreenRect: btnRect,
+            screenFrame: screen.frame,
+            visibleFrame: screen.visibleFrame,
+            auxLeft: screen.auxiliaryTopLeftArea,
+            auxRight: screen.auxiliaryTopRightArea,
+            panelSize: size
+        )
+
+        if AppState.shared.isStatusItemBehindNotch != placement.statusItemOccludedByNotch {
+            AppState.shared.isStatusItemBehindNotch = placement.statusItemOccludedByNotch
+        }
+
+        floatingPanel.setFrame(NSRect(origin: placement.origin, size: size), display: true, animate: false)
     }
 
     private func closePopover() {
-        popover.performClose(nil)
+        removeDismissMonitors()
+        floatingPanel.orderOut(nil)
         AppState.shared.isPopoverOpen = false
+    }
+
+    private func installDismissMonitors() {
+        removeDismissMonitors()
+        globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.closePopover()
+            }
+        }
+        localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            guard let self, self.floatingPanel.isVisible else { return event }
+            if let win = event.window, win !== self.floatingPanel, win !== self.statusItem.button?.window {
+                self.closePopover()
+            }
+            return event
+        }
+    }
+
+    private func removeDismissMonitors() {
+        if let g = globalMouseMonitor {
+            NSEvent.removeMonitor(g)
+            globalMouseMonitor = nil
+        }
+        if let l = localMouseMonitor {
+            NSEvent.removeMonitor(l)
+            localMouseMonitor = nil
+        }
     }
 
     private func openMiniHUD() {
@@ -203,6 +334,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         closePopover()
         let menu = NSMenu()
         let state = AppState.shared
+
+        let stopTitle: String
+        if state.isFocusPlaying {
+            stopTitle = "Stop \(state.focusMode.title)"
+        } else if state.metadata.canControlPlayback && state.metadata.isPlaying {
+            stopTitle = "Pause \(state.metadata.sourceApp)"
+        } else {
+            stopTitle = state.isSystemMuted ? "Unmute Mac Audio" : "Mute Mac Audio"
+        }
+        let stopNowItem = NSMenuItem(title: stopTitle, action: #selector(menuStopImmediately), keyEquivalent: "")
+        stopNowItem.target = self
+        menu.addItem(stopNowItem)
+
+        menu.addItem(.separator())
 
         let openStudioItem = NSMenuItem(title: "Open Studio Window", action: #selector(menuOpenStudio), keyEquivalent: "")
         openStudioItem.target = self
@@ -266,7 +411,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         menu.addItem(sensItem)
 
         if !MediaController.hasMediaKeyPermission {
-            let mediaKeyItem = NSMenuItem(title: "Enable Global Media Keys (Accessibility)…", action: #selector(menuRequestMediaKeys), keyEquivalent: "")
+            let mediaKeyItem = NSMenuItem(title: "Enable Browser Play/Pause (Accessibility)…", action: #selector(menuRequestMediaKeys), keyEquivalent: "")
             mediaKeyItem.target = self
             menu.addItem(mediaKeyItem)
         }
@@ -287,6 +432,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         statusItem.menu = nil
     }
 
+    @objc private func menuStopImmediately() { AppState.shared.stopPlayingAudioImmediately() }
     @objc private func menuOpenStudio() { openStudio(fullscreen: false) }
     @objc private func menuOpenMiniHUD() { openMiniHUD() }
     @objc private func menuOpenFullscreen() { openStudio(fullscreen: true) }
@@ -310,8 +456,4 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     @objc private func menuRequestMediaKeys() { MediaController.requestMediaKeyPermission() }
     @objc private func menuToggleLaunchAtLogin() { AppState.shared.toggleLaunchAtLogin() }
     @objc private func menuQuit() { NSApp.terminate(nil) }
-
-    func popoverDidClose(_ notification: Notification) {
-        AppState.shared.isPopoverOpen = false
-    }
 }

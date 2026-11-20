@@ -16,7 +16,7 @@ brew install --cask graemecode/tap/satie
 ```
 
 ### Direct Download
-Download the notarized [Satie-2.1.0.dmg](https://github.com/graemecode/satie/releases/latest/download/Satie-2.1.0.dmg) (macOS 15 Sequoia or later, Apple Silicon), drag **Satie** to **Applications**, and launch.
+Download the notarized [Satie-2.1.1.dmg](https://github.com/graemecode/satie/releases/latest/download/Satie-2.1.1.dmg) (macOS 15 Sequoia or later, Apple Silicon), drag **Satie** to **Applications**, and launch.
 
 > **Tip:** Hide Apple's built-in icon in **System Settings → Menu Bar → Now Playing → Don't Show in Menu Bar**.
 
