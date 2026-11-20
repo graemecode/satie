@@ -5,22 +5,40 @@ import MediaPlayer
 /// Native Apple MediaPlayer bridge so physical MacBook media keys (Play/Pause, Next, Previous),
 /// AirPods stem taps, and macOS Control Center control Satie seamlessly while focus audio is active,
 /// and release Control Center cleanly when stopped or auto-ducked.
-@MainActor
-public final class NowPlayingBridge {
+///
+/// IMPORTANT (Swift 6 concurrency): MediaPlayer invokes BOTH `MPMediaItemArtwork`'s `requestHandler`
+/// and `MPRemoteCommandCenter`'s `addTarget` blocks on its private background `accessQueue`.
+/// This class intentionally avoids `@MainActor` class isolation so closures handed to Objective-C
+/// MediaPlayer APIs never carry a Swift 6 main-executor assertion (`_swift_task_checkIsolatedSwift`).
+public final class NowPlayingBridge: @unchecked Sendable {
+    private let lock = NSLock()
     private var isRegistered = false
     private var cachedArtwork: MPMediaItemArtwork?
 
     public init() {}
 
+    /// Builds a thread-safe `MPMediaItemArtwork` backed by immutable PNG bytes so MediaPlayer can
+    /// safely invoke the handler from its background `accessQueue` without tripping Swift 6 isolation checks.
+    public static func makeArtwork(pngData: Data, boundsSize: CGSize = CGSize(width: 256, height: 256)) -> MPMediaItemArtwork {
+        MPMediaItemArtwork(boundsSize: boundsSize) { _ in
+            NSImage(data: pngData) ?? NSImage(size: boundsSize)
+        }
+    }
+
     public func configureCommands(
-        onPlay: @escaping () -> Void,
-        onPause: @escaping () -> Void,
-        onToggle: @escaping () -> Void,
-        onNext: @escaping () -> Void,
-        onPrevious: @escaping () -> Void
+        onPlay: @escaping @MainActor @Sendable () -> Void,
+        onPause: @escaping @MainActor @Sendable () -> Void,
+        onToggle: @escaping @MainActor @Sendable () -> Void,
+        onNext: @escaping @MainActor @Sendable () -> Void,
+        onPrevious: @escaping @MainActor @Sendable () -> Void
     ) {
-        guard !isRegistered else { return }
+        lock.lock()
+        guard !isRegistered else {
+            lock.unlock()
+            return
+        }
         isRegistered = true
+        lock.unlock()
 
         let center = MPRemoteCommandCenter.shared()
         center.playCommand.isEnabled = true
@@ -51,6 +69,7 @@ public final class NowPlayingBridge {
         }
     }
 
+    @MainActor
     public func update(isPlaying: Bool, title: String, subtitle: String) {
         let infoCenter = MPNowPlayingInfoCenter.default()
         guard isPlaying else {
@@ -59,8 +78,20 @@ public final class NowPlayingBridge {
             return
         }
 
-        if cachedArtwork == nil, let icon = NSApp.applicationIconImage {
-            cachedArtwork = MPMediaItemArtwork(boundsSize: CGSize(width: 256, height: 256)) { _ in icon }
+        lock.lock()
+        var art = cachedArtwork
+        lock.unlock()
+
+        if art == nil,
+           let icon = NSApp.applicationIconImage,
+           let tiff = icon.tiffRepresentation,
+           let rep = NSBitmapImageRep(data: tiff),
+           let png = rep.representation(using: .png, properties: [:]) {
+            let built = Self.makeArtwork(pngData: png)
+            lock.lock()
+            cachedArtwork = built
+            art = built
+            lock.unlock()
         }
 
         var info: [String: Any] = [
@@ -70,7 +101,7 @@ public final class NowPlayingBridge {
             MPNowPlayingInfoPropertyIsLiveStream: true,
             MPNowPlayingInfoPropertyPlaybackRate: 1.0,
         ]
-        if let art = cachedArtwork {
+        if let art {
             info[MPMediaItemPropertyArtwork] = art
         }
         infoCenter.nowPlayingInfo = info

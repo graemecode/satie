@@ -2,6 +2,9 @@ import AcousticCore
 import AppKit
 import Combine
 import Foundation
+#if APP_STORE
+import StoreKit
+#endif
 
 enum VisualPreset: Int, CaseIterable, Identifiable, Sendable {
     case circuit = 0
@@ -447,7 +450,15 @@ final class AppState: ObservableObject {
                 flowRemainingSeconds = nil
                 flowDuration = .infinite
                 focusSound.triggerSessionChime()
-                Log.app.info("Flow session completed — playing resolving fifth chime")
+                settings.completedFocusSessions += 1
+                Log.app.info("Flow session completed (#\(self.settings.completedFocusSessions)) — playing resolving fifth chime")
+                #if APP_STORE
+                let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+                if settings.completedFocusSessions >= 5 && settings.lastReviewPromptVersion != ver {
+                    settings.lastReviewPromptVersion = ver
+                    SKStoreReviewController.requestReview()
+                }
+                #endif
                 Task { @MainActor [weak self] in
                     try? await Task.sleep(for: .seconds(4.0))
                     guard let self, self.isFocusPlaying, self.flowRemainingSeconds == nil else { return }

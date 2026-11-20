@@ -480,11 +480,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sensItem.submenu = sensMenu
         menu.addItem(sensItem)
 
+        #if !APP_STORE
         if !MediaController.hasMediaKeyPermission {
             let mediaKeyItem = NSMenuItem(title: "Enable Browser Play/Pause (Accessibility)…", action: #selector(menuRequestMediaKeys), keyEquivalent: "")
             mediaKeyItem.target = self
             menu.addItem(mediaKeyItem)
         }
+        #endif
+
+        menu.addItem(.separator())
+
+        let feedbackItem = NSMenuItem(title: "Send Feedback…", action: #selector(menuSendFeedback), keyEquivalent: "")
+        feedbackItem.target = self
+        menu.addItem(feedbackItem)
+
+        let privacyItem = NSMenuItem(title: "Privacy Policy", action: #selector(menuPrivacyPolicy), keyEquivalent: "")
+        privacyItem.target = self
+        menu.addItem(privacyItem)
 
         menu.addItem(.separator())
 
@@ -525,6 +537,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func menuStopSoundscape() { AppState.shared.stopFocusSound() }
     @objc private func menuToggleAutoDuck() { AppState.shared.autoDuckEnabled.toggle() }
     @objc private func menuRequestMediaKeys() { MediaController.requestMediaKeyPermission() }
+    @objc private func menuSendFeedback() {
+        if let url = URL(string: "https://github.com/graemecode/satie/issues/new") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+    @objc private func menuPrivacyPolicy() {
+        if let url = URL(string: "https://strangechances.com/satie/privacy/") {
+            NSWorkspace.shared.open(url)
+        }
+    }
     @objc private func menuToggleLaunchAtLogin() { AppState.shared.toggleLaunchAtLogin() }
     @objc private func menuQuit() { NSApp.terminate(nil) }
 }

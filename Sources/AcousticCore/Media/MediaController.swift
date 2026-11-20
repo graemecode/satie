@@ -57,14 +57,20 @@ public final class MediaController: @unchecked Sendable {
     public init() {}
 
     public static var hasMediaKeyPermission: Bool {
-        AXIsProcessTrusted()
+        #if APP_STORE
+        return false
+        #else
+        return AXIsProcessTrusted()
+        #endif
     }
 
     /// Prompts macOS Accessibility permission so global HID media keys work across Chrome, Safari, YouTube, etc.
     public static func requestMediaKeyPermission() {
+        #if !APP_STORE
         let key = "AXTrustedCheckOptionPrompt" as CFString
         let opts = [key: true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(opts)
+        #endif
     }
 
     public func start() {
@@ -84,6 +90,7 @@ public final class MediaController: @unchecked Sendable {
     }
 
     public func playPause() {
+        #if !APP_STORE
         queue.async { [weak self] in
             guard let self else { return }
             if self.activeProvider == "Spotify", self.isAppRunning("com.spotify.client") {
@@ -100,9 +107,11 @@ public final class MediaController: @unchecked Sendable {
                 self.sendHIDMediaKey(16) // NX_KEYTYPE_PLAY
             }
         }
+        #endif
     }
 
     public func nextTrack() {
+        #if !APP_STORE
         queue.async { [weak self] in
             guard let self else { return }
             if self.activeProvider == "Spotify", self.isAppRunning("com.spotify.client") {
@@ -119,9 +128,11 @@ public final class MediaController: @unchecked Sendable {
                 self.sendHIDMediaKey(17) // NX_KEYTYPE_NEXT
             }
         }
+        #endif
     }
 
     public func previousTrack() {
+        #if !APP_STORE
         queue.async { [weak self] in
             guard let self else { return }
             if self.activeProvider == "Spotify", self.isAppRunning("com.spotify.client") {
@@ -138,9 +149,11 @@ public final class MediaController: @unchecked Sendable {
                 self.sendHIDMediaKey(18) // NX_KEYTYPE_PREVIOUS
             }
         }
+        #endif
     }
 
     public func seek(to fraction: Double) {
+        #if !APP_STORE
         let clamped = max(0, min(1, fraction))
         queue.async { [weak self] in
             guard let self else { return }
@@ -162,12 +175,14 @@ public final class MediaController: @unchecked Sendable {
                 self.poll()
             }
         }
+        #endif
     }
 
     // MARK: - Polling
 
     private func poll() {
         let activeProcs = ProcessAudioTap.listAudioProcesses().filter { $0.isRunningOutput }
+        #if !APP_STORE
         let hidReady = Self.hasMediaKeyPermission
 
         if isAppRunning("com.spotify.client"), !deniedBundles.contains("com.spotify.client") {
@@ -218,7 +233,6 @@ public final class MediaController: @unchecked Sendable {
                 return
             }
 
-            // Only advertise HID media-key controls for known media/browser apps when Accessibility is trusted
             let isMediaCapableApp = Self.isLikelyMediaApp(bundleID: top.bundleID)
             emit(NowPlayingMetadata(
                 title: top.name,
@@ -232,10 +246,28 @@ public final class MediaController: @unchecked Sendable {
             ))
             return
         }
+        #else
+        if let top = activeProcs.first {
+            activeProvider = nil
+            emit(NowPlayingMetadata(
+                title: top.name,
+                subtitle: "Live Process Tap",
+                sourceApp: top.name.uppercased(),
+                isPlaying: true,
+                elapsed: nil,
+                duration: nil,
+                canSeek: false,
+                canControlPlayback: false
+            ))
+            return
+        }
+        #endif
 
         activeProvider = nil
         emit(.idle)
     }
+
+    #if !APP_STORE
 
     private static func isLikelyMediaApp(bundleID: String?) -> Bool {
         guard let bid = bundleID?.lowercased() else { return false }
@@ -365,6 +397,7 @@ public final class MediaController: @unchecked Sendable {
         post(down: true)
         post(down: false)
     }
+    #endif
 
     private func emit(_ meta: NowPlayingMetadata) {
         let cb = onMetadataUpdate

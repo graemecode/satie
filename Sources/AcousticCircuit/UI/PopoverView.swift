@@ -256,6 +256,7 @@ struct PopoverView: View {
                         .buttonStyle(HairlineIconButtonStyle(prominent: true))
                         .help(state.isSystemMuted ? "Unmute Mac audio (Space)" : "Silence Mac audio immediately (Space)")
 
+                        #if !APP_STORE
                         if !state.snapshot.isSilent && !MediaController.hasMediaKeyPermission {
                             Button {
                                 MediaController.requestMediaKeyPermission()
@@ -267,6 +268,7 @@ struct PopoverView: View {
                             .buttonStyle(HairlineIconButtonStyle())
                             .help("Enable browser Play/Pause via macOS Accessibility")
                         }
+                        #endif
                     }
                 }
 

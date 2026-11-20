@@ -1,6 +1,6 @@
 cask "satie" do
-  version "2.3.1"
-  sha256 "a9d4df9b3d97bd2d8616124df9c28f2c9434bd02bc713884a71998edc72edbdd"
+  version "2.4.0"
+  sha256 "b69133d245971060ecf4ce043b693fb19dfef215c5b25fb1160bc5fc0c63258c"
 
   url "https://github.com/graemecode/satie/releases/download/v#{version}/Satie-#{version}.dmg"
   name "Satie"

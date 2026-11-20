@@ -49,6 +49,8 @@ public final class SettingsStore: @unchecked Sendable {
         static let autoDuck = "ac.autoDuck"
         static let miniHUDFrame = "ac.miniHUDFrame"
         static let studioFrame = "ac.studioFrame"
+        static let completedFocusSessions = "ac.completedFocusSessions"
+        static let lastReviewPromptVersion = "ac.lastReviewPromptVersion"
     }
 
     public init(defaults: UserDefaults = .standard) {
@@ -123,6 +125,16 @@ public final class SettingsStore: @unchecked Sendable {
                 defaults.set(NSStringFromRect(rect), forKey: Keys.studioFrame)
             }
         }
+    }
+
+    public var completedFocusSessions: Int {
+        get { defaults.integer(forKey: Keys.completedFocusSessions) }
+        set { defaults.set(max(0, newValue), forKey: Keys.completedFocusSessions) }
+    }
+
+    public var lastReviewPromptVersion: String? {
+        get { defaults.string(forKey: Keys.lastReviewPromptVersion) }
+        set { defaults.set(newValue, forKey: Keys.lastReviewPromptVersion) }
     }
 
     // MARK: - Native macOS Login Item (SMAppService)

@@ -1,4 +1,5 @@
 import AcousticCore
+import AppKit
 import Foundation
 import Testing
 
@@ -381,5 +382,27 @@ struct AcousticCoreTests {
         #expect(gate.evaluate(now: 33.5, activeProcesses: [], externalRMS: 0.0).isDucked == true)
         // After 3.0s continuous silence, smoothly resumes
         #expect(gate.evaluate(now: 35.2, activeProcesses: [], externalRMS: 0.0).isDucked == false)
+    }
+
+    @Test("NowPlayingBridge artwork callback runs safely on a background queue without Swift 6 @MainActor trap")
+    func nowPlayingArtworkBackgroundSafety() async {
+        // Minimal valid 1x1 PNG bytes
+        let img = NSImage(size: CGSize(width: 16, height: 16))
+        img.lockFocus()
+        NSColor.white.setFill()
+        NSRect(x: 0, y: 0, width: 16, height: 16).fill()
+        img.unlockFocus()
+        let rep = NSBitmapImageRep(data: img.tiffRepresentation!)!
+        let png = rep.representation(using: .png, properties: [:])!
+
+        let artwork = NowPlayingBridge.makeArtwork(pngData: png, boundsSize: CGSize(width: 16, height: 16))
+        // Invoke from a non-main background queue (simulating MediaPlayer's accessQueue)
+        let renderedSize: CGSize = await withCheckedContinuation { cont in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let out = artwork.image(at: CGSize(width: 16, height: 16))
+                cont.resume(returning: out?.size ?? .zero)
+            }
+        }
+        #expect(renderedSize.width > 0 && renderedSize.height > 0)
     }
 }
