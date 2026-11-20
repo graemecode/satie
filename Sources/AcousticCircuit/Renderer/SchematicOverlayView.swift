@@ -405,7 +405,7 @@ final class SchematicOverlayView: NSView {
             String(format: "[MIDS] DENSITY %.0f%%", a.mid * 100),
             String(format: "[FLUX] TRANSIENT %.2f", a.flux),
             "[TAP]  \(sourceLabel)",
-            "[DSP]  vDSP 2048-FFT",
+            "[DSP]  vDSP 4096-FFT",
             "[GPU]  METAL 120HZ"
         ]
         for (idx, line) in logLines.enumerated() {

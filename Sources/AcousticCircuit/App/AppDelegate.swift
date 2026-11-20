@@ -244,6 +244,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             stopItem.target = self
             soundMenu.addItem(stopItem)
         }
+        soundMenu.addItem(.separator())
+        let duckItem = NSMenuItem(title: "Auto-Duck for Calls & Media", action: #selector(menuToggleAutoDuck), keyEquivalent: "")
+        duckItem.target = self
+        duckItem.state = state.autoDuckEnabled ? .on : .off
+        soundMenu.addItem(duckItem)
         soundItem.submenu = soundMenu
         menu.addItem(soundItem)
 
@@ -301,6 +306,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
     }
     @objc private func menuStopSoundscape() { AppState.shared.stopFocusSound() }
+    @objc private func menuToggleAutoDuck() { AppState.shared.autoDuckEnabled.toggle() }
     @objc private func menuRequestMediaKeys() { MediaController.requestMediaKeyPermission() }
     @objc private func menuToggleLaunchAtLogin() { AppState.shared.toggleLaunchAtLogin() }
     @objc private func menuQuit() { NSApp.terminate(nil) }

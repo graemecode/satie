@@ -283,15 +283,15 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
                 enc.setFragmentBuffer(uBuf, offset: 0, index: 0)
                 enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
 
-                // 160 layered 3D connectome silk filaments x 96 segments
+                // 240 layered 3D curl-turbulence connectome silk filaments x 112 segments
                 enc.setRenderPipelineState(pipelines.circuitRibbonPipeline)
                 enc.setVertexBuffer(uBuf, offset: 0, index: 0)
-                enc.drawPrimitives(type: .line, vertexStart: 0, vertexCount: 96 * 2, instanceCount: 160)
+                enc.drawPrimitives(type: .line, vertexStart: 0, vertexCount: 112 * 2, instanceCount: compactMode ? 160 : 240)
 
-                // 2,400 luminous neural spike dots
+                // 3,200 luminous neural spike dots
                 enc.setRenderPipelineState(pipelines.circuitSpikePipeline)
                 enc.setVertexBuffer(uBuf, offset: 0, index: 0)
-                enc.drawPrimitives(type: .point, vertexStart: 0, vertexCount: compactMode ? 1200 : 2400)
+                enc.drawPrimitives(type: .point, vertexStart: 0, vertexCount: compactMode ? 1400 : 3200)
                 enc.endEncoding()
             }
 

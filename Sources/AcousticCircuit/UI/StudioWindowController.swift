@@ -37,7 +37,7 @@ final class StudioStageNSView: NSView {
             guard now - self.lastOverlayUpdate >= (1.0 / 30.0) else { return }
             self.lastOverlayUpdate = now
             let state = AppState.shared
-            let label = state.isFocusPlaying ? "GENERATIVE · \(state.focusMode.shortLabel)" : state.tapTarget.shortLabel
+            let label = state.isFocusAudible ? "GENERATIVE · \(state.focusMode.shortLabel)" : state.tapTarget.shortLabel
             self.overlayView.update(snapshot: snap, preset: state.preset, sourceLabel: label)
         }
     }

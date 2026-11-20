@@ -1,8 +1,6 @@
 import AppKit
 import ApplicationServices
 import Foundation
-import IOKit
-import IOKit.hidsystem
 
 public struct NowPlayingMetadata: Equatable, Sendable {
     public var title: String
@@ -346,27 +344,24 @@ public final class MediaController: @unchecked Sendable {
         return result.stringValue
     }
 
-    /// Sends a real hardware-equivalent IOKit HID media key event (requires Accessibility trust).
+    /// Posts a hardware-equivalent system media key event via CGEvent (requires Accessibility trust).
     private func sendHIDMediaKey(_ keyCode: Int32) {
-        let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching(kIOHIDSystemClass))
-        guard service != 0 else { return }
-        defer { IOObjectRelease(service) }
-
-        var connect: io_connect_t = 0
-        guard IOServiceOpen(service, mach_task_self_, UInt32(kIOHIDParamConnectType), &connect) == KERN_SUCCESS else {
-            return
-        }
-        defer { IOServiceClose(connect) }
-
         func post(down: Bool) {
-            var ev = NXEventData()
-            ev.compound.subType = Int16(NX_SUBTYPE_AUX_CONTROL_BUTTONS)
-            let stateBits: Int32 = down ? 0xa00 : 0xb00
-            ev.compound.misc.L.0 = (keyCode << 16) | stateBits
-            let loc = IOGPoint(x: 0, y: 0)
-            IOHIDPostEvent(connect, UInt32(NX_SYSDEFINED), loc, &ev, UInt32(kNXEventDataVersion), 0, 0)
+            let flags = NSEvent.ModifierFlags(rawValue: down ? 0xa00 : 0xb00)
+            let data1 = Int((keyCode << 16) | (down ? 0xa00 : 0xb00))
+            guard let ev = NSEvent.otherEvent(
+                with: .systemDefined,
+                location: .zero,
+                modifierFlags: flags,
+                timestamp: 0,
+                windowNumber: 0,
+                context: nil,
+                subtype: 8,
+                data1: data1,
+                data2: -1
+            )?.cgEvent else { return }
+            ev.post(tap: .cghidEventTap)
         }
-
         post(down: true)
         post(down: false)
     }

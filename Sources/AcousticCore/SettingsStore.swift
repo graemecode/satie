@@ -46,6 +46,7 @@ public final class SettingsStore: @unchecked Sendable {
         static let sensitivity = "ac.sensitivity"
         static let focusMode = "ac.focusMode"
         static let focusVolume = "ac.focusVolume"
+        static let autoDuck = "ac.autoDuck"
         static let miniHUDFrame = "ac.miniHUDFrame"
         static let studioFrame = "ac.studioFrame"
     }
@@ -84,10 +85,18 @@ public final class SettingsStore: @unchecked Sendable {
 
     public var focusVolume: Float {
         get {
-            if defaults.object(forKey: Keys.focusVolume) == nil { return 0.45 }
+            if defaults.object(forKey: Keys.focusVolume) == nil { return 0.48 }
             return max(0.05, min(1.0, defaults.float(forKey: Keys.focusVolume)))
         }
         set { defaults.set(max(0.05, min(1.0, newValue)), forKey: Keys.focusVolume) }
+    }
+
+    public var autoDuck: Bool {
+        get {
+            if defaults.object(forKey: Keys.autoDuck) == nil { return true }
+            return defaults.bool(forKey: Keys.autoDuck)
+        }
+        set { defaults.set(newValue, forKey: Keys.autoDuck) }
     }
 
     public var miniHUDOrigin: NSPoint? {

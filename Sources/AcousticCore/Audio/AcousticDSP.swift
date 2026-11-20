@@ -58,9 +58,9 @@ public struct AcousticSnapshot: Sendable {
 
 /// Real-time Apple Accelerate (vDSP) DSP pipeline producing 24-band FFT, chromagram, key, flux & stereo waveform.
 public final class AcousticDSP {
-    private let fftSize = 2048
-    private let log2n: vDSP_Length = 11 // 2^11 = 2048
-    private let halfSize = 1024
+    private let fftSize = 4096
+    private let log2n: vDSP_Length = 12 // 2^12 = 4096 (11.7 Hz bin resolution @ 48kHz)
+    private let halfSize = 2048
 
     private let fftSetup: FFTSetup
     private var window: [Float]

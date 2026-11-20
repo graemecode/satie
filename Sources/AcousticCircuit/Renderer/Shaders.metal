@@ -121,17 +121,17 @@ struct RibbonVertOut {
     float4 color;
 };
 
-// 160 strands x 96 segments (drawn as line-list: 2 vertices per segment)
+// 240 strands x 112 segments (non-periodic golden-ratio curl connectome volume)
 vertex RibbonVertOut circuitRibbonVertex(uint vid [[vertex_id]],
                                          uint iid [[instance_id]],
                                          constant AcousticUniforms& u [[buffer(0)]]) {
-    const uint segs = 96;
+    const uint segs = 112;
     uint segIdx = vid / 2;
     uint endBit = vid & 1;
     float frac = float(segIdx + endBit) / float(segs);
 
     float fi = float(iid);
-    const float totalStrands = 160.0;
+    const float totalStrands = 240.0;
     float strandNorm = fi / totalStrands;
 
     int band = int(iid % 24);
@@ -140,34 +140,41 @@ vertex RibbonVertOut circuitRibbonVertex(uint vid [[vertex_id]],
 
     float t = u.time;
     float phaseA = strandNorm * 6.2831853;
-    float phaseB = fract(fi * 0.6180339) * 6.2831853;
-    float freq1 = 1.0 + float(iid % 5) * 0.34;
-    float freq2 = 2.0 + float(iid % 7) * 0.26;
-    float tilt  = (float(iid % 9) - 4.0) * 0.22;
+    float phaseB = fract(fi * 0.6180339887) * 6.2831853;
+    float phaseC = fract(fi * 0.7548776662) * 6.2831853;
+    float freq1 = 1.0 + float(iid % 5) * 0.31;
+    float freq2 = 2.0 + float(iid % 7) * 0.27;
+    float tilt  = (float(iid % 11) - 5.0) * 0.19;
 
-    // Two intertwined neural lobes / toroidal shells for dense Room-C volume
-    float shell = (iid % 3 == 0) ? 0.54 : ((iid % 3 == 1) ? 0.78 : 0.98);
-    float baseR = shell * (0.84 + 0.24 * fract(fi * 0.381966));
-    float pulse = 1.0 + bv * 0.30 + u.beat * 0.09 + imp * 0.08;
+    // Three nested neural shells for genuine Room-C translucent depth
+    float shell = (iid % 4 == 0) ? 0.46 : ((iid % 4 == 1) ? 0.72 : ((iid % 4 == 2) ? 0.90 : 1.06));
+    float baseR = shell * (0.82 + 0.24 * fract(fi * 0.381966));
+    float pulse = 1.0 + bv * 0.28 + u.beat * 0.08 + imp * 0.08;
 
     float angle = frac * 6.2831853;
-    float wobble = 0.24 + 0.15 * sin(angle * freq2 + t * 0.72 + phaseB) + bv * 0.19;
-    float theta = angle + phaseA + t * (0.14 + 0.06 * sin(phaseB));
-    float phi = angle * freq1 + phaseB - t * 0.28;
+    // Multi-frequency irrational drift so trajectories never visibly loop
+    float wobble = 0.22 + 0.14 * sin(angle * freq2 + t * 0.58 + phaseB)
+                        + 0.08 * cos(angle * 3.0 - t * 0.37 + phaseC)
+                        + bv * 0.18;
+    float theta = angle + phaseA + t * (0.11 + 0.05 * sin(phaseB + t * 0.07));
+    float phi = angle * freq1 + phaseB - t * (0.21 + 0.06 * cos(phaseC));
 
     float rTube = baseR * pulse;
     float x = (rTube + wobble * cos(phi)) * cos(theta);
-    float y = (rTube + wobble * cos(phi)) * sin(theta) * 0.88 + sin(phi * 1.5) * 0.22;
+    float y = (rTube + wobble * cos(phi)) * sin(theta) * 0.88 + sin(phi * 1.5 + phaseC * 0.3) * 0.22;
     float z = wobble * sin(phi) + cos(theta * 2.0 + tilt) * 0.36;
 
-    // Subtle harmonic curl fold modulated by stereo width & bass
-    float curl = (0.14 + u.mid * 0.22) * sin(y * 2.4 + t * 0.55 + phaseA);
-    x += curl * cos(phaseB);
-    z += curl * sin(phaseB);
+    // 2D gradient curl-noise displacement driven by harmonic mid/treble texture
+    float2 nCoord = float2(x * 1.4 + t * 0.14, y * 1.4 - t * 0.11);
+    float cn1 = gradNoise(nCoord + phaseB * 0.1);
+    float cn2 = gradNoise(nCoord.yx + phaseC * 0.1 + 3.7);
+    float curlAmp = 0.14 + u.mid * 0.24 + u.treble * 0.14;
+    x += cn1 * curlAmp;
+    y += cn2 * curlAmp * 0.85;
+    z += (cn1 - cn2) * curlAmp * 0.65;
 
-    // 3D rotation
-    float rotY = t * 0.22 + u.bass * 0.30;
-    float rotX = 0.38 + sin(t * 0.18) * 0.24;
+    float rotY = t * 0.19 + u.bass * 0.26;
+    float rotX = 0.38 + sin(t * 0.14) * 0.26 + cos(t * 0.09) * 0.08;
     float cY = cos(rotY), sY = sin(rotY);
     float cX = cos(rotX), sX = sin(rotX);
 
@@ -179,18 +186,16 @@ vertex RibbonVertOut circuitRibbonVertex(uint vid [[vertex_id]],
     float persp = 2.55 / (3.15 - z2 * 0.68);
     float aspect = u.resolution.x / max(1.0, u.resolution.y);
 
-    // Convert center from top-left UV to Metal NDC
     float2 centerNDC = float2(u.coreCenter.x * 2.0 - 1.0, 1.0 - u.coreCenter.y * 2.0);
     float radiusNDC = u.coreScale * 0.54;
     float2 pos = centerNDC + float2((x1 * persp * radiusNDC) / max(0.5, aspect), y2 * persp * radiusNDC);
 
-    // Depth-cued luminous gossamer white + faint sapphire accent on energetic peaks
-    float depthFade = clamp(0.45 + 0.55 * (z2 * 0.5 + 0.5), 0.18, 1.0);
-    float baseAlpha = (iid % 7 == 0) ? 0.36 : ((iid % 3 == 0) ? 0.18 : 0.085);
-    float alpha = clamp((baseAlpha + bv * 0.28 + imp * 0.24) * depthFade, 0.02, 0.78);
+    float depthFade = clamp(0.42 + 0.58 * (z2 * 0.5 + 0.5), 0.16, 1.0);
+    float baseAlpha = (iid % 9 == 0) ? 0.30 : ((iid % 3 == 0) ? 0.14 : 0.068);
+    float alpha = clamp((baseAlpha + bv * 0.24 + imp * 0.22) * depthFade, 0.015, 0.72);
 
-    float blueGlint = smoothstep(0.60, 0.95, bv) * ((iid % 5 == 0) ? 1.0 : 0.25);
-    float3 col = mix(float3(0.92, 0.95, 1.00), float3(0.50, 0.74, 1.00), blueGlint);
+    float blueGlint = smoothstep(0.58, 0.94, bv) * ((iid % 5 == 0) ? 1.0 : 0.25);
+    float3 col = mix(float3(0.93, 0.96, 1.00), float3(0.52, 0.76, 1.00), blueGlint);
 
     RibbonVertOut out;
     out.position = float4(pos, 0.0, 1.0);

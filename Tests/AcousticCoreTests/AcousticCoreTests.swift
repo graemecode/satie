@@ -53,16 +53,16 @@ struct AcousticCoreTests {
     @Test("DSP detects 440 Hz A4 sine wave in chromagram pitch class A")
     func dspDetects440HzChromaA() {
         let sr = 48_000.0
-        let rb = StereoRingBuffer(capacity: 4096)
+        let rb = StereoRingBuffer(capacity: 8192)
         let dsp = AcousticDSP()
-        var interleaved = [Float](repeating: 0, count: 2048 * 2)
-        for i in 0..<2048 {
+        var interleaved = [Float](repeating: 0, count: 4096 * 2)
+        for i in 0..<4096 {
             let s = Float(0.6 * sin(2.0 * Double.pi * 440.0 * Double(i) / sr))
             interleaved[i * 2] = s
             interleaved[i * 2 + 1] = s
         }
         interleaved.withUnsafeBufferPointer { ptr in
-            rb.writeInterleaved(ptr.baseAddress!, frameCount: 2048, channels: 2)
+            rb.writeInterleaved(ptr.baseAddress!, frameCount: 4096, channels: 2)
         }
 
         var snap = AcousticSnapshot.empty
@@ -80,11 +80,11 @@ struct AcousticCoreTests {
     @Test("DSP identifies C Major triad (C4 + E4 + G4) as C MAJOR")
     func dspDetectsCMajorTriad() {
         let sr = 48_000.0
-        let rb = StereoRingBuffer(capacity: 4096)
+        let rb = StereoRingBuffer(capacity: 8192)
         let dsp = AcousticDSP()
-        var interleaved = [Float](repeating: 0, count: 2048 * 2)
+        var interleaved = [Float](repeating: 0, count: 4096 * 2)
         let freqs = [261.63, 329.63, 392.00, 523.25] // C4, E4, G4, C5
-        for i in 0..<2048 {
+        for i in 0..<4096 {
             let t = Double(i) / sr
             var sum = 0.0
             for f in freqs { sum += sin(2.0 * Double.pi * f * t) }
@@ -93,7 +93,7 @@ struct AcousticCoreTests {
             interleaved[i * 2 + 1] = s
         }
         interleaved.withUnsafeBufferPointer { ptr in
-            rb.writeInterleaved(ptr.baseAddress!, frameCount: 2048, channels: 2)
+            rb.writeInterleaved(ptr.baseAddress!, frameCount: 4096, channels: 2)
         }
 
         var snap = AcousticSnapshot.empty
@@ -110,10 +110,10 @@ struct AcousticCoreTests {
         let sr = 48_000.0
 
         func measureCorrelation(rightPhaseOffset: Double, invertRight: Bool = false) -> Float {
-            let rb = StereoRingBuffer(capacity: 4096)
+            let rb = StereoRingBuffer(capacity: 8192)
             let dsp = AcousticDSP()
-            var interleaved = [Float](repeating: 0, count: 2048 * 2)
-            for i in 0..<2048 {
+            var interleaved = [Float](repeating: 0, count: 4096 * 2)
+            for i in 0..<4096 {
                 let phase = 2.0 * Double.pi * 300.0 * Double(i) / sr
                 let l = Float(0.5 * sin(phase))
                 let r = Float((invertRight ? -0.5 : 0.5) * sin(phase + rightPhaseOffset))
@@ -121,7 +121,7 @@ struct AcousticCoreTests {
                 interleaved[i * 2 + 1] = r
             }
             interleaved.withUnsafeBufferPointer { ptr in
-                rb.writeInterleaved(ptr.baseAddress!, frameCount: 2048, channels: 2)
+                rb.writeInterleaved(ptr.baseAddress!, frameCount: 4096, channels: 2)
             }
             return dsp.process(ringBuffer: rb, sampleRate: sr, dt: 0.02, demoMode: false).stereoCorrelation
         }
@@ -133,7 +133,7 @@ struct AcousticCoreTests {
 
     @Test("DSP silence gating transitions cleanly to STANDBY after 1.8s")
     func dspSilenceGating() {
-        let rb = StereoRingBuffer(capacity: 4096)
+        let rb = StereoRingBuffer(capacity: 8192)
         let dsp = AcousticDSP()
         var snap = AcousticSnapshot.empty
         for _ in 0..<55 {
@@ -147,15 +147,15 @@ struct AcousticCoreTests {
     @Test("Sensitivity modes scale low-level response monotonically (calm < balanced < vivid)")
     func sensitivityScaling() {
         let sr = 48_000.0
-        let rb = StereoRingBuffer(capacity: 4096)
-        var interleaved = [Float](repeating: 0, count: 2048 * 2)
-        for i in 0..<2048 {
+        let rb = StereoRingBuffer(capacity: 8192)
+        var interleaved = [Float](repeating: 0, count: 4096 * 2)
+        for i in 0..<4096 {
             let s = Float(0.015 * sin(2.0 * Double.pi * 220.0 * Double(i) / sr))
             interleaved[i * 2] = s
             interleaved[i * 2 + 1] = s
         }
         interleaved.withUnsafeBufferPointer { ptr in
-            rb.writeInterleaved(ptr.baseAddress!, frameCount: 2048, channels: 2)
+            rb.writeInterleaved(ptr.baseAddress!, frameCount: 4096, channels: 2)
         }
 
         func energyFor(_ mode: SensitivityMode) -> Float {
@@ -217,5 +217,29 @@ struct AcousticCoreTests {
         )
         #expect(safariFromWebKit.name == "Safari")
         #expect(safariFromWebKit.bundleID == "com.apple.Safari")
+    }
+
+    @Test("FocusSoundEngine generates bounded, non-silent stereo audio across all 4 modes and auto-ducks cleanly")
+    func focusSoundSynthesisAndAutoDuck() {
+        for mode in FocusSoundscape.allCases {
+            let (l, r) = FocusSoundEngine.renderOfflineTestBlock(mode: mode, circadian: .afternoon, frames: 2048, ducked: false)
+            var peak: Float = 0
+            var sumSq: Float = 0
+            for i in 0..<l.count {
+                #expect(l[i].isFinite && r[i].isFinite)
+                peak = max(peak, abs(l[i]), abs(r[i]))
+                sumSq += l[i] * l[i] + r[i] * r[i]
+            }
+            let rms = sqrt(sumSq / Float(l.count * 2))
+            #expect(peak <= 1.0)
+            #expect(rms > 0.005)
+        }
+
+        // Verify auto-ducking strongly attenuates output
+        let (activeL, _) = FocusSoundEngine.renderOfflineTestBlock(mode: .focus, frames: 2048, ducked: false)
+        let (duckedL, _) = FocusSoundEngine.renderOfflineTestBlock(mode: .focus, frames: 2048, ducked: true)
+        let rmsActive = sqrt(activeL.reduce(0) { $0 + $1 * $1 } / Float(activeL.count))
+        let rmsDucked = sqrt(duckedL.reduce(0) { $0 + $1 * $1 } / Float(duckedL.count))
+        #expect(rmsDucked < rmsActive * 0.25)
     }
 }

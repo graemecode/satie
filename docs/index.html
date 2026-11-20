@@ -3,15 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Acoustic Circuit — Native 120Hz Metal Audio Visualizer for macOS</title>
-<meta name="description" content="A native 2.3 MB macOS menu bar audio visualizer and harmonic instrument powered by Core Audio Process Taps, Apple Accelerate vDSP, and 120Hz Metal.">
+<title>Acoustic Circuit — Generative Focus Audio &amp; 120Hz Metal Instrument for macOS</title>
+<meta name="description" content="A 2.3 MB native macOS menu bar focus soundscape engine & 120Hz Metal harmonic instrument. Zero subscriptions, auto-ducks for calls, Apple notarized.">
 <style>
   :root {
     --bg: #070b12;
-    --bg-2: #0b111c;
     --ink: #eef4ff;
-    --ink-soft: rgba(232, 240, 252, 0.72);
-    --ink-dim: rgba(214, 226, 245, 0.44);
+    --ink-soft: rgba(232, 240, 252, 0.74);
+    --ink-dim: rgba(214, 226, 245, 0.45);
     --hair: rgba(220, 232, 250, 0.24);
     --hair-soft: rgba(220, 232, 250, 0.12);
     --font-sans: "Helvetica Neue", -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
@@ -71,7 +70,7 @@
 
   h1 {
     margin: 0;
-    font-size: clamp(34px, 4.5vw, 50px);
+    font-size: clamp(32px, 4.3vw, 48px);
     font-weight: 500;
     letter-spacing: -0.03em;
     line-height: 1.06;
@@ -155,6 +154,7 @@
     cursor: pointer;
   }
   .copy-btn:hover { color: #fff; border-color: var(--hair); }
+  .copy-btn.active { background: #eef4ff; color: #070b12; border-color: #eef4ff; font-weight: 600; }
 
   .specs-row {
     margin-top: 16px;
@@ -193,10 +193,13 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
     font-family: var(--font-mono);
     font-size: 10px;
     color: var(--ink-dim);
   }
+  .sound-tabs { display: inline-flex; gap: 4px; }
 
   /* Feature / Mode Grid */
   .section-head {
@@ -290,23 +293,23 @@
   <nav>
     <a class="brand" href="#">Acoustic Circuit</a>
     <div class="links">
-      <a href="#modes">Modes</a>
-      <a href="#specs">Architecture</a>
+      <a href="#sound">Focus Sound</a>
+      <a href="#modes">Visual Modes</a>
       <a href="https://github.com/graemecode/acoustic-circuit">GitHub</a>
     </div>
   </nav>
 
   <section class="hero">
     <div>
-      <div class="kicker">macOS 15+ · Apple Silicon · Apple Notarized</div>
-      <h1>A living harmonic instrument in your macOS menu bar.</h1>
+      <div class="kicker">v2.0 · macOS 15+ · Apple Silicon · Zero Subscriptions</div>
+      <h1>Generative focus audio &amp; a living 120Hz Metal instrument.</h1>
       <p class="lead">
-        Acoustic Circuit taps your Mac's system audio directly via Core Audio Process Taps — zero virtual audio drivers — and renders real-time 120Hz Metal visuals, Circle of Fifths chromagrams, and musical key detection in a 2.3 MB native Swift app.
+        Drop into deep work from your macOS menu bar with offline psychoacoustic soundscapes — 4×4 Hadamard reverb, circadian harmony, and automatic ducking the instant a Zoom call, YouTube video, or Spotify track starts.
       </p>
 
       <div class="cta-row">
-        <a class="btn-primary" href="https://github.com/graemecode/acoustic-circuit/releases/latest/download/AcousticCircuit-1.1.0.dmg">
-          ↓ Download v1.1.0 (.dmg)
+        <a class="btn-primary" href="https://github.com/graemecode/acoustic-circuit/releases/latest/download/AcousticCircuit-2.0.0.dmg">
+          ↓ Download v2.0.0 (.dmg)
         </a>
         <a class="btn-ghost" href="https://github.com/graemecode/acoustic-circuit">
           View Source
@@ -319,27 +322,49 @@
       </div>
 
       <div class="specs-row">
-        Developer ID Signed &amp; Notarized · macOS 15 Sequoia / 26 Tahoe · Zero Telemetry · MIT
+        2.3 MB Native Swift + Metal · Apple Developer ID Notarized · Zero Virtual Drivers · MIT
       </div>
     </div>
 
     <div class="stage-card">
       <div class="stage-head">
-        <span>LIVE WEBGL PREVIEW · 01 THE CIRCUIT</span>
-        <span id="liveKey">C MINOR</span>
+        <span id="stageModeLabel">LIVE PREVIEW · 01 THE CIRCUIT</span>
+        <span id="liveKey">D DORIAN</span>
       </div>
       <div class="stage-canvas-wrap">
         <canvas id="heroCanvas"></canvas>
       </div>
       <div class="stage-foot">
-        <span id="liveStats">24 BANDS · CHROMAGRAM · 120HZ METAL</span>
-        <button class="copy-btn" id="grooveBtn">▶ Play Synth Groove</button>
+        <div class="sound-tabs">
+          <button class="copy-btn" data-sound="focus">▶ Focus</button>
+          <button class="copy-btn" data-sound="pulse">▶ Pulse</button>
+          <button class="copy-btn" data-sound="rain">▶ Rain</button>
+        </div>
+        <span>CLICK TO AUDITION IN BROWSER</span>
       </div>
     </div>
   </section>
 
+  <div class="section-head" id="sound">
+    <span>Built for 6-Hour Deep Work Sessions</span>
+    <span>100% Procedural Offline DSP</span>
+  </div>
+
+  <section class="modes">
+    <div class="mode-card">
+      <div class="mode-num">AUTO-DUCKING</div>
+      <h3>Fades out for calls, visualizes your music</h3>
+      <p>Powered by Core Audio Process Taps: the instant Zoom, Loom, Chrome, or Spotify plays sound, your focus soundscape smoothly fades down and Acoustic Circuit visualizes your live audio — then blooms back in when silence returns.</p>
+    </div>
+    <div class="mode-card">
+      <div class="mode-num">PSYCHOACOUSTICS</div>
+      <h3>4×4 Hadamard FDN Reverb + Circadian Voicing</h3>
+      <p>Zero harsh loops or fatiguing high frequencies. Four real-time modes (<strong>Focus</strong>, <strong>Pulse</strong> with subtle 14 Hz neural modulation, <strong>Rain</strong>, and Eno-style <strong>Drift</strong>) shift harmonies gently across Morning, Day, and Night.</p>
+    </div>
+  </section>
+
   <div class="section-head" id="modes">
-    <span>Four GPU-Accelerated Modes (Keys 1–4)</span>
+    <span>Four 120Hz Metal Modes (Keys 1–4)</span>
     <span>Menu Bar · Mini HUD · Studio Window · Fullscreen</span>
   </div>
 
@@ -347,7 +372,7 @@
     <div class="mode-card">
       <div class="mode-num">MODE 01</div>
       <h3>The Circuit</h3>
-      <p>160-strand GPU 3D luminous connectome core + 2,400 spike particles, paired in Studio and Fullscreen views with a 24-band sensor mosaic, curved impulse routing wires, live Circle of Fifths chromagram, and 24 stark-white dB bars.</p>
+      <p>240-strand GPU 3D curl-turbulence connectome + 3,200 neural spikes, paired in Studio and Fullscreen views with a 24-band sensor mosaic, curved impulse routing wires, 4096-pt Circle of Fifths chromagram, and 24 stark-white dB bars.</p>
     </div>
     <div class="mode-card">
       <div class="mode-num">MODE 02</div>
@@ -366,7 +391,7 @@
     </div>
   </section>
 
-  <div class="section-head" id="specs">
+  <div class="section-head">
     <span>Engineered for Zero Bloat</span>
     <span>Native Swift 6 + Metal + Accelerate</span>
   </div>
@@ -385,8 +410,8 @@
       <div class="stat-lbl">ProMotion Metal GPU</div>
     </div>
     <div class="stat">
-      <div class="stat-val">Per-App</div>
-      <div class="stat-lbl">PID Audio Isolation</div>
+      <div class="stat-val">$0 / mo</div>
+      <div class="stat-lbl">100% Local &amp; MIT</div>
     </div>
   </section>
 
@@ -404,78 +429,117 @@ copyBtn.addEventListener('click', () => {
   setTimeout(() => copyBtn.textContent = 'Copy', 1500);
 });
 
-// Lightweight live 3D Filament Circuit hero preview (+ optional WebAudio synth groove)
 const canvas = document.getElementById('heroCanvas');
 const ctx = canvas.getContext('2d');
-const strands = Array.from({ length: 48 }, (_, i) => ({
+const strands = Array.from({ length: 56 }, (_, i) => ({
   band: i % 24,
-  phaseA: (i / 48) * Math.PI * 2,
+  phaseA: (i / 56) * Math.PI * 2,
   phaseB: ((i * 1.618) % 1) * Math.PI * 2,
-  freq1: 1 + (i % 5) * 0.35,
-  freq2: 2 + (i % 7) * 0.28,
-  radius: 0.56 + (i / 48) * 0.44,
-  tilt: ((i % 9) - 4) * 0.22,
-  bright: 0.22 + (i % 6 === 0 ? 0.52 : (i % 3 === 0 ? 0.24 : 0.08)),
-  width: i % 8 === 0 ? 1.3 : 0.72,
+  freq1: 1 + (i % 5) * 0.31,
+  freq2: 2 + (i % 7) * 0.27,
+  radius: 0.52 + (i / 56) * 0.48,
+  tilt: ((i % 9) - 4) * 0.2,
+  bright: 0.2 + (i % 6 === 0 ? 0.5 : (i % 3 === 0 ? 0.22 : 0.08)),
+  width: i % 8 === 0 ? 1.25 : 0.7,
 }));
 const bands = new Float32Array(24);
-let audioCtx = null, analyser = null, freqData = null, synthTimer = null, synthOn = false, step = 0;
+let audioCtx = null, analyser = null, freqData = null, activeSound = null, stopActive = null;
 
-document.getElementById('grooveBtn').addEventListener('click', () => {
-  const btn = document.getElementById('grooveBtn');
-  if (synthOn) {
-    synthOn = false;
-    clearInterval(synthTimer);
-    btn.textContent = '▶ Play Synth Groove';
-    return;
-  }
+function stopSound() {
+  if (stopActive) { stopActive(); stopActive = null; }
+  activeSound = null;
+  document.querySelectorAll('[data-sound]').forEach(b => b.classList.remove('active'));
+  document.getElementById('stageModeLabel').textContent = 'LIVE PREVIEW · 01 THE CIRCUIT';
+}
+
+function startSound(kind) {
+  if (activeSound === kind) { stopSound(); return; }
+  stopSound();
   if (!audioCtx) {
     const AC = window.AudioContext || window.webkitAudioContext;
     audioCtx = new AC();
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 1024;
-    analyser.smoothingTimeConstant = 0.78;
+    analyser.smoothingTimeConstant = 0.8;
     analyser.connect(audioCtx.destination);
     freqData = new Uint8Array(analyser.frequencyBinCount);
   }
   if (audioCtx.state === 'suspended') audioCtx.resume();
-  synthOn = true;
-  btn.textContent = '■ Stop Groove';
-  const roots = [130.81, 103.83, 174.61, 196.0];
-  const tick = () => {
-    if (!synthOn) return;
-    const now = audioCtx.currentTime;
-    const s = step % 16, bar = Math.floor(step / 16) % 4;
-    if (s % 4 === 0) {
+  activeSound = kind;
+  document.querySelector(`[data-sound="${kind}"]`).classList.add('active');
+  document.getElementById('stageModeLabel').textContent = `AUDITION · ${kind.toUpperCase()}`;
+
+  const master = audioCtx.createGain();
+  master.gain.setValueAtTime(0.001, audioCtx.currentTime);
+  master.gain.linearRampToValueAtTime(0.45, audioCtx.currentTime + 0.5);
+  master.connect(analyser);
+
+  const nodes = [];
+  let timer = null;
+
+  if (kind === 'rain') {
+    const len = audioCtx.sampleRate * 3;
+    const buf = audioCtx.createBuffer(2, len, audioCtx.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(0 + ch);
+      let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+      for (let i = 0; i < len; i++) {
+        const w = Math.random() * 2 - 1;
+        b0 = 0.99886*b0 + w*0.0555179; b1 = 0.99332*b1 + w*0.0750759; b2 = 0.96900*b2 + w*0.1538520;
+        b3 = 0.86650*b3 + w*0.3104856; b4 = 0.55000*b4 + w*0.5329522; b5 = -0.7616*b5 - w*0.0168980;
+        d[i] = (b0+b1+b2+b3+b4+b5+b6 + w*0.5362) * 0.055; b6 = w*0.115926;
+      }
+    }
+    const src = audioCtx.createBufferSource(); src.buffer = buf; src.loop = true;
+    const lp = audioCtx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 1100;
+    src.connect(lp); lp.connect(master); src.start();
+    nodes.push(src);
+  } else {
+    const chord = [73.42, 110.0, 146.83, 220.0, 329.63];
+    const lp = audioCtx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 620;
+    lp.connect(master);
+    chord.forEach((f, idx) => {
       const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-      o.frequency.setValueAtTime(135, now); o.frequency.exponentialRampToValueAtTime(44, now + 0.14);
-      g.gain.setValueAtTime(0.65, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-      o.connect(g); g.connect(analyser); o.start(now); o.stop(now + 0.32);
-    }
-    if (s === 0) {
-      [1, 1.189, 1.498, 1.782].forEach((r, idx) => {
+      o.type = idx % 2 === 0 ? 'sine' : 'triangle';
+      o.frequency.value = f + (idx - 2) * 0.3;
+      g.gain.value = idx === 0 ? 0.25 : 0.12;
+      o.connect(g); g.connect(lp); o.start();
+      nodes.push(o);
+    });
+    if (kind === 'pulse') {
+      timer = setInterval(() => {
+        const now = audioCtx.currentTime;
         const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-        o.type = idx % 2 === 0 ? 'triangle' : 'sine';
-        o.frequency.value = roots[bar] * r * 2;
-        g.gain.setValueAtTime(0.001, now); g.gain.linearRampToValueAtTime(0.08, now + 0.14);
-        g.gain.exponentialRampToValueAtTime(0.001, now + 1.9);
-        o.connect(g); g.connect(analyser); o.start(now); o.stop(now + 1.95);
-      });
+        o.frequency.value = 73.42;
+        g.gain.setValueAtTime(0.001, now);
+        g.gain.linearRampToValueAtTime(0.32, now + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
+        o.connect(g); g.connect(master); o.start(now); o.stop(now + 0.36);
+      }, 535);
     }
-    step++;
+  }
+
+  stopActive = () => {
+    if (timer) clearInterval(timer);
+    const now = audioCtx.currentTime;
+    master.gain.cancelScheduledValues(now);
+    master.gain.linearRampToValueAtTime(0.0001, now + 0.25);
+    setTimeout(() => { nodes.forEach(n => { try { n.stop(); } catch {} }); master.disconnect(); }, 280);
   };
-  tick();
-  synthTimer = setInterval(tick, 129);
+}
+
+document.querySelectorAll('[data-sound]').forEach(btn => {
+  btn.addEventListener('click', () => startSound(btn.dataset.sound));
 });
 
-const keys = ['C MINOR', 'Ab MAJOR', 'F MINOR', 'G MINOR'];
+const keys = ['D DORIAN', 'C ADD9', 'F MAJ7', 'A SUS9'];
 let last = performance.now(), t = 0;
 function loop(now) {
   const dt = Math.max(0.001, Math.min(0.05, (now - last) / 1000));
   last = now; t += dt;
 
   let bass = 0;
-  if (synthOn && analyser) {
+  if (activeSound && analyser) {
     analyser.getByteFrequencyData(freqData);
     for (let i = 0; i < 24; i++) {
       const v = freqData[Math.min(freqData.length - 1, Math.floor(Math.pow(1.22, i)))] / 255;
@@ -484,18 +548,18 @@ function loop(now) {
     }
     bass /= 6;
   } else {
-    const bp = (t * 116 / 60) % 1;
-    const kick = Math.pow(Math.max(0, 1 - bp * 3.5), 2.3);
+    const bp = (t * 112 / 60) % 1;
+    const kick = Math.pow(Math.max(0, 1 - bp * 3.2), 2.3);
     for (let i = 0; i < 24; i++) {
       const f = i / 23;
-      const v = Math.min(1, Math.exp(-Math.pow((f - 0.1) / 0.18, 2)) * (0.4 + 0.6 * kick) + 0.25 * (0.5 + 0.5 * Math.sin(i * 0.7 - t * 3)));
+      const v = Math.min(1, Math.exp(-Math.pow((f - 0.1) / 0.18, 2)) * (0.38 + 0.58 * kick) + 0.22 * (0.5 + 0.5 * Math.sin(i * 0.7 - t * 2.6)));
       bands[i] += (v - bands[i]) * Math.min(1, dt * 14);
       if (i < 6) bass += bands[i];
     }
     bass /= 6;
   }
 
-  document.getElementById('liveKey').textContent = keys[Math.floor(t / 5) % keys.length];
+  document.getElementById('liveKey').textContent = keys[Math.floor(t / 6) % keys.length];
 
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const w = Math.max(2, Math.floor(canvas.clientWidth * dpr));
@@ -503,8 +567,8 @@ function loop(now) {
   if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
 
   ctx.clearRect(0, 0, w, h);
-  const cx = w * 0.5, cy = h * 0.45, R = Math.min(w, h) * 0.36;
-  const rotY = t * 0.25 + bass * 0.3, rotX = 0.4 + Math.sin(t * 0.2) * 0.22;
+  const cx = w * 0.5, cy = h * 0.45, R = Math.min(w, h) * 0.37;
+  const rotY = t * 0.22 + bass * 0.26, rotX = 0.38 + Math.sin(t * 0.16) * 0.24;
   const cY = Math.cos(rotY), sY = Math.sin(rotY), cX = Math.cos(rotX), sX = Math.sin(rotX);
 
   ctx.save();
@@ -512,11 +576,11 @@ function loop(now) {
   for (let s = 0; s < strands.length; s++) {
     const st = strands[s], bv = bands[st.band];
     ctx.beginPath();
-    for (let i = 0; i <= 52; i++) {
-      const u = (i / 52) * Math.PI * 2;
-      const wob = 0.26 + 0.14 * Math.sin(u * st.freq2 + t * 0.75 + st.phaseB) + bv * 0.18;
-      const rT = st.radius * (1 + bv * 0.28);
-      const th = u + st.phaseA + t * 0.16, ph = u * st.freq1 + st.phaseB - t * 0.3;
+    for (let i = 0; i <= 54; i++) {
+      const u = (i / 54) * Math.PI * 2;
+      const wob = 0.24 + 0.14 * Math.sin(u * st.freq2 + t * 0.6 + st.phaseB) + bv * 0.18;
+      const rT = st.radius * (1 + bv * 0.26);
+      const th = u + st.phaseA + t * 0.14, ph = u * st.freq1 + st.phaseB - t * 0.24;
       const x = (rT + wob * Math.cos(ph)) * Math.cos(th);
       const y = (rT + wob * Math.cos(ph)) * Math.sin(th) * 0.86 + Math.sin(ph * 1.5) * 0.2;
       const z = wob * Math.sin(ph) + Math.cos(th * 2 + st.tilt) * 0.35;
@@ -526,13 +590,12 @@ function loop(now) {
       const sx = cx + x1 * R * 0.74 * p, sy = cy + y2 * R * 0.74 * p;
       i === 0 ? ctx.moveTo(sx, sy) : ctx.lineTo(sx, sy);
     }
-    ctx.strokeStyle = `rgba(236, 243, 255, ${Math.min(0.85, (st.bright + bv * 0.4) * 0.72).toFixed(3)})`;
+    ctx.strokeStyle = `rgba(236, 243, 255, ${Math.min(0.84, (st.bright + bv * 0.38) * 0.7).toFixed(3)})`;
     ctx.lineWidth = st.width * dpr;
     ctx.stroke();
   }
   ctx.restore();
 
-  // Bottom 24 crisp white bars
   const pad = 14 * dpr, gap = 3 * dpr, bw = (w - pad * 2 - gap * 23) / 24, bh = 22 * dpr, by = h - bh - 10 * dpr;
   for (let i = 0; i < 24; i++) {
     const x = pad + i * (bw + gap);
