@@ -349,7 +349,7 @@ struct PopoverView: View {
                         .frame(width: 26, height: 25)
                 }
                 .buttonStyle(HairlineIconButtonStyle())
-                .help("Quit Acoustic Circuit")
+                .help("Quit Satie")
             }
             .padding(.top, 2)
         }

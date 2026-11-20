@@ -61,7 +61,7 @@ public final class ProcessAudioTap: @unchecked Sendable {
     private var aggregateDeviceID: AudioObjectID = kAudioObjectUnknown
     private var ioProcID: AudioDeviceIOProcID?
     private let stateLock = NSLock()
-    private let lifecycleQueue = DispatchQueue(label: "com.strangechances.AcousticCircuit.tapLifecycle", qos: .userInitiated)
+    private let lifecycleQueue = DispatchQueue(label: "com.strangechances.Satie.tapLifecycle", qos: .userInitiated)
 
     private var currentTarget: TapTarget = .systemAll
     private var isSleeping = false
@@ -345,7 +345,7 @@ public final class ProcessAudioTap: @unchecked Sendable {
 
         let tapUUID = UUID()
         tapDesc.uuid = tapUUID
-        tapDesc.name = "AcousticCircuitTap"
+        tapDesc.name = "SatieTap"
         tapDesc.isPrivate = true
         tapDesc.muteBehavior = .unmuted
 
@@ -373,9 +373,9 @@ public final class ProcessAudioTap: @unchecked Sendable {
             self.sampleRate = 48_000
         }
 
-        let aggUID = "com.strangechances.AcousticCircuit.agg.\(UUID().uuidString)"
+        let aggUID = "com.strangechances.Satie.agg.\(UUID().uuidString)"
         var aggDesc: [String: Any] = [
-            kAudioAggregateDeviceNameKey: "AcousticCircuitTapDevice",
+            kAudioAggregateDeviceNameKey: "SatieTapDevice",
             kAudioAggregateDeviceUIDKey: aggUID,
             kAudioAggregateDeviceIsPrivateKey: true,
             kAudioAggregateDeviceIsStackedKey: false,

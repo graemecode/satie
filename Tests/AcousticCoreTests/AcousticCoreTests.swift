@@ -176,7 +176,7 @@ struct AcousticCoreTests {
 
     @Test("SettingsStore round-trips preferences cleanly")
     func settingsPersistence() {
-        let suiteName = "com.strangechances.AcousticCircuit.test.\(UUID().uuidString)"
+        let suiteName = "com.strangechances.Satie.test.\(UUID().uuidString)"
         let ud = UserDefaults(suiteName: suiteName)!
         defer { ud.removePersistentDomain(forName: suiteName) }
 

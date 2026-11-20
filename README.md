@@ -1,8 +1,10 @@
-# Acoustic Circuit
+# Satie
 
-A native macOS **generative focus soundscape** & **120Hz Metal harmonic instrument** living quietly in your menu bar.
+Named after **Erik Satie**, who invented *musique d'ameublement* ("furniture music") in 1917 — sound meant to inhabit a room without demanding attention.
 
-**Website & live preview:** [strangechances.com/acoustic-circuit](https://strangechances.com/acoustic-circuit/)
+**Satie** is a native macOS **generative focus soundscape** & **120Hz Metal harmonic instrument** living quietly in your menu bar.
+
+**Website & live preview:** [strangechances.com/satie](https://strangechances.com/satie/)
 
 Zero subscriptions, zero virtual audio drivers, zero Electron bloat — **2.4 MB native Apple Silicon app**, **Apple Developer ID signed & notarized**.
 
@@ -10,11 +12,11 @@ Zero subscriptions, zero virtual audio drivers, zero Electron bloat — **2.4 MB
 
 ### Homebrew
 ```bash
-brew install --cask graemecode/tap/acoustic-circuit
+brew install --cask graemecode/tap/satie
 ```
 
 ### Direct Download
-Download the notarized [AcousticCircuit-2.0.0.dmg](https://github.com/graemecode/acoustic-circuit/releases/latest/download/AcousticCircuit-2.0.0.dmg) (macOS 15 Sequoia or later, Apple Silicon), drag **Acoustic Circuit** to **Applications**, and launch.
+Download the notarized [Satie-2.1.0.dmg](https://github.com/graemecode/satie/releases/latest/download/Satie-2.1.0.dmg) (macOS 15 Sequoia or later, Apple Silicon), drag **Satie** to **Applications**, and launch.
 
 > **Tip:** Hide Apple's built-in icon in **System Settings → Menu Bar → Now Playing → Don't Show in Menu Bar**.
 

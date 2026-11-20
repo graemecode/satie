@@ -2,7 +2,7 @@ import AcousticCore
 import AppKit
 import SwiftUI
 
-private let wakeupNotificationName = Notification.Name("com.strangechances.AcousticCircuit.wakeup")
+private let wakeupNotificationName = Notification.Name("com.strangechances.Satie.wakeup")
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
@@ -13,7 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private let studio = StudioWindowController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Single-instance guard: if another Acoustic Circuit is already running, wake it and exit
+        // Single-instance guard: if another Satie is already running, wake it and exit
         if let bundleID = Bundle.main.bundleIdentifier {
             let others = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
                 .filter { $0.processIdentifier != ProcessInfo.processInfo.processIdentifier }
@@ -78,9 +78,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         // App Menu
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(NSMenuItem(title: "About Acoustic Circuit", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: ""))
+        appMenu.addItem(NSMenuItem(title: "About Satie", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: ""))
         appMenu.addItem(.separator())
-        appMenu.addItem(NSMenuItem(title: "Quit Acoustic Circuit", action: #selector(menuQuit), keyEquivalent: "q"))
+        appMenu.addItem(NSMenuItem(title: "Quit Satie", action: #selector(menuQuit), keyEquivalent: "q"))
         appItem.submenu = appMenu
         mainMenu.addItem(appItem)
 
@@ -278,7 +278,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         loginItem.state = state.launchAtLogin ? .on : .off
         menu.addItem(loginItem)
 
-        let quitItem = NSMenuItem(title: "Quit Acoustic Circuit", action: #selector(menuQuit), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "Quit Satie", action: #selector(menuQuit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
 

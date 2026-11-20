@@ -403,7 +403,7 @@ final class StudioWindowController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        win.title = "Acoustic Circuit"
+        win.title = "Satie"
         win.titleVisibility = .hidden
         win.titlebarAppearsTransparent = true
         win.backgroundColor = NSColor(calibratedRed: 0.028, green: 0.043, blue: 0.071, alpha: 1.0)

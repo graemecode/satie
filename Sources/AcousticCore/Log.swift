@@ -2,7 +2,7 @@ import Foundation
 import os
 
 public enum Log {
-    public static let subsystem = "com.strangechances.AcousticCircuit"
+    public static let subsystem = "com.strangechances.Satie"
     public static let audio = Logger(subsystem: subsystem, category: "audio")
     public static let dsp = Logger(subsystem: subsystem, category: "dsp")
     public static let renderer = Logger(subsystem: subsystem, category: "renderer")

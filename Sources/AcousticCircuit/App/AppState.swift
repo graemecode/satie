@@ -215,7 +215,7 @@ final class AppState: ObservableObject {
                 self.tickHousekeeping()
             }
         }
-        Log.app.info("Acoustic Circuit 2.0 booted (preset=\(self.preset.title, privacy: .public), autoDuck=\(self.autoDuckEnabled))")
+        Log.app.info("Satie 2.1 booted (preset=\(self.preset.title, privacy: .public), autoDuck=\(self.autoDuckEnabled))")
     }
 
     func shutdown() {
@@ -228,7 +228,7 @@ final class AppState: ObservableObject {
         focusSound.stopImmediately()
         media.stop()
         audioTap.stop()
-        Log.app.info("Acoustic Circuit shut down cleanly")
+        Log.app.info("Satie shut down cleanly")
     }
 
     func toggleFocusSound(_ mode: FocusSoundscape) {

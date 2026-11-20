@@ -2,18 +2,18 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-APP_NAME="AcousticCircuit"
-DISPLAY_NAME="Acoustic Circuit"
-BUNDLE_ID="com.strangechances.AcousticCircuit"
+APP_NAME="Satie"
+DISPLAY_NAME="Satie"
+BUNDLE_ID="com.strangechances.Satie"
 TEAM_ID="6KM3577ETV"
-VERSION="2.0.0"
-BUILD_NUM="5"
+VERSION="2.1.0"
+BUILD_NUM="6"
 BUILD_DIR="$ROOT_DIR/build"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 CONTENTS="$APP_BUNDLE/Contents"
 MACOS_DIR="$CONTENTS/MacOS"
 RES_DIR="$CONTENTS/Resources"
-CASK_FILE="$ROOT_DIR/Casks/acoustic-circuit.rb"
+CASK_FILE="$ROOT_DIR/Casks/satie.rb"
 
 DO_INSTALL=false
 DO_DMG=false
@@ -103,9 +103,9 @@ cat > "$CONTENTS/Info.plist" << EOF
   <key>NSHumanReadableCopyright</key>
   <string>Copyright © 2026 Graeme Boy. All rights reserved.</string>
   <key>NSAudioCaptureUsageDescription</key>
-  <string>Acoustic Circuit taps your Mac's system audio output locally in real time to drive 120Hz Metal visualizations and harmonic analysis. Zero audio is recorded or transmitted.</string>
+  <string>Satie taps your Mac's system audio output locally in real time to auto-duck focus soundscapes during calls or music and drive 120Hz Metal visualizations. Zero audio is recorded or transmitted.</string>
   <key>NSAppleEventsUsageDescription</key>
-  <string>Acoustic Circuit optionally reads the current track title and playback position from Apple Music, Spotify, or Chrome to display Now Playing controls.</string>
+  <string>Satie optionally reads the current track title and playback position from Apple Music, Spotify, or Chrome to display Now Playing controls.</string>
 </dict>
 </plist>
 EOF

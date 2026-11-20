@@ -2,13 +2,13 @@
 import PackageDescription
 
 let package = Package(
-    name: "AcousticCircuit",
+    name: "Satie",
     platforms: [
         .macOS(.v15)
     ],
     products: [
         .library(name: "AcousticCore", targets: ["AcousticCore"]),
-        .executable(name: "AcousticCircuit", targets: ["AcousticCircuit"])
+        .executable(name: "Satie", targets: ["Satie"])
     ],
     targets: [
         .target(
@@ -26,7 +26,7 @@ let package = Package(
             ]
         ),
         .executableTarget(
-            name: "AcousticCircuit",
+            name: "Satie",
             dependencies: ["AcousticCore"],
             path: "Sources/AcousticCircuit",
             exclude: [

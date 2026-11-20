@@ -47,7 +47,7 @@ public struct NowPlayingMetadata: Equatable, Sendable {
 /// Sanctioned macOS media transport + metadata observer.
 /// Shows transport controls only when a working control channel exists (Spotify/Music AppleScript or Accessibility-trusted HID media keys).
 public final class MediaController: @unchecked Sendable {
-    private let queue = DispatchQueue(label: "com.strangechances.AcousticCircuit.media", qos: .utility)
+    private let queue = DispatchQueue(label: "com.strangechances.Satie.media", qos: .utility)
     private var timer: DispatchSourceTimer?
     private var deniedBundles: Set<String> = []
     private var activeProvider: String?
