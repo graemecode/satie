@@ -253,10 +253,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         keyToggle.state = state.showMenuBarKey ? .on : .off
         menu.addItem(keyToggle)
 
-        let demoToggle = NSMenuItem(title: "Demo Signal Mode", action: #selector(menuToggleDemo), keyEquivalent: "")
-        demoToggle.target = self
-        demoToggle.state = state.demoMode ? .on : .off
-        menu.addItem(demoToggle)
+        if !MediaController.hasMediaKeyPermission {
+            let mediaKeyItem = NSMenuItem(title: "Enable Global Media Keys (Accessibility)…", action: #selector(menuRequestMediaKeys), keyEquivalent: "")
+            mediaKeyItem.target = self
+            menu.addItem(mediaKeyItem)
+        }
 
         menu.addItem(.separator())
 
@@ -288,7 +289,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
     }
     @objc private func menuToggleMenuBarKey() { AppState.shared.showMenuBarKey.toggle() }
-    @objc private func menuToggleDemo() { AppState.shared.demoMode.toggle() }
+    @objc private func menuRequestMediaKeys() { MediaController.requestMediaKeyPermission() }
     @objc private func menuToggleLaunchAtLogin() { AppState.shared.toggleLaunchAtLogin() }
     @objc private func menuQuit() { NSApp.terminate(nil) }
 

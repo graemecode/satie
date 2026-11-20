@@ -31,14 +31,16 @@ struct MiniHUDContentView: View {
 
                 if isHovering {
                     HStack(spacing: 5) {
-                        Button {
-                            state.media.playPause()
-                        } label: {
-                            Image(systemName: state.metadata.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 9.5))
-                                .frame(width: 24, height: 22)
+                        if state.metadata.canControlPlayback {
+                            Button {
+                                state.media.playPause()
+                            } label: {
+                                Image(systemName: state.metadata.isPlaying ? "pause.fill" : "play.fill")
+                                    .font(.system(size: 9.5))
+                                    .frame(width: 24, height: 22)
+                            }
+                            .buttonStyle(HUDChipButtonStyle())
                         }
-                        .buttonStyle(HUDChipButtonStyle())
 
                         Button {
                             let nextRaw = (state.preset.rawValue + 1) % VisualPreset.allCases.count

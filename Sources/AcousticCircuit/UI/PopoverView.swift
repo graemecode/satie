@@ -110,14 +110,14 @@ struct PopoverView: View {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 5) {
-                        Text(state.demoMode ? "DEMO SIGNAL" : state.metadata.sourceApp)
+                        Text(state.metadata.sourceApp)
                         Text("·")
                         Text("\(Int(round(state.audioTap.sampleRate / 1000))) KHZ")
                     }
                     .font(.system(size: 9.5, weight: .regular, design: .monospaced))
                     .foregroundColor(inkDim)
 
-                    Text(state.demoMode ? "Acoustic Circuit — Demo Signal" : state.metadata.title)
+                    Text(state.metadata.title)
                         .font(.system(size: 13.5, weight: .medium))
                         .foregroundColor(.white)
                         .lineLimit(1)
@@ -136,7 +136,7 @@ struct PopoverView: View {
             }
 
             // Permission banner if Core Audio Process Tap failed
-            if case .permissionOrError = state.tapStatus, !state.demoMode {
+            if case .permissionOrError = state.tapStatus {
                 HStack(spacing: 8) {
                     Text("Grant System Audio Recording permission to tap live sound.")
                         .font(.system(size: 10.5))
@@ -194,27 +194,29 @@ struct PopoverView: View {
                 .background(Color.black.opacity(0.38))
                 .overlay(Rectangle().stroke(hairSoft, lineWidth: 1))
 
-            // Transport + Scrub bar
+            // Transport + Scrub / Live Signal bar (only shows transport buttons when a verified control path exists)
             HStack(spacing: 10) {
-                HStack(spacing: 4) {
-                    Button { state.media.previousTrack() } label: {
-                        Image(systemName: "backward.fill").font(.system(size: 10))
-                            .frame(width: 26, height: 26)
-                    }
-                    .buttonStyle(HairlineIconButtonStyle())
+                if state.metadata.canControlPlayback {
+                    HStack(spacing: 4) {
+                        Button { state.media.previousTrack() } label: {
+                            Image(systemName: "backward.fill").font(.system(size: 10))
+                                .frame(width: 26, height: 26)
+                        }
+                        .buttonStyle(HairlineIconButtonStyle())
 
-                    Button { state.media.playPause() } label: {
-                        Image(systemName: state.metadata.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 11))
-                            .frame(width: 28, height: 26)
-                    }
-                    .buttonStyle(HairlineIconButtonStyle(prominent: true))
+                        Button { state.media.playPause() } label: {
+                            Image(systemName: state.metadata.isPlaying ? "pause.fill" : "play.fill")
+                                .font(.system(size: 11))
+                                .frame(width: 28, height: 26)
+                        }
+                        .buttonStyle(HairlineIconButtonStyle(prominent: true))
 
-                    Button { state.media.nextTrack() } label: {
-                        Image(systemName: "forward.fill").font(.system(size: 10))
-                            .frame(width: 26, height: 26)
+                        Button { state.media.nextTrack() } label: {
+                            Image(systemName: "forward.fill").font(.system(size: 10))
+                                .frame(width: 26, height: 26)
+                        }
+                        .buttonStyle(HairlineIconButtonStyle())
                     }
-                    .buttonStyle(HairlineIconButtonStyle())
                 }
 
                 VStack(spacing: 4) {
@@ -245,20 +247,6 @@ struct PopoverView: View {
                     .font(.system(size: 9.5, design: .monospaced))
                     .foregroundColor(inkDim)
                 }
-
-                Button {
-                    state.demoMode.toggle()
-                } label: {
-                    Text("DEMO")
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                        .padding(.horizontal, 6)
-                        .frame(height: 26)
-                        .background(state.demoMode ? Color.white : Color.white.opacity(0.03))
-                        .foregroundColor(state.demoMode ? Color(red: 0.04, green: 0.06, blue: 0.10) : inkDim)
-                        .overlay(Rectangle().stroke(state.demoMode ? Color.white : hairSoft, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .help("Toggle built-in demo signal when no music is playing")
             }
 
             // Expansion action strip
@@ -316,7 +304,7 @@ struct PopoverView: View {
 
     private var elapsedLabel: String {
         if let el = state.metadata.elapsed { return formatClock(el) }
-        return state.demoMode ? "DEMO" : (state.snapshot.isSilent ? "IDLE" : "LIVE")
+        return state.snapshot.isSilent ? "STANDBY" : "LIVE"
     }
 
     private var remainingLabel: String {

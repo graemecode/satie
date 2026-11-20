@@ -16,9 +16,11 @@ let package = Package(
             path: "Sources/AcousticCore",
             linkerSettings: [
                 .linkedFramework("AppKit"),
+                .linkedFramework("ApplicationServices"),
                 .linkedFramework("CoreAudio"),
                 .linkedFramework("AudioToolbox"),
                 .linkedFramework("Accelerate"),
+                .linkedFramework("IOKit"),
                 .linkedFramework("ServiceManagement")
             ]
         ),

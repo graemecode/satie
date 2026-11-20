@@ -205,7 +205,7 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
         // Match display refresh rate cleanly (60Hz cap in compact popover, up to 120Hz ProMotion in Studio/Fullscreen, 15Hz quiet standby)
         let screenMax = win.screen?.maximumFramesPerSecond ?? 60
         let activeCap = compactMode ? min(60, screenMax) : min(120, screenMax)
-        let desiredFPS = (snap.isSilent && !state.demoMode) ? 15 : activeCap
+        let desiredFPS = snap.isSilent ? 15 : activeCap
         if preferredFramesPerSecond != desiredFPS {
             preferredFramesPerSecond = desiredFPS
         }

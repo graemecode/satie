@@ -37,8 +37,7 @@ final class StudioStageNSView: NSView {
             guard now - self.lastOverlayUpdate >= (1.0 / 30.0) else { return }
             self.lastOverlayUpdate = now
             let state = AppState.shared
-            let label = state.demoMode ? "DEMO SIGNAL" : state.tapTarget.shortLabel
-            self.overlayView.update(snapshot: snap, preset: state.preset, sourceLabel: label)
+            self.overlayView.update(snapshot: snap, preset: state.preset, sourceLabel: state.tapTarget.shortLabel)
         }
     }
 
@@ -211,19 +210,6 @@ struct StudioContentView: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
 
-            Button {
-                state.demoMode.toggle()
-            } label: {
-                Text("DEMO")
-                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
-                    .padding(.horizontal, 8)
-                    .frame(height: 25)
-                    .background(state.demoMode ? Color.white : Color.white.opacity(0.03))
-                    .foregroundColor(state.demoMode ? Color(red: 0.03, green: 0.05, blue: 0.09) : inkDim)
-                    .overlay(Rectangle().stroke(state.demoMode ? Color.white : hairSoft, lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-
             if !state.isFullscreen {
                 Button(action: onSwitchToMiniHUD) {
                     Image(systemName: "pip")
@@ -253,16 +239,18 @@ struct StudioContentView: View {
     private var statusBar: some View {
         HStack(spacing: 14) {
             HStack(spacing: 8) {
-                Button {
-                    state.media.playPause()
-                } label: {
-                    Image(systemName: state.metadata.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 9.5))
-                        .frame(width: 22, height: 22)
+                if state.metadata.canControlPlayback {
+                    Button {
+                        state.media.playPause()
+                    } label: {
+                        Image(systemName: state.metadata.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: 9.5))
+                            .frame(width: 22, height: 22)
+                    }
+                    .buttonStyle(HairlineIconButtonStyle(prominent: true))
                 }
-                .buttonStyle(HairlineIconButtonStyle(prominent: true))
 
-                Text(state.demoMode ? "Acoustic Circuit — Demo Signal" : state.metadata.title)
+                Text(state.metadata.title)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white)
                     .lineLimit(1)
@@ -291,7 +279,6 @@ struct StudioContentView: View {
     }
 
     private var tapDotColor: Color {
-        if state.demoMode { return Color(red: 0.45, green: 0.72, blue: 1.0) }
         switch state.tapStatus {
         case .active: return Color(red: 0.25, green: 0.88, blue: 0.54)
         case .permissionOrError: return Color(red: 1.0, green: 0.52, blue: 0.32)

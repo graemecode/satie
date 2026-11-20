@@ -50,7 +50,6 @@ final class AppState: ObservableObject {
     }
     @Published var launchAtLogin: Bool = false
 
-    @Published var demoMode: Bool = false
     @Published var tapTarget: TapTarget = .systemAll
     @Published var tapStatus: TapStatus = .stopped
     @Published var audioProcesses: [AudioProcessInfo] = []
@@ -206,7 +205,7 @@ final class AppState: ObservableObject {
                 let now = CACurrentMediaTime()
                 if now - self.lastRenderDrivenTime > 0.06 {
                     let snap = self.stepDSP(drivenByMetal: false)
-                    let targetHz: Double = (snap.isSilent && !self.demoMode) ? 4.0 : 28.0
+                    let targetHz: Double = snap.isSilent ? 4.0 : 28.0
                     if abs(self.currentMenuBarHz - targetHz) > 1.0 {
                         self.scheduleMenuBarTimer(hz: targetHz)
                     }
@@ -231,7 +230,7 @@ final class AppState: ObservableObject {
             ringBuffer: audioTap.ringBuffer,
             sampleRate: audioTap.sampleRate,
             dt: dt,
-            demoMode: demoMode,
+            demoMode: false,
             sensitivity: sensitivity
         )
         snapshot = snap
@@ -239,14 +238,14 @@ final class AppState: ObservableObject {
         // Throttle menu bar icon redraws to <= 20Hz when active, and 0Hz once settled in standby
         menuBarTickAccum += dt
         let shouldRedrawMenuBar: Bool
-        if snap.isSilent && !demoMode {
+        if snap.isSilent {
             shouldRedrawMenuBar = !lastMenuBarWasSilent
         } else {
             shouldRedrawMenuBar = (menuBarTickAccum >= 0.05) // 20 Hz max
         }
         if shouldRedrawMenuBar {
             menuBarTickAccum = 0
-            lastMenuBarWasSilent = (snap.isSilent && !demoMode)
+            lastMenuBarWasSilent = snap.isSilent
             onFrameTick?(snap)
         }
 

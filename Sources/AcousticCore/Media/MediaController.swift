@@ -1,5 +1,8 @@
 import AppKit
+import ApplicationServices
 import Foundation
+import IOKit
+import IOKit.hidsystem
 
 public struct NowPlayingMetadata: Equatable, Sendable {
     public var title: String
@@ -9,6 +12,7 @@ public struct NowPlayingMetadata: Equatable, Sendable {
     public var elapsed: Double?
     public var duration: Double?
     public var canSeek: Bool
+    public var canControlPlayback: Bool
 
     public init(
         title: String,
@@ -17,7 +21,8 @@ public struct NowPlayingMetadata: Equatable, Sendable {
         isPlaying: Bool,
         elapsed: Double?,
         duration: Double?,
-        canSeek: Bool
+        canSeek: Bool,
+        canControlPlayback: Bool
     ) {
         self.title = title
         self.subtitle = subtitle
@@ -26,6 +31,7 @@ public struct NowPlayingMetadata: Equatable, Sendable {
         self.elapsed = elapsed
         self.duration = duration
         self.canSeek = canSeek
+        self.canControlPlayback = canControlPlayback
     }
 
     public static let idle = NowPlayingMetadata(
@@ -35,11 +41,13 @@ public struct NowPlayingMetadata: Equatable, Sendable {
         isPlaying: false,
         elapsed: nil,
         duration: nil,
-        canSeek: false
+        canSeek: false,
+        canControlPlayback: false
     )
 }
 
-/// Sanctioned macOS media transport + metadata observer (Core Audio active process + Music/Spotify/Chrome AppleScript).
+/// Sanctioned macOS media transport + metadata observer.
+/// Shows transport controls only when a working control channel exists (Spotify/Music AppleScript or Accessibility-trusted HID media keys).
 public final class MediaController: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.strangechances.AcousticCircuit.media", qos: .utility)
     private var timer: DispatchSourceTimer?
@@ -49,6 +57,17 @@ public final class MediaController: @unchecked Sendable {
     public var onMetadataUpdate: ((NowPlayingMetadata) -> Void)?
 
     public init() {}
+
+    public static var hasMediaKeyPermission: Bool {
+        AXIsProcessTrusted()
+    }
+
+    /// Prompts macOS Accessibility permission so global HID media keys work across Chrome, Safari, YouTube, etc.
+    public static func requestMediaKeyPermission() {
+        let key = "AXTrustedCheckOptionPrompt" as CFString
+        let opts = [key: true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(opts)
+    }
 
     public func start() {
         stop()
@@ -79,7 +98,9 @@ public final class MediaController: @unchecked Sendable {
                 self.poll()
                 return
             }
-            self.sendMediaKey(16) // NX_KEYTYPE_PLAY
+            if Self.hasMediaKeyPermission {
+                self.sendHIDMediaKey(16) // NX_KEYTYPE_PLAY
+            }
         }
     }
 
@@ -96,7 +117,9 @@ public final class MediaController: @unchecked Sendable {
                 self.poll()
                 return
             }
-            self.sendMediaKey(17) // NX_KEYTYPE_NEXT
+            if Self.hasMediaKeyPermission {
+                self.sendHIDMediaKey(17) // NX_KEYTYPE_NEXT
+            }
         }
     }
 
@@ -113,7 +136,9 @@ public final class MediaController: @unchecked Sendable {
                 self.poll()
                 return
             }
-            self.sendMediaKey(18) // NX_KEYTYPE_PREVIOUS
+            if Self.hasMediaKeyPermission {
+                self.sendHIDMediaKey(18) // NX_KEYTYPE_PREVIOUS
+            }
         }
     }
 
@@ -145,6 +170,7 @@ public final class MediaController: @unchecked Sendable {
 
     private func poll() {
         let activeProcs = ProcessAudioTap.listAudioProcesses().filter { $0.isRunningOutput }
+        let hidReady = Self.hasMediaKeyPermission
 
         if isAppRunning("com.spotify.client"), !deniedBundles.contains("com.spotify.client") {
             if let meta = querySpotify(), meta.isPlaying || activeProcs.isEmpty {
@@ -173,7 +199,8 @@ public final class MediaController: @unchecked Sendable {
                     isPlaying: true,
                     elapsed: nil,
                     duration: nil,
-                    canSeek: false
+                    canSeek: false,
+                    canControlPlayback: hidReady
                 ))
                 return
             }
@@ -187,11 +214,14 @@ public final class MediaController: @unchecked Sendable {
                     isPlaying: true,
                     elapsed: nil,
                     duration: nil,
-                    canSeek: false
+                    canSeek: false,
+                    canControlPlayback: hidReady
                 ))
                 return
             }
 
+            // Only advertise HID media-key controls for known media/browser apps when Accessibility is trusted
+            let isMediaCapableApp = Self.isLikelyMediaApp(bundleID: top.bundleID)
             emit(NowPlayingMetadata(
                 title: top.name,
                 subtitle: "Live Process Tap · PID \(top.pid)",
@@ -199,13 +229,23 @@ public final class MediaController: @unchecked Sendable {
                 isPlaying: true,
                 elapsed: nil,
                 duration: nil,
-                canSeek: false
+                canSeek: false,
+                canControlPlayback: hidReady && isMediaCapableApp
             ))
             return
         }
 
         activeProvider = nil
         emit(.idle)
+    }
+
+    private static func isLikelyMediaApp(bundleID: String?) -> Bool {
+        guard let bid = bundleID?.lowercased() else { return false }
+        let known = [
+            "chrome", "safari", "firefox", "brave", "thebrowser", "edge", "opera",
+            "spotify", "music", "tidal", "vlc", "iina", "quicktime", "podcasts", "sonos"
+        ]
+        return known.contains(where: { bid.contains($0) })
     }
 
     private func querySpotify() -> NowPlayingMetadata? {
@@ -233,7 +273,8 @@ public final class MediaController: @unchecked Sendable {
             isPlaying: playing,
             elapsed: Double(parts[3]),
             duration: Double(parts[4]),
-            canSeek: true
+            canSeek: true,
+            canControlPlayback: true
         )
     }
 
@@ -262,7 +303,8 @@ public final class MediaController: @unchecked Sendable {
             isPlaying: playing,
             elapsed: Double(parts[3]),
             duration: Double(parts[4]),
-            canSeek: true
+            canSeek: true,
+            canControlPlayback: true
         )
     }
 
@@ -304,23 +346,27 @@ public final class MediaController: @unchecked Sendable {
         return result.stringValue
     }
 
-    private func sendMediaKey(_ keyCode: Int32) {
-        func post(down: Bool) {
-            let flags = NSEvent.ModifierFlags(rawValue: down ? 0xa00 : 0xb00)
-            let data1 = Int((keyCode << 16) | (down ? 0xa00 : 0xb00))
-            guard let ev = NSEvent.otherEvent(
-                with: .systemDefined,
-                location: .zero,
-                modifierFlags: flags,
-                timestamp: 0,
-                windowNumber: 0,
-                context: nil,
-                subtype: 8,
-                data1: data1,
-                data2: -1
-            )?.cgEvent else { return }
-            ev.post(tap: .cghidEventTap)
+    /// Sends a real hardware-equivalent IOKit HID media key event (requires Accessibility trust).
+    private func sendHIDMediaKey(_ keyCode: Int32) {
+        let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching(kIOHIDSystemClass))
+        guard service != 0 else { return }
+        defer { IOObjectRelease(service) }
+
+        var connect: io_connect_t = 0
+        guard IOServiceOpen(service, mach_task_self_, UInt32(kIOHIDParamConnectType), &connect) == KERN_SUCCESS else {
+            return
         }
+        defer { IOServiceClose(connect) }
+
+        func post(down: Bool) {
+            var ev = NXEventData()
+            ev.compound.subType = Int16(NX_SUBTYPE_AUX_CONTROL_BUTTONS)
+            let stateBits: Int32 = down ? 0xa00 : 0xb00
+            ev.compound.misc.L.0 = (keyCode << 16) | stateBits
+            let loc = IOGPoint(x: 0, y: 0)
+            IOHIDPostEvent(connect, UInt32(NX_SYSDEFINED), loc, &ev, UInt32(kNXEventDataVersion), 0, 0)
+        }
+
         post(down: true)
         post(down: false)
     }

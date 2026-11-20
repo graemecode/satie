@@ -12,7 +12,7 @@ brew install --cask graemecode/tap/acoustic-circuit
 ```
 
 ### Direct Download
-Download the notarized [AcousticCircuit-1.0.1.dmg](https://github.com/graemecode/acoustic-circuit/releases/latest/download/AcousticCircuit-1.0.1.dmg) (macOS 15 Sequoia or later, Apple Silicon), drag **Acoustic Circuit** to **Applications**, and launch.
+Download the notarized [AcousticCircuit-1.0.2.dmg](https://github.com/graemecode/acoustic-circuit/releases/latest/download/AcousticCircuit-1.0.2.dmg) (macOS 15 Sequoia or later, Apple Silicon), drag **Acoustic Circuit** to **Applications**, and launch.
 
 > **Tip:** Hide macOS's built-in icon in **System Settings → Menu Bar → Now Playing → Don't Show in Menu Bar**.
 
@@ -23,7 +23,7 @@ Download the notarized [AcousticCircuit-1.0.1.dmg](https://github.com/graemecode
 4. **04 Liquid Warp** — `RGBA16Float` ping-pong curl-noise HDR feedback warp with chromatic dispersion and ACES filmic tonemapping.
 
 ## Form Factors & Shortcuts
-- **Menu Bar:** Live 8-bar architectural micro-meter + detected musical key pill (right-click for Sensitivity, Launch at Login, Demo mode, and quick switching).
+- **Menu Bar:** Live 8-bar architectural micro-meter + detected musical key pill (right-click for Sensitivity, Launch at Login, Global Media Keys, and quick switching).
 - **Menu Bar Popover:** Click the menu bar icon for the compact Now Playing replacement.
 - **Floating Mini HUD (`⌘M`):** Draggable borderless corner monitor with hover-only controls.
 - **Studio Window (`⌘W` closes back to menu bar):** Resizable native window with per-app **Core Audio Process Tap** isolation (`System Output (All)` or any active audio app).

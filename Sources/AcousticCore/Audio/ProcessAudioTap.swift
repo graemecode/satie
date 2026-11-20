@@ -220,7 +220,8 @@ public final class ProcessAudioTap: @unchecked Sendable {
         var buf = [CChar](repeating: 0, count: Int(MAXPATHLEN) * 4)
         let len = proc_pidpath(pid, &buf, UInt32(buf.count))
         guard len > 0 else { return nil }
-        return String(cString: buf)
+        let bytes = buf.prefix(Int(len)).map { UInt8(bitPattern: $0) }
+        return String(decoding: bytes, as: UTF8.self)
     }
 
     public static func selfAudioProcessObjectID() -> AudioObjectID? {
