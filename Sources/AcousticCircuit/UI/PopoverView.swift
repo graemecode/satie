@@ -123,35 +123,10 @@ struct PopoverView: View {
                     .stroke(hairSoft, lineWidth: 1)
             )
 
-            // Permission banner if Core Audio Process Tap needs approval
-            if case .permissionOrError = state.tapStatus {
-                HStack(spacing: 8) {
-                    Text("Enable System Audio Recording for auto-ducking & live visuals.")
-                        .font(.system(size: 10))
-                        .foregroundColor(Color(red: 1.0, green: 0.86, blue: 0.62))
-                        .lineLimit(2)
-                    Spacer()
-                    Button("Settings") {
-                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture") {
-                            NSWorkspace.shared.open(url)
-                        }
-                    }
-                    .buttonStyle(HairlineButtonStyle())
-                    Button("Retry") {
-                        state.retryAudioTap()
-                    }
-                    .buttonStyle(HairlineButtonStyle())
-                }
-                .padding(8)
-                .background(Color.orange.opacity(0.10))
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.orange.opacity(0.35), lineWidth: 1))
-            }
-
             // 2. Five Iconic Circular Geometric Soundscape Glyphs (Focus · Pulse · Rain · Drift · Still)
             HStack(spacing: 0) {
                 ForEach(FocusSoundscape.allCases) { mode in
-                    let isSelected = (state.focusMode == mode) && !isExternalAudioVisualizing
+                    let isSelected = (state.focusMode == mode)
                     let isActive = state.isFocusPlaying && (state.focusMode == mode)
                     Button {
                         if isActive {
@@ -183,13 +158,9 @@ struct PopoverView: View {
 
             // 3. Pure Dead-Center Play / Pause + One Consolidated Options Button
             HStack(spacing: 16) {
-                // Left wing: Previous Track for external playback, or live timer pill ONLY when a timer is set
+                // Left wing: live timer pill ONLY when a sleep timer is counting down
                 HStack(spacing: 10) {
-                    if !state.isFocusAudible && state.metadata.canControlPlayback {
-                        CircularControlButton(systemName: "backward.fill", isActive: false, help: "Previous Track") {
-                            state.media.previousTrack()
-                        }
-                    } else if let countdown = compactCountdown {
+                    if let countdown = compactCountdown {
                         Button {
                             toggleOptions()
                         } label: {
@@ -214,14 +185,7 @@ struct PopoverView: View {
 
                 // Hero High-Contrast White Play / Pause Circle (100% dead-center beneath center glyph)
                 Button {
-                    if state.isFocusPlaying {
-                        state.performHaptic()
-                        state.stopFocusSound()
-                    } else if state.metadata.canControlPlayback && !state.snapshot.isSilent {
-                        state.media.playPause()
-                    } else {
-                        state.toggleFocusSound(state.focusMode)
-                    }
+                    state.togglePlayOrStartFocus()
                 } label: {
                     Image(systemName: heroPlayIcon)
                         .font(.system(size: 16, weight: .semibold))
@@ -234,21 +198,15 @@ struct PopoverView: View {
                 .buttonStyle(.plain)
                 .help(state.isFocusPlaying ? "Pause \(state.focusMode.title) (Space)" : "Play \(state.focusMode.title) (Space)")
 
-                // Right wing: One consolidated Options button (plus amber mute indicator only when Mac is muted)
+                // Right wing: One consolidated Options button (plus mute indicator only when Mac is muted)
                 HStack(spacing: 10) {
-                    if !state.isFocusAudible && state.metadata.canControlPlayback {
-                        CircularControlButton(systemName: "forward.fill", isActive: false, help: "Next Track") {
-                            state.media.nextTrack()
-                        }
-                    } else {
-                        CircularControlButton(
-                            systemName: "slider.horizontal.3",
-                            isActive: showOptions,
-                            hasIndicatorDot: state.maskingBed != .off || state.flowMinutes > 0,
-                            help: "Options (Timer, Background noise, Pause for calls)"
-                        ) {
-                            toggleOptions()
-                        }
+                    CircularControlButton(
+                        systemName: "slider.horizontal.3",
+                        isActive: showOptions,
+                        hasIndicatorDot: state.maskingBed != .off || state.flowMinutes > 0,
+                        help: "Options (Timer, Background noise)"
+                    ) {
+                        toggleOptions()
                     }
 
                     if state.isSystemMuted {
@@ -364,23 +322,6 @@ struct PopoverView: View {
                 }
             }
 
-            // Auto-Ducking toggle
-            HStack {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("PAUSE FOR CALLS & MUSIC")
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                        .foregroundColor(inkSoft)
-                    Text("Steps aside automatically · ignores notifications")
-                        .font(.system(size: 9.5))
-                        .foregroundColor(inkDim)
-                }
-                Spacer()
-                Toggle("", isOn: $state.autoDuckEnabled)
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .labelsHidden()
-            }
-
             Divider().background(hairSoft)
 
             volumeSliderRow
@@ -408,7 +349,7 @@ struct PopoverView: View {
 
     private var volumeSliderRow: some View {
         HStack(spacing: 8) {
-            Image(systemName: state.isAutoDucked ? "speaker.slash" : "speaker.wave.2")
+            Image(systemName: "speaker.wave.2")
                 .font(.system(size: 9.5))
                 .foregroundColor(inkDim)
                 .frame(width: 12)
@@ -421,7 +362,7 @@ struct PopoverView: View {
             )
             .controlSize(.mini)
             .tint(.white)
-            Text(state.isAutoDucked ? "DUCKED" : "\(Int(round(state.focusVolume * 100)))%")
+            Text("\(Int(round(state.focusVolume * 100)))%")
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(inkDim)
                 .frame(minWidth: 32, alignment: .trailing)
@@ -445,35 +386,11 @@ struct PopoverView: View {
         return state.flowMinutes > 0 ? "FADES OUT AFTER \(state.flowMinutes)M" : "NO LIMIT"
     }
 
-    private var isShowingVerifiedExternalTrack: Bool {
-        !state.isFocusPlaying && state.metadata.canControlPlayback && state.metadata.isPlaying
-    }
-
-    private var isExternalAudioVisualizing: Bool {
-        !state.isFocusPlaying && !state.snapshot.isSilent && !isShowingVerifiedExternalTrack
-    }
-
     private var heroTitle: String {
-        if isShowingVerifiedExternalTrack {
-            return state.metadata.title
-        }
-        if isExternalAudioVisualizing {
-            return "Listening"
-        }
-        return state.focusMode.title
+        state.focusMode.title
     }
 
     private var heroSubtitle: String {
-        if isShowingVerifiedExternalTrack {
-            let artist = state.metadata.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
-            return artist.isEmpty ? state.metadata.sourceApp : "\(state.metadata.sourceApp) · \(artist.uppercased())"
-        }
-        if isExternalAudioVisualizing {
-            return "MAC AUDIO ACTIVE"
-        }
-        if state.isFocusPlaying && state.isAutoDucked {
-            return "PAUSED FOR MAC AUDIO"
-        }
         let base = state.focusMode.subtitle.uppercased()
         if state.isFocusPlaying && state.maskingBed != .off {
             return "\(base) · +\(state.maskingBed.label.uppercased())"
@@ -482,11 +399,7 @@ struct PopoverView: View {
     }
 
     private var heroPlayIcon: String {
-        if state.isFocusPlaying { return "pause.fill" }
-        if state.metadata.canControlPlayback && state.metadata.isPlaying && !state.snapshot.isSilent {
-            return "pause.fill"
-        }
-        return "play.fill"
+        state.isFocusPlaying ? "pause.fill" : "play.fill"
     }
 
     private var soundscapeAuraColor: Color {

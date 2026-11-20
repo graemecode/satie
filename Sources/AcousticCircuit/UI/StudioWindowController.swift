@@ -37,7 +37,7 @@ final class StudioStageNSView: NSView {
             guard now - self.lastOverlayUpdate >= (1.0 / 30.0) else { return }
             self.lastOverlayUpdate = now
             let state = AppState.shared
-            let label = state.isFocusAudible ? "GENERATIVE · \(state.focusMode.shortLabel)" : state.tapTarget.shortLabel
+            let label = state.isFocusPlaying ? state.focusMode.title.uppercased() : "STANDBY"
             self.overlayView.update(snapshot: snap, preset: state.preset, sourceLabel: label)
         }
     }
@@ -193,59 +193,6 @@ struct StudioContentView: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
 
-            // Core Audio Process Tap Source Picker
-            Menu {
-                Button {
-                    state.selectTapTarget(.systemAll)
-                } label: {
-                    if case .systemAll = state.tapTarget {
-                        Label("System Output (All Apps)", systemImage: "checkmark")
-                    } else {
-                        Text("System Output (All Apps)")
-                    }
-                }
-
-                if !state.audioProcesses.isEmpty {
-                    Divider()
-                    ForEach(state.audioProcesses) { proc in
-                        Button {
-                            state.selectTapTarget(.process(proc))
-                        } label: {
-                            let label = proc.isRunningOutput ? "● \(proc.name) (PID \(proc.pid))" : "\(proc.name) (PID \(proc.pid))"
-                            if case .process(let current) = state.tapTarget, current.objectID == proc.objectID {
-                                Label(label, systemImage: "checkmark")
-                            } else {
-                                Text(label)
-                            }
-                        }
-                    }
-                }
-
-                Divider()
-                Button("Refresh Active Apps") {
-                    state.refreshAudioProcesses()
-                }
-            } label: {
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(tapDotColor)
-                        .frame(width: 6, height: 6)
-                    Text("TAP: \(state.tapTarget.displayLabel)")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(inkSoft)
-                        .lineLimit(1)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8.5, weight: .semibold))
-                        .foregroundColor(inkDim)
-                }
-                .padding(.horizontal, 9)
-                .frame(height: 25)
-                .background(Color.white.opacity(0.04))
-                .overlay(Rectangle().stroke(hairSoft, lineWidth: 1))
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-
             if !state.isFullscreen {
                 Button(action: onSwitchToMiniHUD) {
                     Image(systemName: "pip")
@@ -328,14 +275,6 @@ struct StudioContentView: View {
         .background(Color(red: 0.038, green: 0.058, blue: 0.095))
         .overlay(alignment: .top) {
             Rectangle().fill(hairSoft).frame(height: 1)
-        }
-    }
-
-    private var tapDotColor: Color {
-        switch state.tapStatus {
-        case .active: return Color(red: 0.25, green: 0.88, blue: 0.54)
-        case .permissionOrError: return Color(red: 1.0, green: 0.52, blue: 0.32)
-        case .stopped, .sleeping: return .gray
         }
     }
 

@@ -200,27 +200,7 @@ struct AcousticCoreTests {
         #expect(reloaded.studioFrame == NSRect(x: 100, y: 120, width: 1280, height: 820))
     }
 
-    @Test("ProcessAudioTap resolves Chromium, Electron, and WebKit helpers to parent apps")
-    func helperProcessResolution() {
-        let chromePath = "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/130/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper"
-        #expect(ProcessAudioTap.outermostAppBundlePath(from: chromePath) == "/Applications/Google Chrome.app")
-
-        let chromeFromBundleID = ProcessAudioTap.resolveAppIdentity(
-            executablePath: nil,
-            rawBundleID: "com.google.Chrome.helper"
-        )
-        #expect(chromeFromBundleID.name == "Google Chrome")
-        #expect(chromeFromBundleID.bundleID == "com.google.Chrome")
-
-        let safariFromWebKit = ProcessAudioTap.resolveAppIdentity(
-            executablePath: nil,
-            rawBundleID: "com.apple.WebKit.GPU"
-        )
-        #expect(safariFromWebKit.name == "Safari")
-        #expect(safariFromWebKit.bundleID == "com.apple.Safari")
-    }
-
-    @Test("FocusSoundEngine generates bounded, non-silent stereo audio across all 4 modes and auto-ducks cleanly")
+    @Test("FocusSoundEngine generates bounded, non-silent stereo audio across all 5 modes")
     func focusSoundSynthesisAndAutoDuck() {
         for mode in FocusSoundscape.allCases {
             let (l, r) = FocusSoundEngine.renderOfflineTestBlock(mode: mode, circadian: .afternoon, frames: 2048, ducked: false)
@@ -343,45 +323,6 @@ struct AcousticCoreTests {
             #expect(midAvg > 0.08, "Mode \(mode.shortLabel) too weak in laptop-speaker midband (\(midAvg))")
             #expect(highAvg < midAvg * 0.95 + 0.25, "Mode \(mode.shortLabel) harsh upper energy too high (\(highAvg))")
         }
-    }
-
-    @Test("AutoDuckGate ignores notifications, system alerts, and silent streams, but ducks sustained media/calls")
-    func autoDuckNotificationImmunity() {
-        var gate = AutoDuckGate()
-
-        let sysAlert = AudioProcessInfo(objectID: 1, pid: 10, name: "systemsoundserverd", bundleID: "com.apple.systemsoundserverd", isRunningOutput: true)
-        let messages = AudioProcessInfo(objectID: 2, pid: 11, name: "Messages", bundleID: "com.apple.MobileSMS", isRunningOutput: true)
-        let chrome = AudioProcessInfo(objectID: 3, pid: 12, name: "Google Chrome", bundleID: "com.google.Chrome", isRunningOutput: true)
-        let spotify = AudioProcessInfo(objectID: 4, pid: 13, name: "Spotify", bundleID: "com.spotify.client", isRunningOutput: true)
-
-        // 1. System alerts & Messages never duck even if sustained
-        for step in 0..<12 {
-            let d = gate.evaluate(now: Double(step) * 0.25, activeProcesses: [sysAlert, messages], externalRMS: 0.12)
-            #expect(d.isDucked == false)
-        }
-
-        // 2. Short 0.75s notification ping from Chrome/Slack never ducks
-        for step in 0..<3 {
-            let d = gate.evaluate(now: 10.0 + Double(step) * 0.25, activeProcesses: [chrome], externalRMS: 0.08)
-            #expect(d.isDucked == false)
-        }
-        // Chime stops -> timer resets cleanly
-        #expect(gate.evaluate(now: 11.0, activeProcesses: [], externalRMS: 0.0).isDucked == false)
-
-        // 3. Idle Chrome stream with silent RMS never ghost-ducks
-        for step in 0..<12 {
-            let d = gate.evaluate(now: 20.0 + Double(step) * 0.25, activeProcesses: [chrome], externalRMS: 0.0005)
-            #expect(d.isDucked == false)
-        }
-
-        // 4. Sustained Spotify playback (>= 0.9s with real RMS) cleanly ducks and unducks after 3.0s silence
-        #expect(gate.evaluate(now: 30.0, activeProcesses: [spotify], externalRMS: 0.05).isDucked == false)
-        #expect(gate.evaluate(now: 31.0, activeProcesses: [spotify], externalRMS: 0.05).isDucked == true)
-        // Brief 1.5s pause between songs stays ducked
-        #expect(gate.evaluate(now: 32.0, activeProcesses: [], externalRMS: 0.0).isDucked == true)
-        #expect(gate.evaluate(now: 33.5, activeProcesses: [], externalRMS: 0.0).isDucked == true)
-        // After 3.0s continuous silence, smoothly resumes
-        #expect(gate.evaluate(now: 35.2, activeProcesses: [], externalRMS: 0.0).isDucked == false)
     }
 
     @Test("NowPlayingBridge artwork callback runs safely on a background queue without Swift 6 @MainActor trap")

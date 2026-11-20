@@ -102,22 +102,8 @@ final class AppState: ObservableObject {
             focusSound.setCircadianPhase(resolved)
         }
     }
-    @Published var autoDuckEnabled: Bool {
-        didSet {
-            settings.autoDuck = autoDuckEnabled
-            if !autoDuckEnabled && isAutoDucked {
-                autoDuckGate.reset()
-                isAutoDucked = false
-                duckedByAppName = nil
-                focusSound.setDucked(false)
-                syncNowPlaying()
-            }
-        }
-    }
 
     @Published var isFocusPlaying: Bool = false
-    @Published var isAutoDucked: Bool = false
-    @Published var duckedByAppName: String? = nil
     @Published var circadianPhase: CircadianPhase = .current()
     @Published var flowDuration: FlowDuration = .infinite
     @Published var flowMinutes: Int = 0
@@ -135,10 +121,6 @@ final class AppState: ObservableObject {
     }
 
     @Published var launchAtLogin: Bool = false
-    @Published var tapTarget: TapTarget = .systemAll
-    @Published var tapStatus: TapStatus = .stopped
-    @Published var audioProcesses: [AudioProcessInfo] = []
-    @Published var metadata: NowPlayingMetadata = .idle
     @Published var isPopoverOpen: Bool = false
     @Published var isMiniHUDOpen: Bool = false
     @Published var isStudioOpen: Bool = false
@@ -154,11 +136,9 @@ final class AppState: ObservableObject {
     @Published var displayPhase: Float = 1
     @Published var displayFPS: Int = 60
 
-    let audioTap: ProcessAudioTap
     let focusRingBuffer: StereoRingBuffer
     let focusSound: FocusSoundEngine
     let dsp: AcousticDSP
-    let media: MediaController
     let nowPlaying = NowPlayingBridge()
 
     var onFrameTick: ((AcousticSnapshot) -> Void)?
@@ -166,12 +146,6 @@ final class AppState: ObservableObject {
     private var menuBarTimer: Timer?
     private var currentMenuBarHz: Double = 24.0
     private var housekeepingTimer: Timer?
-    private var duckMonitorTimer: Timer?
-    private var autoDuckGate = AutoDuckGate()
-    /// When the user explicitly clicks Play while external Mac audio is already playing,
-    /// honor their intent (blend without immediately auto-ducking) until external audio stops once,
-    /// then automatically re-arm Auto-Duck for future calls/videos.
-    private var suppressAutoDuckUntilSilence: Bool = false
     private var isSleeping: Bool = false
     private var sleepObservers: [NSObjectProtocol] = []
 
@@ -184,23 +158,14 @@ final class AppState: ObservableObject {
     private var lastRenderDrivenTime: CFTimeInterval = 0
 
     var isFocusAudible: Bool {
-        isFocusPlaying && !isAutoDucked
+        isFocusPlaying
     }
 
     var activeTitle: String {
-        if isFocusPlaying {
-            return focusMode.title
-        }
-        if metadata.canControlPlayback && metadata.isPlaying {
-            return metadata.title
-        }
-        return focusMode.title
+        focusMode.title
     }
 
     var activeSourceLabel: String {
-        if isFocusPlaying && isAutoDucked {
-            return "AUTO-DUCKED"
-        }
         if isFocusPlaying {
             let barNum = String(format: "%02d", scoreTelemetry.barInForm + 1)
             let passTag = scoreTelemetry.pass > 0
@@ -208,25 +173,19 @@ final class AppState: ObservableObject {
                 : effectiveCircadianPhase.label
             return "BAR \(barNum)/32 · \(passTag)"
         }
-        if metadata.canControlPlayback && metadata.isPlaying {
-            return metadata.sourceApp
-        }
-        return snapshot.isSilent ? effectiveCircadianPhase.detailedLabel : "LIVE INPUT"
+        return focusMode.subtitle.uppercased()
     }
 
     var effectiveKeyBadge: String {
-        if isFocusAudible {
-            return scoreTelemetry.chordLabel
-        }
-        return displayKey
+        isFocusPlaying ? scoreTelemetry.chordLabel : "STANDBY"
     }
 
     var canTogglePrimaryPlayback: Bool {
-        isFocusAudible || metadata.canControlPlayback
+        true
     }
 
     var isPrimaryPlaying: Bool {
-        isFocusAudible ? true : metadata.isPlaying
+        isFocusPlaying
     }
 
     private init() {
@@ -239,10 +198,8 @@ final class AppState: ObservableObject {
         self.maskingBed = settings.maskingBed
         self.circadianOverride = .auto
         self.flowMinutes = settings.flowMinutes
-        self.autoDuckEnabled = settings.autoDuck
         self.launchAtLogin = settings.launchAtLogin
 
-        self.audioTap = ProcessAudioTap()
         self.focusRingBuffer = StereoRingBuffer()
         self.focusSound = FocusSoundEngine(ringBuffer: focusRingBuffer)
         self.focusSound.setMode(settings.focusMode)
@@ -253,30 +210,10 @@ final class AppState: ObservableObject {
         self.circadianPhase = initPhase
         self.focusSound.setCircadianPhase(initPhase)
         self.dsp = AcousticDSP()
-        self.media = MediaController()
-
-        audioTap.onStatusChange = { [weak self] status in
-            Task { @MainActor in
-                self?.tapStatus = status
-            }
-        }
-        audioTap.onTargetFallback = { [weak self] fallback in
-            Task { @MainActor in
-                self?.tapTarget = fallback
-            }
-        }
-        media.onMetadataUpdate = { [weak self] meta in
-            Task { @MainActor in
-                self?.metadata = meta
-            }
-        }
     }
 
     func boot() {
         installSleepObservers()
-        refreshAudioProcesses()
-        audioTap.start(target: .systemAll)
-        media.start()
 
         nowPlaying.configureCommands(
             onPlay: { [weak self] in
@@ -298,24 +235,16 @@ final class AppState: ObservableObject {
             }
         )
 
-        scheduleMenuBarTimer(hz: 24.0)
+        scheduleMenuBarTimer(hz: 4.0)
 
-        // 4 Hz notification-immune auto-ducking monitor (zero work when focus sound is off)
-        duckMonitorTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self, !self.isSleeping else { return }
-                self.tickAutoDuck()
-            }
-        }
-
-        // 1 Hz housekeeping: flow timer countdown, circadian check, mute sync, process refresh
+        // 1 Hz housekeeping: sleep timer countdown, automatic circadian voicing, mute status sync
         housekeepingTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, !self.isSleeping else { return }
                 self.tickHousekeeping()
             }
         }
-        Log.app.info("Satie 2.1 booted (preset=\(self.preset.title, privacy: .public), autoDuck=\(self.autoDuckEnabled))")
+        Log.app.info("Satie booted (preset=\(self.preset.title, privacy: .public), zero-permission generative mode)")
     }
 
     func shutdown() {
@@ -325,11 +254,8 @@ final class AppState: ObservableObject {
         sleepObservers.removeAll()
         menuBarTimer?.invalidate()
         housekeepingTimer?.invalidate()
-        duckMonitorTimer?.invalidate()
         focusSound.stopImmediately()
         nowPlaying.clear()
-        media.stop()
-        audioTap.stop()
         Log.app.info("Satie shut down cleanly")
     }
 
@@ -346,14 +272,9 @@ final class AppState: ObservableObject {
             let phase = circadianOverride.resolvedPhase()
             circadianPhase = phase
             focusSound.setCircadianPhase(phase)
-            autoDuckGate.reset()
-            // If external Mac audio is already audible when user explicitly clicks Play,
-            // honor their click instead of letting Auto-Duck immediately silence Satie 1.5s later.
-            suppressAutoDuckUntilSilence = !snapshot.isSilent
-            isAutoDucked = false
-            duckedByAppName = nil
             focusSound.start(mode: mode)
             isFocusPlaying = true
+            scheduleMenuBarTimer(hz: 28.0)
             if flowMinutes > 0 {
                 if flowRemainingSeconds == nil {
                     flowRemainingSeconds = Double(flowMinutes * 60)
@@ -369,11 +290,7 @@ final class AppState: ObservableObject {
     func stopFocusSound() {
         focusSound.stop()
         focusSound.setSessionProgress(nil)
-        autoDuckGate.reset()
-        suppressAutoDuckUntilSilence = false
         isFocusPlaying = false
-        isAutoDucked = false
-        duckedByAppName = nil
         flowRemainingSeconds = nil
         syncNowPlaying()
     }
@@ -422,8 +339,6 @@ final class AppState: ObservableObject {
         if isFocusPlaying {
             performHaptic()
             stopFocusSound()
-        } else if !snapshot.isSilent {
-            stopPlayingAudioImmediately()
         } else {
             toggleFocusSound(focusMode)
         }
@@ -437,11 +352,11 @@ final class AppState: ObservableObject {
     }
 
     private func syncNowPlaying() {
-        if isFocusAudible {
+        if isFocusPlaying {
             nowPlaying.update(
                 isPlaying: true,
                 title: focusMode.title,
-                subtitle: "Procedural Furniture Music · \(circadianPhase.label)"
+                subtitle: focusMode.subtitle
             )
         } else {
             nowPlaying.clear()
@@ -460,13 +375,7 @@ final class AppState: ObservableObject {
     }
 
     func togglePrimaryPlayback() {
-        if isFocusAudible {
-            stopFocusSound()
-        } else if metadata.canControlPlayback {
-            media.playPause()
-        } else {
-            toggleSystemMute()
-        }
+        togglePlayOrStartFocus()
     }
 
     func toggleSystemMute() {
@@ -475,19 +384,8 @@ final class AppState: ObservableObject {
         isSystemMuted = nowMuted
     }
 
-    /// Stops or silences currently playing audio immediately with one action:
-    /// stops Satie focus audio if playing, pauses Spotify/Music/Accessibility media if controllable,
-    /// or toggles zero-permission Core Audio system mute for unscriptable browser audio.
     func stopPlayingAudioImmediately() {
-        if isFocusPlaying {
-            stopFocusSound()
-            return
-        }
-        if metadata.canControlPlayback && metadata.isPlaying {
-            media.playPause()
-            return
-        }
-        toggleSystemMute()
+        togglePlayOrStartFocus()
     }
 
     func toggleLaunchAtLogin() {
@@ -497,45 +395,23 @@ final class AppState: ObservableObject {
         }
     }
 
-    func refreshAudioProcesses() {
-        audioProcesses = ProcessAudioTap.listAudioProcesses()
-    }
-
-    func selectTapTarget(_ target: TapTarget) {
-        tapTarget = target
-        audioTap.start(target: target)
-    }
-
-    func retryAudioTap() {
-        audioTap.start(target: tapTarget)
-    }
-
-    // MARK: - 1 Hz Auto-Ducking, Flow Session Timer & Circadian Voicing
-
-    private var housekeepingTickCount = 0
+    // MARK: - 1 Hz Sleep Timer & Automatic Circadian Voicing
 
     private func tickHousekeeping() {
-        housekeepingTickCount += 1
-
         let muted = SystemOutputMute.isMuted
         if muted != isSystemMuted {
             isSystemMuted = muted
         }
 
-        // Refresh process list every 3s when idle (4 Hz duck monitor refreshes when focus sound is active)
-        if !isFocusPlaying && housekeepingTickCount % 3 == 0 {
-            refreshAudioProcesses()
-        }
-
-        // Update circadian harmonic voicing if hour crossed boundary (respecting manual override)
-        let nowPhase = circadianOverride.resolvedPhase()
+        // Quietly adapt harmonic warmth to the time of day
+        let nowPhase = CircadianOverride.auto.resolvedPhase()
         if nowPhase != circadianPhase {
             circadianPhase = nowPhase
             focusSound.setCircadianPhase(nowPhase)
         }
 
-        // Flow Session Timer countdown + Session-Arc audio choreography (pauses while auto-ducked on a call)
-        if isFocusPlaying && !isAutoDucked, let rem = flowRemainingSeconds {
+        // Sleep / Focus timer countdown + soft landing chime
+        if isFocusPlaying, let rem = flowRemainingSeconds {
             let next = rem - 1.0
             if next <= 0 {
                 flowRemainingSeconds = nil
@@ -543,7 +419,7 @@ final class AppState: ObservableObject {
                 focusSound.setSessionProgress(1.0)
                 focusSound.triggerSessionChime()
                 settings.completedFocusSessions += 1
-                Log.app.info("Flow session completed (#\(self.settings.completedFocusSessions)) — playing resolving fifth chime")
+                Log.app.info("Focus session completed (#\(self.settings.completedFocusSessions)) — playing resolving fifth chime")
                 #if APP_STORE
                 let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
                 if settings.completedFocusSessions >= 5 && settings.lastReviewPromptVersion != ver {
@@ -563,37 +439,6 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func tickAutoDuck() {
-        guard isFocusPlaying && autoDuckEnabled else { return }
-        let procs = ProcessAudioTap.listAudioProcesses()
-        audioProcesses = procs
-        let isTapActive: Bool
-        if case .active = tapStatus { isTapActive = true } else { isTapActive = false }
-        let externalRMS: Float? = isTapActive ? audioTap.ringBuffer.recentRMS(frameCount: 2048) : nil
-
-        if suppressAutoDuckUntilSilence {
-            // Re-arm Auto-Duck cleanly once the pre-existing external audio finishes
-            if (externalRMS ?? 0) < 0.002 {
-                suppressAutoDuckUntilSilence = false
-                autoDuckGate.reset()
-            }
-            return
-        }
-
-        let decision = autoDuckGate.evaluate(now: CACurrentMediaTime(), activeProcesses: procs, externalRMS: externalRMS)
-        if decision.isDucked != isAutoDucked || decision.duckedByAppName != duckedByAppName {
-            isAutoDucked = decision.isDucked
-            duckedByAppName = decision.duckedByAppName
-            focusSound.setDucked(decision.isDucked)
-            syncNowPlaying()
-            if decision.isDucked, let app = decision.duckedByAppName {
-                Log.audio.info("Auto-ducked focus soundscape for sustained audio from \(app, privacy: .public)")
-            } else {
-                Log.audio.info("Sustained external audio ended; smoothly resuming focus soundscape")
-            }
-        }
-    }
-
     private func installSleepObservers() {
         let ws = NSWorkspace.shared.notificationCenter
 
@@ -606,18 +451,14 @@ final class AppState: ObservableObject {
                 }
                 self.menuBarTimer?.invalidate()
                 self.menuBarTimer = nil
-                self.media.stop()
-                self.audioTap.pauseForSleep()
             }
         }
         let onWake: @Sendable (Notification) -> Void = { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.isSleeping else { return }
                 self.isSleeping = false
-                self.audioTap.resumeFromSleep()
                 self.focusSound.handleSystemWake()
-                self.media.start()
-                self.scheduleMenuBarTimer(hz: 24.0)
+                self.scheduleMenuBarTimer(hz: 4.0)
             }
         }
 
@@ -639,7 +480,7 @@ final class AppState: ObservableObject {
                 let now = CACurrentMediaTime()
                 if now - self.lastRenderDrivenTime > 0.06 {
                     let snap = self.stepDSP(drivenByMetal: false)
-                    let targetHz: Double = snap.isSilent ? 4.0 : 28.0
+                    let targetHz: Double = snap.isSilent ? 2.0 : 28.0
                     if abs(self.currentMenuBarHz - targetHz) > 1.0 {
                         self.scheduleMenuBarTimer(hz: targetHz)
                     }
@@ -660,12 +501,9 @@ final class AppState: ObservableObject {
         }
         lastFrameTime = now
 
-        let activeBuffer = isFocusAudible ? focusRingBuffer : audioTap.ringBuffer
-        let activeSR = isFocusAudible ? 48_000.0 : audioTap.sampleRate
-
         let snap = dsp.process(
-            ringBuffer: activeBuffer,
-            sampleRate: activeSR,
+            ringBuffer: focusRingBuffer,
+            sampleRate: 48_000.0,
             dt: dt,
             demoMode: false,
             sensitivity: sensitivity

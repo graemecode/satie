@@ -107,10 +107,6 @@ cat > "$CONTENTS/Info.plist" << EOF
   <true/>
   <key>NSHumanReadableCopyright</key>
   <string>Copyright © 2026 Graeme Boy. All rights reserved.</string>
-  <key>NSAudioCaptureUsageDescription</key>
-  <string>Satie taps your Mac's system audio output locally in real time to auto-duck focus soundscapes during calls or music and drive 120Hz Metal visualizations. Zero audio is recorded or transmitted.</string>
-  <key>NSAppleEventsUsageDescription</key>
-  <string>Satie optionally reads the current track title and playback position from Apple Music, Spotify, or Chrome to display Now Playing controls.</string>
 </dict>
 </plist>
 EOF

@@ -109,13 +109,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Keep panel height crisp and anchored downward whenever expandable rows appear/disappear
-        Publishers.CombineLatest3(
+        Publishers.CombineLatest(
             state.$isFocusPlaying.removeDuplicates(),
-            state.$tapStatus.map { if case .permissionOrError = $0 { return true } else { return false } }.removeDuplicates(),
             state.$isStatusItemBehindNotch.removeDuplicates()
         )
         .receive(on: RunLoop.main)
-        .sink { [weak self] _, _, _ in
+        .sink { [weak self] _, _ in
             guard let self, self.floatingPanel.isVisible else { return }
             DispatchQueue.main.async {
                 self.repositionFloatingPanel()
@@ -402,14 +401,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         let state = AppState.shared
 
-        let stopTitle: String
-        if state.isFocusPlaying {
-            stopTitle = "Stop \(state.focusMode.title)"
-        } else if state.metadata.canControlPlayback && state.metadata.isPlaying {
-            stopTitle = "Pause \(state.metadata.sourceApp)"
-        } else {
-            stopTitle = state.isSystemMuted ? "Unmute Mac Audio" : "Mute Mac Audio"
-        }
+        let stopTitle = state.isFocusPlaying
+            ? "Pause \(state.focusMode.title)"
+            : "Play \(state.focusMode.title)"
         let stopNowItem = NSMenuItem(title: "\(stopTitle)  (⌥⌘Space)", action: #selector(menuStopImmediately), keyEquivalent: "")
         stopNowItem.target = self
         menu.addItem(stopNowItem)
@@ -456,15 +450,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if state.isFocusPlaying {
             soundMenu.addItem(.separator())
-            let stopItem = NSMenuItem(title: "Stop Soundscape", action: #selector(menuStopSoundscape), keyEquivalent: "")
+            let stopItem = NSMenuItem(title: "Pause Soundscape", action: #selector(menuStopSoundscape), keyEquivalent: "")
             stopItem.target = self
             soundMenu.addItem(stopItem)
         }
-        soundMenu.addItem(.separator())
-        let duckItem = NSMenuItem(title: "Auto-Duck for Calls & Media", action: #selector(menuToggleAutoDuck), keyEquivalent: "")
-        duckItem.target = self
-        duckItem.state = state.autoDuckEnabled ? .on : .off
-        soundMenu.addItem(duckItem)
         soundItem.submenu = soundMenu
         menu.addItem(soundItem)
 
@@ -480,14 +469,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         sensItem.submenu = sensMenu
         menu.addItem(sensItem)
-
-        #if !APP_STORE
-        if !MediaController.hasMediaKeyPermission {
-            let mediaKeyItem = NSMenuItem(title: "Enable Browser Play/Pause (Accessibility)…", action: #selector(menuRequestMediaKeys), keyEquivalent: "")
-            mediaKeyItem.target = self
-            menu.addItem(mediaKeyItem)
-        }
-        #endif
 
         menu.addItem(.separator())
 
@@ -536,8 +517,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
     @objc private func menuStopSoundscape() { AppState.shared.stopFocusSound() }
-    @objc private func menuToggleAutoDuck() { AppState.shared.autoDuckEnabled.toggle() }
-    @objc private func menuRequestMediaKeys() { MediaController.requestMediaKeyPermission() }
     @objc private func menuSendFeedback() {
         if let url = URL(string: "https://github.com/graemecode/satie/issues/new") {
             NSWorkspace.shared.open(url)
