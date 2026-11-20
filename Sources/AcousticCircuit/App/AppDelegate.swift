@@ -401,45 +401,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         let state = AppState.shared
 
-        let stopTitle = state.isFocusPlaying
+        let playTitle = state.isFocusPlaying
             ? "Pause \(state.focusMode.title)"
             : "Play \(state.focusMode.title)"
-        let stopNowItem = NSMenuItem(title: "\(stopTitle)  (⌥⌘Space)", action: #selector(menuStopImmediately), keyEquivalent: "")
-        stopNowItem.target = self
-        menu.addItem(stopNowItem)
+        let playItem = NSMenuItem(title: "\(playTitle)  (⌥⌘Space)", action: #selector(menuTogglePlay), keyEquivalent: "")
+        playItem.target = self
+        menu.addItem(playItem)
 
-        let summonItem = NSMenuItem(title: "Show Satie Panel  (⌥⌘S)", action: #selector(menuSummonPanel), keyEquivalent: "")
-        summonItem.target = self
-        menu.addItem(summonItem)
-
-        menu.addItem(.separator())
-
-        let openStudioItem = NSMenuItem(title: "Open Studio Window", action: #selector(menuOpenStudio), keyEquivalent: "")
-        openStudioItem.target = self
-        menu.addItem(openStudioItem)
-
-        let miniItem = NSMenuItem(title: "Floating Mini HUD", action: #selector(menuOpenMiniHUD), keyEquivalent: "")
-        miniItem.target = self
-        menu.addItem(miniItem)
-
-        let fsItem = NSMenuItem(title: "Fullscreen Wall", action: #selector(menuOpenFullscreen), keyEquivalent: "")
-        fsItem.target = self
-        menu.addItem(fsItem)
-
-        menu.addItem(.separator())
-
-        for preset in VisualPreset.allCases {
-            let item = NSMenuItem(title: preset.title, action: #selector(menuSelectPreset(_:)), keyEquivalent: "\(preset.rawValue + 1)")
-            item.target = self
-            item.tag = preset.rawValue
-            item.state = state.preset == preset ? .on : .off
-            menu.addItem(item)
-        }
-
-        menu.addItem(.separator())
-
-        // Work Soundscape submenu
-        let soundItem = NSMenuItem(title: "Work Soundscape", action: nil, keyEquivalent: "")
+        let soundItem = NSMenuItem(title: "Soundscape", action: nil, keyEquivalent: "")
         let soundMenu = NSMenu()
         for mode in FocusSoundscape.allCases {
             let sItem = NSMenuItem(title: mode.title, action: #selector(menuToggleSoundscape(_:)), keyEquivalent: "")
@@ -448,37 +417,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             sItem.state = (state.isFocusPlaying && state.focusMode == mode) ? .on : .off
             soundMenu.addItem(sItem)
         }
-        if state.isFocusPlaying {
-            soundMenu.addItem(.separator())
-            let stopItem = NSMenuItem(title: "Pause Soundscape", action: #selector(menuStopSoundscape), keyEquivalent: "")
-            stopItem.target = self
-            soundMenu.addItem(stopItem)
-        }
         soundItem.submenu = soundMenu
         menu.addItem(soundItem)
 
-        // Sensitivity submenu
-        let sensItem = NSMenuItem(title: "Sensitivity", action: nil, keyEquivalent: "")
-        let sensMenu = NSMenu()
-        for mode in SensitivityMode.allCases {
-            let mItem = NSMenuItem(title: mode.label, action: #selector(menuSelectSensitivity(_:)), keyEquivalent: "")
-            mItem.target = self
-            mItem.representedObject = mode.rawValue
-            mItem.state = state.sensitivity == mode ? .on : .off
-            sensMenu.addItem(mItem)
-        }
-        sensItem.submenu = sensMenu
-        menu.addItem(sensItem)
-
         menu.addItem(.separator())
 
-        let feedbackItem = NSMenuItem(title: "Send Feedback…", action: #selector(menuSendFeedback), keyEquivalent: "")
-        feedbackItem.target = self
-        menu.addItem(feedbackItem)
+        let studioItem = NSMenuItem(title: "Studio Window", action: #selector(menuOpenStudio), keyEquivalent: "")
+        studioItem.target = self
+        menu.addItem(studioItem)
 
-        let privacyItem = NSMenuItem(title: "Privacy Policy", action: #selector(menuPrivacyPolicy), keyEquivalent: "")
-        privacyItem.target = self
-        menu.addItem(privacyItem)
+        let miniItem = NSMenuItem(title: "Mini HUD", action: #selector(menuOpenMiniHUD), keyEquivalent: "")
+        miniItem.target = self
+        menu.addItem(miniItem)
+
+        let fsItem = NSMenuItem(title: "Fullscreen", action: #selector(menuOpenFullscreen), keyEquivalent: "")
+        fsItem.target = self
+        menu.addItem(fsItem)
 
         menu.addItem(.separator())
 
@@ -496,8 +450,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.menu = nil
     }
 
-    @objc private func menuStopImmediately() { AppState.shared.stopPlayingAudioImmediately() }
-    @objc private func menuSummonPanel() { showPopover() }
+    @objc private func menuTogglePlay() { AppState.shared.togglePlayOrStartFocus() }
     @objc private func menuOpenStudio() { openStudio(fullscreen: false) }
     @objc private func menuOpenMiniHUD() { openMiniHUD() }
     @objc private func menuOpenFullscreen() { openStudio(fullscreen: true) }
@@ -506,25 +459,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AppState.shared.preset = p
         }
     }
-    @objc private func menuSelectSensitivity(_ sender: NSMenuItem) {
-        if let raw = sender.representedObject as? String, let mode = SensitivityMode(rawValue: raw) {
-            AppState.shared.sensitivity = mode
-        }
-    }
     @objc private func menuToggleSoundscape(_ sender: NSMenuItem) {
         if let raw = sender.representedObject as? String, let mode = FocusSoundscape(rawValue: raw) {
             AppState.shared.toggleFocusSound(mode)
-        }
-    }
-    @objc private func menuStopSoundscape() { AppState.shared.stopFocusSound() }
-    @objc private func menuSendFeedback() {
-        if let url = URL(string: "https://github.com/graemecode/satie/issues/new") {
-            NSWorkspace.shared.open(url)
-        }
-    }
-    @objc private func menuPrivacyPolicy() {
-        if let url = URL(string: "https://strangechances.com/satie/privacy/") {
-            NSWorkspace.shared.open(url)
         }
     }
     @objc private func menuToggleLaunchAtLogin() { AppState.shared.toggleLaunchAtLogin() }
