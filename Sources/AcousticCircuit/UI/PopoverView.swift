@@ -276,16 +276,6 @@ struct PopoverView: View {
             }
             .padding(.top, 1)
 
-            // One plain sentence on what the selected soundscape is for (hidden when visualizing other Mac audio)
-            if !isExternalAudioVisualizing {
-                Text(state.focusMode.promise)
-                    .font(.system(size: 10.5))
-                    .foregroundColor(inkDim)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .frame(maxWidth: .infinity)
-            }
-
             // 3. Iconic Centered Transport Row: [↻ Refresh]  [▶/⏸ Hero White]  [⏱ Timer]  [≡ Sculpt]
             HStack(spacing: 14) {
                 // Re-seed / Refresh harmonic phrase (or Previous Track for external media)
@@ -356,7 +346,7 @@ struct PopoverView: View {
                     .overlay(Capsule().stroke(activeDrawer == .timer ? Color.clear : hairSoft, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
-                .help("Focus Timer, Rounds & Breaks")
+                .help("Focus Timer & Circadian Curve")
 
                 // Live Sound Sculptor Toggle (Intensity + Rain/Brown Masking + Auto-Duck)
                 CircularControlButton(
@@ -390,11 +380,9 @@ struct PopoverView: View {
 
             // 5. Expandable Contextual Drawer: Braun/Leica Radial Timer OR Live Sound Sculptor
             if activeDrawer == .timer {
-                RadialTimerView(
-                    state: state,
-                    onClose: { toggleDrawer(.none) },
-                    onRequestResize: onRequestResize
-                )
+                RadialTimerView(state: state) {
+                    toggleDrawer(.none)
+                }
                 .transition(.opacity)
             } else if activeDrawer == .sculpt {
                 liveSculptorDrawer
@@ -570,13 +558,6 @@ struct PopoverView: View {
             return "STEPPED ASIDE · MAC AUDIO"
         }
         let phase = state.effectiveCircadianPhase.detailedLabel
-        if state.isOnBreak {
-            return state.roundLabel.map { "ON BREAK · \($0)" } ?? "ON BREAK"
-        }
-        let intention = state.sessionIntention.trimmingCharacters(in: .whitespacesAndNewlines)
-        if state.isFocusPlaying && state.flowMinutes > 0 && !intention.isEmpty {
-            return intention.uppercased()
-        }
         if state.isFocusPlaying {
             if state.maskingBed != .off {
                 return "\(phase) · \(state.maskingBed.label)"

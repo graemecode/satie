@@ -20,14 +20,6 @@ final class SatieFloatingPanel: NSPanel {
     }
 
     override func keyDown(with event: NSEvent) {
-        if firstResponder is NSTextView {
-            if event.keyCode == 53 { // Escape unfocuses text field before closing panel
-                makeFirstResponder(nil)
-                return
-            }
-            super.keyDown(with: event)
-            return
-        }
         if event.keyCode == 53 { // Escape
             onEscape?()
             return

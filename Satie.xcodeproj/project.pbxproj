@@ -45,7 +45,6 @@
 		97CE96B78B5D3A3AF976489B /* AppKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 81FA047C9BB90CDE3BCB41AA /* AppKit.framework */; };
 		9882E95E27C57C48142B0FBD /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2E99D8026CE501ABDECE5557 /* IOKit.framework */; };
 		99904B12FE64BE0FA1112FB0 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBF69E89938FDEEECD64A8 /* AppDelegate.swift */; };
-		9F9364A691936F595DD65B40 /* FocusSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 966DCF65E6D4A2CDDB1EC250 /* FocusSession.swift */; };
 		A583A54C4CC4ECF45FCF7C63 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B088A28104E37FB1C43B26EA /* StoreKit.framework */; };
 		ABEA7997A9CA9B0FAED0B62E /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 21174110F87B50E245729D03 /* Accelerate.framework */; };
 		AF9C4239355A6EFBFEE96523 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D7F0DD8AEB2D15C2A63885 /* Log.swift */; };
@@ -98,7 +97,6 @@
 		8008291A58D6A16CEB3B5D38 /* MediaController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaController.swift; sourceTree = "<group>"; };
 		81FA047C9BB90CDE3BCB41AA /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = System/Library/Frameworks/AppKit.framework; sourceTree = SDKROOT; };
 		8880E9DB01723F8D1CF71269 /* NowPlayingBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingBridge.swift; sourceTree = "<group>"; };
-		966DCF65E6D4A2CDDB1EC250 /* FocusSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusSession.swift; sourceTree = "<group>"; };
 		97835604CF2371330F57FCF8 /* DSPPrimitives.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DSPPrimitives.swift; sourceTree = "<group>"; };
 		98F2A747872292287D43EDB1 /* Shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Shaders.metal; sourceTree = "<group>"; };
 		99D7F0DD8AEB2D15C2A63885 /* Log.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Log.swift; sourceTree = "<group>"; };
@@ -237,7 +235,6 @@
 		B9ED88A26F5D6F6291FEC36C /* AcousticCore */ = {
 			isa = PBXGroup;
 			children = (
-				966DCF65E6D4A2CDDB1EC250 /* FocusSession.swift */,
 				399F9D5D17214E97E233F23E /* GlobalHotKeys.swift */,
 				99D7F0DD8AEB2D15C2A63885 /* Log.swift */,
 				ECF78C003BD8651395C98184 /* MenuBarPositioner.swift */,
@@ -307,7 +304,7 @@
 			path = Renderer;
 			sourceTree = "<group>";
 		};
-		"TEMP_74399EA7-4A67-4840-9CC5-49BBDD542BD8" /* Resources */ = {
+		"TEMP_0E91C9D7-9F0A-4486-8701-2C1928EA9398" /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -450,7 +447,6 @@
 				59C43D5FC24773E0BDD29662 /* AcousticDSP.swift in Sources */,
 				7CE468E46813C7F49CFB098D /* AutoDuckGate.swift in Sources */,
 				37877166FFA2E3CD064AAF2D /* DSPPrimitives.swift in Sources */,
-				9F9364A691936F595DD65B40 /* FocusSession.swift in Sources */,
 				082699013F74504DC81EF9FA /* FocusSoundEngine.swift in Sources */,
 				074A3E10A6E0DF5FAE439508 /* GlobalHotKeys.swift in Sources */,
 				AF9C4239355A6EFBFEE96523 /* Log.swift in Sources */,

@@ -40,17 +40,6 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .still: return "Zero-Ego Study · Suspended"
         }
     }
-
-    /// One plain sentence on what this soundscape is for, shown under the glyph row.
-    public var promise: String {
-        switch self {
-        case .focus: return "Warm felt piano to settle into steady work."
-        case .pulse: return "A steady pulse for momentum on routine tasks."
-        case .rain: return "Rain and glass to mask a noisy room."
-        case .drift: return "Slow nocturnal piano for reading and winding down."
-        case .still: return "Near-silence over soft noise for the deepest concentration."
-        }
-    }
 }
 
 /// Live cognitive-load / modulation-depth control (real-time atomic modulation).
