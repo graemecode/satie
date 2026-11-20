@@ -18,10 +18,12 @@ let package = Package(
                 .linkedFramework("AppKit"),
                 .linkedFramework("ApplicationServices"),
                 .linkedFramework("AVFoundation"),
+                .linkedFramework("Carbon"),
                 .linkedFramework("CoreAudio"),
                 .linkedFramework("AudioToolbox"),
                 .linkedFramework("Accelerate"),
                 .linkedFramework("IOKit"),
+                .linkedFramework("MediaPlayer"),
                 .linkedFramework("ServiceManagement")
             ]
         ),

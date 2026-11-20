@@ -275,27 +275,44 @@ struct StudioContentView: View {
     private var statusBar: some View {
         HStack(spacing: 14) {
             HStack(spacing: 8) {
-                if state.canTogglePrimaryPlayback {
-                    Button {
-                        state.togglePrimaryPlayback()
-                    } label: {
-                        Image(systemName: state.isPrimaryPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 9.5))
-                            .frame(width: 22, height: 22)
-                    }
-                    .buttonStyle(HairlineIconButtonStyle(prominent: true))
+                Button {
+                    state.togglePlayOrStartFocus()
+                } label: {
+                    Image(systemName: state.isFocusPlaying ? "stop.fill" : (state.isPrimaryPlaying ? "pause.fill" : "play.fill"))
+                        .font(.system(size: 9.5))
+                        .frame(width: 24, height: 22)
                 }
+                .buttonStyle(HairlineIconButtonStyle(prominent: true))
+                .help(state.isFocusPlaying ? "Stop soundscape (Space)" : "Play / Pause (Space)")
+
+                Button {
+                    state.toggleSystemMute()
+                } label: {
+                    Image(systemName: state.isSystemMuted ? "speaker.slash.fill" : "speaker.wave.2")
+                        .font(.system(size: 9.5))
+                        .foregroundColor(state.isSystemMuted ? Color(red: 1.0, green: 0.65, blue: 0.58) : .white)
+                        .frame(width: 24, height: 22)
+                }
+                .buttonStyle(HairlineIconButtonStyle())
+                .help(state.isSystemMuted ? "Unmute Mac audio (⌥⌘M)" : "Mute Mac audio (⌥⌘M)")
 
                 Text(state.activeTitle)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white)
                     .lineLimit(1)
+
+                if state.isFocusAudible {
+                    Text(state.activeSourceLabel)
+                        .font(.system(size: 9.5, design: .monospaced))
+                        .foregroundColor(inkDim)
+                        .lineLimit(1)
+                }
             }
 
             Spacer()
 
             HStack(spacing: 14) {
-                Text(state.displayKey)
+                Text(state.effectiveKeyBadge)
                     .foregroundColor(.white)
                     .fontWeight(.semibold)
                 Text(String(format: "ENERGY %.2f", state.displayEnergy))
@@ -352,12 +369,13 @@ final class StudioNSWindow: NSWindow {
                 return
             }
         }
-        switch chars {
-        case "1": AppState.shared.preset = .circuit; return
-        case "2": AppState.shared.preset = .ecology; return
-        case "3": AppState.shared.preset = .phosphor; return
-        case "4": AppState.shared.preset = .liquid; return
-        case " ": AppState.shared.togglePrimaryPlayback(); return
+        switch chars.lowercased() {
+        case "1": AppState.shared.preset = .circuit; AppState.shared.performHaptic(); return
+        case "2": AppState.shared.preset = .ecology; AppState.shared.performHaptic(); return
+        case "3": AppState.shared.preset = .phosphor; AppState.shared.performHaptic(); return
+        case "4": AppState.shared.preset = .liquid; AppState.shared.performHaptic(); return
+        case " ": AppState.shared.togglePlayOrStartFocus(); return
+        case "m": AppState.shared.toggleSystemMute(); return
         default: break
         }
         if event.keyCode == 53, styleMask.contains(.fullScreen) { // Esc

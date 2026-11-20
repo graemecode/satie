@@ -16,7 +16,7 @@ brew install --cask graemecode/tap/satie
 ```
 
 ### Direct Download
-Download the notarized [Satie-2.2.0.dmg](https://github.com/graemecode/satie/releases/latest/download/Satie-2.2.0.dmg) (macOS 15 Sequoia or later, Apple Silicon), drag **Satie** to **Applications**, and launch.
+Download the notarized [Satie-2.3.0.dmg](https://github.com/graemecode/satie/releases/latest/download/Satie-2.3.0.dmg) (macOS 15 Sequoia or later, Apple Silicon), drag **Satie** to **Applications**, and launch.
 
 > **Tip:** Hide Apple's built-in icon in **System Settings → Menu Bar → Now Playing → Don't Show in Menu Bar**.
 
@@ -31,9 +31,11 @@ Download the notarized [Satie-2.2.0.dmg](https://github.com/graemecode/satie/rel
 3. **03 Phosphor Scope** — `RGBA16Float` ping-pong CRT Lissajous electron beam with velocity-modulated dwell glow + **P31 Emerald / P39 Amber** toggle.
 4. **04 Liquid Warp** — `RGBA16Float` ping-pong curl-noise HDR feedback warp with chromatic dispersion and ACES filmic tonemapping.
 
-## Form Factors & Shortcuts
-- **Menu Bar:** Fixed `30pt` 8-bar architectural hairline meter (right-click for Work Soundscapes, Auto-Duck toggle, Sensitivity, Launch at Login, and Global Media Keys).
-- **Menu Bar Popover:** Click the menu bar meter for instant focus soundscapes, flow timer, and compact Metal visuals.
+## Form Factors & Global Shortcuts
+- **Global Hotkeys (zero permissions required):** `⌥⌘S` summon/dismiss panel · `⌥⌘Space` play/stop · `⌥⌘]` cycle soundscape · `⌥⌘M` instant mute.
+- **AirPods & MacBook Media Keys:** Registered with macOS Control Center (`MPNowPlayingInfoCenter` / `MPRemoteCommandCenter`) — tap AirPods or press `⏯` / `⏭` to pause or switch pieces.
+- **Menu Bar:** Ultra-compact `22pt` 6-bar architectural meter with muted slash indicator (`⌥`-click to stop/mute; right-click for menu; `autosaveName` remembers position right of notch).
+- **Notch-Safe Floating Panel (`⌥⌘S`):** Always renders cleanly below the MacBook camera notch, with live 32-bar score strip, live chord/pass readout, instant `STOP` / `MUTE`, flow timer, and `1`–`4` mode switching.
 - **Floating Mini HUD (`⌘M`):** Draggable borderless corner monitor with hover-only controls.
 - **Studio Window (`⌘W` closes back to menu bar):** Resizable native window with per-app **Core Audio Process Tap** isolation (`System Output (All)` or any active audio app).
 - **Fullscreen Wall (`⌘F` / `Esc`):** Edge-to-edge installation view with auto-hiding HUD after 2.5s idle.

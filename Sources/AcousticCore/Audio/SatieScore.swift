@@ -134,12 +134,13 @@ public enum SatieScore {
         [(0, 78, 1.5), (1.5, 81, 2.5)], [(1, 76, 1), (2, 71, 2)], [(0, 73, 4)], [],
     ]
 
-    private static let softLightFullness: [Double] = [
+    public static let fullnessCurve: [Double] = [
         0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80, 0.80,
         0.92, 0.92, 0.92, 0.92, 0.92, 0.92, 0.92, 0.92,
         1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00, 1.00,
         0.95, 0.95, 0.92, 0.90, 0.88, 0.86, 0.82, 0.80,
     ]
+    private static let softLightFullness = fullnessCurve
 
     private static let softLightStringSwell: [Double] = [
         0.22, 0.22, 0.22, 0.22, 0.22, 0.22, 0.22, 0.22,

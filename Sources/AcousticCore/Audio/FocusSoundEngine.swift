@@ -50,6 +50,51 @@ public enum CircadianPhase: Int, Sendable {
     }
 }
 
+public struct ScoreTelemetry: Equatable, Sendable {
+    public let barInForm: Int       // 0 ..< 32
+    public let pass: Int            // 0 = Pass 1, 1 = Pass 2, ...
+    public let chordIndex: Int
+    public let didSwapFigure: Bool
+    public let barProgress: Float   // 0 .. 1 within current bar
+
+    public static let empty = ScoreTelemetry(barInForm: 0, pass: 0, chordIndex: 0, didSwapFigure: false, barProgress: 0)
+
+    public static let chordLabels: [String] = [
+        "A MAJ", "F# MIN", "D MAJ", "E SUS", "E MAJ", "B MIN", "C# MIN", "E 6", "A 6",
+        "D MIN9", "F MAJ7", "C ADD9", "G 6", "A MIN7",
+        "G MAJ7", "D MAJ7", "E MIN9", "A 9SUS"
+    ]
+
+    public var chordLabel: String {
+        guard chordIndex >= 0 && chordIndex < Self.chordLabels.count else { return "A MAJ" }
+        return Self.chordLabels[chordIndex]
+    }
+
+    public static func chordIndex(for name: String) -> Int {
+        switch name {
+        case "A":     return 0
+        case "F#m":   return 1
+        case "D":     return 2
+        case "Esus":  return 3
+        case "E":     return 4
+        case "Bm":    return 5
+        case "C#m":   return 6
+        case "E6":    return 7
+        case "A6":    return 8
+        case "Dm9":   return 9
+        case "Fmaj7": return 10
+        case "Cadd9": return 11
+        case "G6":    return 12
+        case "Am7":   return 13
+        case "Gmaj7": return 14
+        case "Dmaj7": return 15
+        case "Em9":   return 16
+        case "A9sus": return 17
+        default:      return 0
+        }
+    }
+}
+
 /// Studio-grade procedural furniture-music synthesizer (AVAudioEngine + lock-free AVAudioSourceNode).
 /// Implements Soft Light's two-layer score/engine design in native Swift:
 /// - Deterministic seeded 32-bar harmonic forms with Pass 2+ intra-chord swaps & water glints (`SatieScore`)
@@ -81,6 +126,28 @@ public final class FocusSoundEngine: @unchecked Sendable {
 
     public var volume: Float {
         Float(bitPattern: renderState.volumeBitsAtom.load(ordering: .acquiring))
+    }
+
+    public var scoreTelemetry: ScoreTelemetry {
+        let packed = renderState.telemetryPackedAtom.load(ordering: .acquiring)
+        let bar = Int(packed & 0x3F)
+        let pass = Int((packed >> 6) & 0x3FF)
+        let chordIdx = Int((packed >> 16) & 0x3F)
+        let swapped = ((packed >> 22) & 1) != 0
+        let progQ = Float((packed >> 24) & 0xFF) / 255.0
+        return ScoreTelemetry(barInForm: bar, pass: pass, chordIndex: chordIdx, didSwapFigure: swapped, barProgress: progQ)
+    }
+
+    /// Re-anchors the audio graph cleanly after macOS system wake so Core Audio never glitches or piles up bars.
+    public func handleSystemWake() {
+        guard isPlaying else { return }
+        renderState.wakeResetAtom.store(1, ordering: .releasing)
+        lifecycleLock.lock()
+        let needsRestart = isEngineRunning && !engine.isRunning
+        lifecycleLock.unlock()
+        if needsRestart {
+            start(mode: currentMode)
+        }
     }
 
     public init(ringBuffer: StereoRingBuffer) {
@@ -760,6 +827,8 @@ private final class FocusRenderState: @unchecked Sendable {
     let circadianAtom = Atomic<Int>(1)
     let volumeBitsAtom = Atomic<UInt32>(Float(0.65).bitPattern)
     let chimeTriggerAtom = Atomic<Int>(0)
+    let wakeResetAtom = Atomic<Int>(0)
+    let telemetryPackedAtom = Atomic<UInt64>(0)
 
     private let bank = TimbreBank()
     private var rng: SeededRNG
@@ -874,6 +943,12 @@ private final class FocusRenderState: @unchecked Sendable {
         if chimeTriggerAtom.exchange(0, ordering: .acquiring) != 0 {
             chimeVoiceA.trigger(event: ScoredBellEvent(kind: .melody, at: 0, midi: 69, duration: 2.2, velocity: 0.7, level: 0.16, pan: -0.15))
             chimeVoiceB.trigger(event: ScoredBellEvent(kind: .melody, at: 0, midi: 76, duration: 2.6, velocity: 0.65, level: 0.14, pan: 0.15))
+        }
+
+        if wakeResetAtom.exchange(0, ordering: .acquiring) != 0 && wantActive {
+            // Smoothly fade back in from current bar boundary without dumping missed chords
+            activeGain = 0
+            resetScore(for: mode, circadian: circadian)
         }
 
         if wantActive && (modeIdx != activeModeIdx || circadianRaw != activeCircadianRaw) {
@@ -1087,6 +1162,16 @@ private final class FocusRenderState: @unchecked Sendable {
             outL[i] = finalL
             outR[i] = finalR
             blockPeak = max(blockPeak, abs(finalL), abs(finalR))
+        }
+
+        if let bar = currentBar {
+            let rel = max(0.0, min(1.0, (clockSec - currentBarStartSec) / max(0.01, bar.secondsPerBar)))
+            let packed: UInt64 = UInt64(bar.barInForm & 0x3F)
+                | (UInt64(min(1023, bar.pass)) << 6)
+                | (UInt64(ScoreTelemetry.chordIndex(for: bar.chordName) & 0x3F) << 16)
+                | (UInt64(bar.didSwapFigure ? 1 : 0) << 22)
+                | (UInt64(Int(rel * 255.0) & 0xFF) << 24)
+            telemetryPackedAtom.store(packed, ordering: .releasing)
         }
 
         isAudibleOutput = blockPeak > 0.0008

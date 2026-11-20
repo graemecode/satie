@@ -51,24 +51,26 @@ func renderIcon(size: Int) -> Data? {
     let center = CGPoint(x: s * 0.5, y: s * 0.5)
     ctx.drawRadialGradient(grad, startCenter: center, startRadius: s * 0.04, endCenter: center, endRadius: s * 0.55, options: [])
 
-    // Subtle hairline schematic ring
-    ctx.setStrokeColor(CGColor(red: 0.86, green: 0.92, blue: 1.0, alpha: 0.16))
-    ctx.setLineWidth(max(1.0, s * 0.004))
-    ctx.strokeEllipse(in: CGRect(x: s * 0.18, y: s * 0.18, width: s * 0.64, height: s * 0.64))
+    // Subtle concentric architectural rings + warm-paper focal arc (Satie / Braun restraint)
+    ctx.setStrokeColor(CGColor(red: 0.86, green: 0.92, blue: 1.0, alpha: 0.14))
+    ctx.setLineWidth(max(1.0, s * 0.0038))
+    ctx.strokeEllipse(in: CGRect(x: s * 0.17, y: s * 0.17, width: s * 0.66, height: s * 0.66))
+    ctx.setStrokeColor(CGColor(red: 0.96, green: 0.95, blue: 0.92, alpha: 0.10))
+    ctx.strokeEllipse(in: CGRect(x: s * 0.25, y: s * 0.25, width: s * 0.50, height: s * 0.50))
 
     // Luminous white 3D filament loops
-    let R = s * 0.27
-    for k in 0..<28 {
+    let R = s * 0.275
+    for k in 0..<32 {
         let fk = Double(k)
-        let phase = fk / 28.0 * Double.pi * 2.0
-        let alpha = CGFloat(0.14 + (k % 5 == 0 ? 0.55 : 0.22))
-        ctx.setStrokeColor(CGColor(red: 0.93, green: 0.96, blue: 1.0, alpha: alpha))
-        ctx.setLineWidth(max(0.8, s * (k % 6 == 0 ? 0.0085 : 0.0045)))
+        let phase = fk / 32.0 * Double.pi * 2.0
+        let alpha = CGFloat(0.14 + (k % 5 == 0 ? 0.58 : 0.20))
+        ctx.setStrokeColor(CGColor(red: 0.95, green: 0.96, blue: 0.98, alpha: alpha))
+        ctx.setLineWidth(max(0.8, s * (k % 6 == 0 ? 0.0080 : 0.0040)))
         ctx.beginPath()
         for i in 0...72 {
             let u = Double(i) / 72.0 * Double.pi * 2.0
-            let wobble = 0.28 + 0.14 * sin(u * 3.0 + phase * 1.7)
-            let rTube = (0.72 + 0.28 * sin(fk * 0.7))
+            let wobble = 0.27 + 0.14 * sin(u * 3.0 + phase * 1.7)
+            let rTube = (0.72 + 0.26 * sin(fk * 0.7))
             let x = (rTube + wobble * cos(u * 2.0 + phase)) * cos(u + phase)
             let y = (rTube + wobble * cos(u * 2.0 + phase)) * sin(u + phase) * 0.86 + sin(u * 3.0 + phase) * 0.16
             let pt = CGPoint(x: center.x + CGFloat(x) * R, y: center.y + CGFloat(y) * R)
@@ -76,6 +78,11 @@ func renderIcon(size: Int) -> Data? {
         }
         ctx.strokePath()
     }
+
+    // Precision warm-paper center dot (homage to Dieter Rams / strangechances orb)
+    let dotR = s * 0.022
+    ctx.setFillColor(CGColor(red: 0.96, green: 0.95, blue: 0.92, alpha: 0.92))
+    ctx.fillEllipse(in: CGRect(x: center.x - dotR, y: center.y - dotR, width: dotR * 2, height: dotR * 2))
 
     // Crisp outer rim stroke
     ctx.addPath(clipPath)

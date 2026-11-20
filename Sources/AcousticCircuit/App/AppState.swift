@@ -108,6 +108,7 @@ final class AppState: ObservableObject {
     @Published var isFullscreen: Bool = false
     @Published var isSystemMuted: Bool = SystemOutputMute.isMuted
     @Published var isStatusItemBehindNotch: Bool = false
+    @Published var scoreTelemetry: ScoreTelemetry = .empty
 
     private(set) var snapshot: AcousticSnapshot = .empty
     @Published var displayKey: String = "STANDBY"
@@ -121,6 +122,7 @@ final class AppState: ObservableObject {
     let focusSound: FocusSoundEngine
     let dsp: AcousticDSP
     let media: MediaController
+    let nowPlaying = NowPlayingBridge()
 
     var onFrameTick: ((AcousticSnapshot) -> Void)?
 
@@ -155,9 +157,20 @@ final class AppState: ObservableObject {
             return "DUCKED · \(app.uppercased())"
         }
         if isFocusPlaying {
-            return "GENERATIVE · \(circadianPhase.label)"
+            let barNum = String(format: "%02d", scoreTelemetry.barInForm + 1)
+            let passTag = scoreTelemetry.pass > 0
+                ? (scoreTelemetry.didSwapFigure ? "PASS \(scoreTelemetry.pass + 1) · VARIED" : "PASS \(scoreTelemetry.pass + 1)")
+                : circadianPhase.label
+            return "BAR \(barNum)/32 · \(passTag)"
         }
         return metadata.sourceApp
+    }
+
+    var effectiveKeyBadge: String {
+        if isFocusAudible {
+            return scoreTelemetry.chordLabel
+        }
+        return displayKey
     }
 
     var canTogglePrimaryPlayback: Bool {
@@ -208,6 +221,26 @@ final class AppState: ObservableObject {
         audioTap.start(target: .systemAll)
         media.start()
 
+        nowPlaying.configureCommands(
+            onPlay: { [weak self] in
+                guard let self else { return }
+                if !self.isFocusPlaying { self.toggleFocusSound(self.focusMode) }
+            },
+            onPause: { [weak self] in
+                guard let self else { return }
+                if self.isFocusPlaying { self.stopFocusSound() }
+            },
+            onToggle: { [weak self] in
+                self?.togglePlayOrStartFocus()
+            },
+            onNext: { [weak self] in
+                self?.cycleFocusMode(forward: true)
+            },
+            onPrevious: { [weak self] in
+                self?.cycleFocusMode(forward: false)
+            }
+        )
+
         scheduleMenuBarTimer(hz: 24.0)
 
         // 1 Hz housekeeping: auto-ducking monitor, flow timer countdown, circadian check, process refresh
@@ -228,12 +261,18 @@ final class AppState: ObservableObject {
         menuBarTimer?.invalidate()
         housekeepingTimer?.invalidate()
         focusSound.stopImmediately()
+        nowPlaying.clear()
         media.stop()
         audioTap.stop()
         Log.app.info("Satie shut down cleanly")
     }
 
+    func performHaptic() {
+        NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+    }
+
     func toggleFocusSound(_ mode: FocusSoundscape) {
+        performHaptic()
         if isFocusPlaying && focusMode == mode {
             stopFocusSound()
         } else {
@@ -247,6 +286,7 @@ final class AppState: ObservableObject {
             if flowDuration != .infinite && flowRemainingSeconds == nil {
                 flowRemainingSeconds = Double(flowDuration.rawValue)
             }
+            syncNowPlaying()
         }
     }
 
@@ -256,6 +296,51 @@ final class AppState: ObservableObject {
         isAutoDucked = false
         duckedByAppName = nil
         flowRemainingSeconds = nil
+        syncNowPlaying()
+    }
+
+    func cycleFocusMode(forward: Bool = true) {
+        let all = FocusSoundscape.allCases
+        guard let idx = all.firstIndex(of: focusMode) else { return }
+        let nextIdx = (idx + (forward ? 1 : all.count - 1)) % all.count
+        let next = all[nextIdx]
+        if isFocusPlaying {
+            performHaptic()
+            focusMode = next
+            syncNowPlaying()
+        } else {
+            toggleFocusSound(next)
+        }
+    }
+
+    func togglePlayOrStartFocus() {
+        if isFocusPlaying {
+            performHaptic()
+            stopFocusSound()
+        } else if !snapshot.isSilent {
+            stopPlayingAudioImmediately()
+        } else {
+            toggleFocusSound(focusMode)
+        }
+    }
+
+    func adjustFocusVolume(delta: Float) {
+        let next = max(0.05, min(1.0, focusVolume + delta))
+        if abs(next - focusVolume) > 0.002 {
+            focusVolume = next
+        }
+    }
+
+    private func syncNowPlaying() {
+        if isFocusAudible {
+            nowPlaying.update(
+                isPlaying: true,
+                title: focusMode.title,
+                subtitle: "Procedural Furniture Music · \(circadianPhase.label)"
+            )
+        } else {
+            nowPlaying.clear()
+        }
     }
 
     func cycleFlowDuration() {
@@ -278,6 +363,7 @@ final class AppState: ObservableObject {
     }
 
     func toggleSystemMute() {
+        performHaptic()
         let nowMuted = SystemOutputMute.toggle()
         isSystemMuted = nowMuted
     }
@@ -350,6 +436,7 @@ final class AppState: ObservableObject {
                     isAutoDucked = true
                     duckedByAppName = ext.name
                     focusSound.setDucked(true)
+                    syncNowPlaying()
                     Log.audio.info("Auto-ducked focus soundscape for external app: \(ext.name, privacy: .public)")
                 }
             } else if isAutoDucked {
@@ -360,6 +447,7 @@ final class AppState: ObservableObject {
                         duckedByAppName = nil
                         externalSilentSince = nil
                         focusSound.setDucked(false)
+                        syncNowPlaying()
                         Log.audio.info("External audio ended; smoothly resuming focus soundscape")
                     }
                 } else {
@@ -408,6 +496,7 @@ final class AppState: ObservableObject {
                 guard let self, self.isSleeping else { return }
                 self.isSleeping = false
                 self.audioTap.resumeFromSleep()
+                self.focusSound.handleSystemWake()
                 self.media.start()
                 self.scheduleMenuBarTimer(hz: 24.0)
             }
@@ -475,6 +564,16 @@ final class AppState: ObservableObject {
             menuBarTickAccum = 0
             lastMenuBarWasSilent = snap.isSilent
             onFrameTick?(snap)
+        }
+
+        if isFocusPlaying && (isPopoverOpen || isStudioOpen) {
+            let tel = focusSound.scoreTelemetry
+            if tel.barInForm != scoreTelemetry.barInForm
+                || tel.pass != scoreTelemetry.pass
+                || tel.chordIndex != scoreTelemetry.chordIndex
+                || tel.didSwapFigure != scoreTelemetry.didSwapFigure {
+                scoreTelemetry = tel
+            }
         }
 
         fpsCounter += 1

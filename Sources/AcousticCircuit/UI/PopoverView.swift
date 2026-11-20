@@ -126,13 +126,14 @@ struct PopoverView: View {
 
                 Spacer(minLength: 4)
 
-                Text(state.displayKey)
+                Text(state.effectiveKeyBadge)
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .foregroundColor(.white)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(Color.white.opacity(0.05))
                     .overlay(Rectangle().stroke(hairColor, lineWidth: 1))
+                    .accessibilityLabel("Current musical key or chord: \(state.effectiveKeyBadge)")
             }
 
             // Permission banner if Core Audio Process Tap failed
@@ -270,24 +271,45 @@ struct PopoverView: View {
                 }
 
                 VStack(spacing: 4) {
-                    GeometryReader { geo in
-                        let frac = progressFraction
-                        ZStack(alignment: .leading) {
-                            Rectangle().fill(Color.white.opacity(0.14))
-                            Rectangle()
-                                .fill(Color.white.opacity(0.94))
-                                .frame(width: max(2, geo.size.width * frac))
+                    if state.isFocusAudible {
+                        // 32-bar architectural micro-score strip tracking Soft Light / generative form
+                        HStack(alignment: .bottom, spacing: 2) {
+                            ForEach(0..<SatieScore.barsPerForm, id: \.self) { idx in
+                                let fullness = SatieScore.fullnessCurve[idx]
+                                let isCurrent = idx == state.scoreTelemetry.barInForm
+                                let isPast = idx < state.scoreTelemetry.barInForm
+                                Rectangle()
+                                    .fill(
+                                        isCurrent
+                                            ? Color.white
+                                            : (isPast ? Color.white.opacity(0.42) : Color.white.opacity(0.15))
+                                    )
+                                    .frame(height: max(2.5, CGFloat(fullness) * 9.0))
+                                    .frame(maxWidth: .infinity)
+                            }
                         }
-                        .contentShape(Rectangle())
-                        .gesture(
-                            DragGesture(minimumDistance: 0)
-                                .onEnded { val in
-                                    guard !state.isFocusAudible, state.metadata.canSeek, geo.size.width > 1 else { return }
-                                    state.media.seek(to: Double(val.location.x / geo.size.width))
-                                }
-                        )
+                        .frame(height: 9, alignment: .bottom)
+                        .accessibilityLabel("Score progress: bar \(state.scoreTelemetry.barInForm + 1) of 32")
+                    } else {
+                        GeometryReader { geo in
+                            let frac = progressFraction
+                            ZStack(alignment: .leading) {
+                                Rectangle().fill(Color.white.opacity(0.14))
+                                Rectangle()
+                                    .fill(Color.white.opacity(0.94))
+                                    .frame(width: max(2, geo.size.width * frac))
+                            }
+                            .contentShape(Rectangle())
+                            .gesture(
+                                DragGesture(minimumDistance: 0)
+                                    .onEnded { val in
+                                        guard !state.isFocusAudible, state.metadata.canSeek, geo.size.width > 1 else { return }
+                                        state.media.seek(to: Double(val.location.x / geo.size.width))
+                                    }
+                            )
+                        }
+                        .frame(height: 3)
                     }
-                    .frame(height: 3)
 
                     HStack {
                         Text(elapsedLabel)
@@ -400,7 +422,7 @@ struct PopoverView: View {
             .padding(.top, 2)
 
             if state.isStatusItemBehindNotch {
-                Text("Menu bar icon tucked behind notch · ⌘-drag right or open via Spotlight")
+                Text("⌥⌘S summon · ⌥⌘Space play/stop · ⌘-drag icon right of notch")
                     .font(.system(size: 9, design: .monospaced))
                     .foregroundColor(inkDim)
                     .lineLimit(1)

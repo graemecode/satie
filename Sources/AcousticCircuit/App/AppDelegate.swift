@@ -10,6 +10,7 @@ private let wakeupNotificationName = Notification.Name("com.strangechances.Satie
 final class SatieFloatingPanel: NSPanel {
     var onEscape: (() -> Void)?
     var onSpace: (() -> Void)?
+    var onKeyAction: ((NSEvent) -> Bool)?
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
@@ -23,8 +24,11 @@ final class SatieFloatingPanel: NSPanel {
             onEscape?()
             return
         }
-        if event.keyCode == 49 { // Space -> instant stop/pause/mute
+        if event.keyCode == 49 { // Space -> instant play/stop/mute
             onSpace?()
+            return
+        }
+        if let handled = onKeyAction?(event), handled {
             return
         }
         super.keyDown(with: event)
@@ -40,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var globalMouseMonitor: Any?
     private var localMouseMonitor: Any?
     private var layoutCancellables: Set<AnyCancellable> = []
+    private let hotKeys = GlobalHotKeyManager()
 
     private let miniHUD = MiniHUDPanelController()
     private let studio = StudioWindowController()
@@ -78,7 +83,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let state = AppState.shared
         state.onFrameTick = { [weak self] snap in
-            self?.menuBarIconView.update(snapshot: snap)
+            self?.menuBarIconView.update(snapshot: snap, isMuted: AppState.shared.isSystemMuted)
+        }
+        state.$isSystemMuted
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] muted in
+                self?.menuBarIconView.update(snapshot: AppState.shared.snapshot, isMuted: muted)
+            }
+            .store(in: &layoutCancellables)
+
+        // Register zero-permission Carbon global hotkeys (⌥⌘S, ⌥⌘Space, ⌥⌘], ⌥⌘M)
+        hotKeys.register { [weak self] action in
+            guard let self else { return }
+            switch action {
+            case .togglePanel:
+                self.togglePopover()
+            case .togglePlayStop:
+                AppState.shared.togglePlayOrStartFocus()
+            case .cycleMode:
+                AppState.shared.cycleFocusMode(forward: true)
+            case .toggleMute:
+                AppState.shared.toggleSystemMute()
+            }
         }
 
         // Keep panel height crisp and anchored downward whenever expandable rows appear/disappear
@@ -104,6 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        hotKeys.unregister()
         removeDismissMonitors()
         DistributedNotificationCenter.default().removeObserver(self)
         AppState.shared.shutdown()
@@ -206,7 +234,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.appearance = NSAppearance(named: .darkAqua)
         panel.contentViewController = hc
         panel.onEscape = { [weak self] in self?.closePopover() }
-        panel.onSpace = { AppState.shared.stopPlayingAudioImmediately() }
+        panel.onSpace = { AppState.shared.togglePlayOrStartFocus() }
+        panel.onKeyAction = { [weak self] event in
+            guard let self else { return false }
+            let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            let chars = event.charactersIgnoringModifiers?.lowercased() ?? ""
+            if mods == .command {
+                if chars == "m" { self.openMiniHUD(); return true }
+                if chars == "f" { self.openStudio(fullscreen: true); return true }
+                if chars == "q" { NSApp.terminate(nil); return true }
+            }
+            if mods.isEmpty {
+                switch chars {
+                case "1": AppState.shared.preset = .circuit; AppState.shared.performHaptic(); return true
+                case "2": AppState.shared.preset = .ecology; AppState.shared.performHaptic(); return true
+                case "3": AppState.shared.preset = .phosphor; AppState.shared.performHaptic(); return true
+                case "4": AppState.shared.preset = .liquid; AppState.shared.performHaptic(); return true
+                case "m": AppState.shared.toggleSystemMute(); return true
+                default: break
+                }
+                if event.keyCode == 126 { // Up arrow
+                    AppState.shared.adjustFocusVolume(delta: 0.08); return true
+                }
+                if event.keyCode == 125 { // Down arrow
+                    AppState.shared.adjustFocusVolume(delta: -0.08); return true
+                }
+            }
+            return false
+        }
         self.floatingPanel = panel
     }
 
@@ -237,9 +292,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showPopover() {
         AppState.shared.isPopoverOpen = true
         repositionFloatingPanel()
+        let finalFrame = floatingPanel.frame
+        var startFrame = finalFrame
+        startFrame.origin.y += 5
+        floatingPanel.alphaValue = 0.0
+        floatingPanel.setFrame(startFrame, display: false)
         NSApp.activate(ignoringOtherApps: true)
         floatingPanel.orderFrontRegardless()
         floatingPanel.makeKey()
+        NSAnimationContext.runAnimationGroup { ctx in
+            ctx.duration = 0.14
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            floatingPanel.animator().alphaValue = 1.0
+            floatingPanel.animator().setFrame(finalFrame, display: true)
+        }
         installDismissMonitors()
     }
 
@@ -343,9 +409,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             stopTitle = state.isSystemMuted ? "Unmute Mac Audio" : "Mute Mac Audio"
         }
-        let stopNowItem = NSMenuItem(title: stopTitle, action: #selector(menuStopImmediately), keyEquivalent: "")
+        let stopNowItem = NSMenuItem(title: "\(stopTitle)  (⌥⌘Space)", action: #selector(menuStopImmediately), keyEquivalent: "")
         stopNowItem.target = self
         menu.addItem(stopNowItem)
+
+        let summonItem = NSMenuItem(title: "Show Satie Panel  (⌥⌘S)", action: #selector(menuSummonPanel), keyEquivalent: "")
+        summonItem.target = self
+        menu.addItem(summonItem)
 
         menu.addItem(.separator())
 
@@ -433,6 +503,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func menuStopImmediately() { AppState.shared.stopPlayingAudioImmediately() }
+    @objc private func menuSummonPanel() { showPopover() }
     @objc private func menuOpenStudio() { openStudio(fullscreen: false) }
     @objc private func menuOpenMiniHUD() { openMiniHUD() }
     @objc private func menuOpenFullscreen() { openStudio(fullscreen: true) }
