@@ -196,4 +196,24 @@ struct AcousticCoreTests {
         #expect(reloaded.miniHUDOrigin == NSPoint(x: 420, y: 180))
         #expect(reloaded.studioFrame == NSRect(x: 100, y: 120, width: 1280, height: 820))
     }
+
+    @Test("ProcessAudioTap resolves Chromium, Electron, and WebKit helpers to parent apps")
+    func helperProcessResolution() {
+        let chromePath = "/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework/Versions/130/Helpers/Google Chrome Helper.app/Contents/MacOS/Google Chrome Helper"
+        #expect(ProcessAudioTap.outermostAppBundlePath(from: chromePath) == "/Applications/Google Chrome.app")
+
+        let chromeFromBundleID = ProcessAudioTap.resolveAppIdentity(
+            executablePath: nil,
+            rawBundleID: "com.google.Chrome.helper"
+        )
+        #expect(chromeFromBundleID.name == "Google Chrome")
+        #expect(chromeFromBundleID.bundleID == "com.google.Chrome")
+
+        let safariFromWebKit = ProcessAudioTap.resolveAppIdentity(
+            executablePath: nil,
+            rawBundleID: "com.apple.WebKit.GPU"
+        )
+        #expect(safariFromWebKit.name == "Safari")
+        #expect(safariFromWebKit.bundleID == "com.apple.Safari")
+    }
 }

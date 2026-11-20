@@ -1,6 +1,6 @@
 cask "acoustic-circuit" do
-  version "1.0.0"
-  sha256 "2fa14c0d5725e5b4f42a20efef41d23f23787301685922ff5393dfa2b2feb4a2"
+  version "1.0.1"
+  sha256 "e4029dd4f3fc8900fa0671267c6b8508787dcd9a02eb7f7a6b81d814a933888e"
 
   url "https://github.com/graemecode/acoustic-circuit/releases/download/v#{version}/AcousticCircuit-#{version}.dmg"
   name "Acoustic Circuit"

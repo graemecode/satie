@@ -178,6 +178,20 @@ public final class MediaController: @unchecked Sendable {
                 return
             }
 
+            if top.bundleID == "com.apple.Safari", !deniedBundles.contains("com.apple.Safari"),
+               let tabTitle = querySafariTabTitle(), !tabTitle.isEmpty {
+                emit(NowPlayingMetadata(
+                    title: tabTitle,
+                    subtitle: "Safari · Tab Audio",
+                    sourceApp: "SAFARI",
+                    isPlaying: true,
+                    elapsed: nil,
+                    duration: nil,
+                    canSeek: false
+                ))
+                return
+            }
+
             emit(NowPlayingMetadata(
                 title: top.name,
                 subtitle: "Live Process Tap · PID \(top.pid)",
@@ -260,6 +274,16 @@ public final class MediaController: @unchecked Sendable {
         end tell
         """
         return runAppleScript(script, bundleID: "com.google.Chrome")
+    }
+
+    private func querySafariTabTitle() -> String? {
+        let script = """
+        tell application "Safari"
+            if (count of windows) is 0 then return ""
+            return name of current tab of front window
+        end tell
+        """
+        return runAppleScript(script, bundleID: "com.apple.Safari")
     }
 
     private func isAppRunning(_ bundleID: String) -> Bool {

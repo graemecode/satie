@@ -12,7 +12,7 @@ brew install --cask graemecode/tap/acoustic-circuit
 ```
 
 ### Direct Download
-Download the notarized [AcousticCircuit-1.0.0.dmg](https://github.com/graemecode/acoustic-circuit/releases/latest/download/AcousticCircuit-1.0.0.dmg) (macOS 15 Sequoia or later, Apple Silicon), drag **Acoustic Circuit** to **Applications**, and launch.
+Download the notarized [AcousticCircuit-1.0.1.dmg](https://github.com/graemecode/acoustic-circuit/releases/latest/download/AcousticCircuit-1.0.1.dmg) (macOS 15 Sequoia or later, Apple Silicon), drag **Acoustic Circuit** to **Applications**, and launch.
 
 > **Tip:** Hide macOS's built-in icon in **System Settings → Menu Bar → Now Playing → Don't Show in Menu Bar**.
 

@@ -1,6 +1,7 @@
 import AppKit
 import AudioToolbox
 import CoreAudio
+import Darwin
 import Foundation
 
 public struct AudioProcessInfo: Identifiable, Hashable, Sendable {
@@ -112,18 +113,26 @@ public final class ProcessAudioTap: @unchecked Sendable {
         for oid in objectIDs {
             guard let pid = readPID(for: oid), pid != selfPID else { continue }
             let runningOut = readBool(for: oid, selector: kAudioProcessPropertyIsRunningOutput)
-            let bundleID = readString(for: oid, selector: kAudioProcessPropertyBundleID)
+            let rawBundleID = readString(for: oid, selector: kAudioProcessPropertyBundleID)
             let runningApp = NSRunningApplication(processIdentifier: pid)
 
-            let name = runningApp?.localizedName ?? bundleID?.components(separatedBy: ".").last ?? "PID \(pid)"
+            if let bid = rawBundleID, bid.hasPrefix("com.apple.audio") || bid.hasPrefix("com.apple.coreaudio") { continue }
             if !runningOut && runningApp == nil { continue }
-            if let bid = bundleID, bid.hasPrefix("com.apple.audio") || bid.hasPrefix("com.apple.coreaudio") { continue }
+
+            let execPath = Self.executablePath(for: pid)
+            let resolved = Self.resolveAppIdentity(
+                runningAppName: runningApp?.localizedName,
+                runningAppBundleID: runningApp?.bundleIdentifier,
+                executablePath: execPath,
+                rawBundleID: rawBundleID,
+                pid: pid
+            )
 
             results.append(AudioProcessInfo(
                 objectID: oid,
                 pid: pid,
-                name: name,
-                bundleID: bundleID,
+                name: resolved.name,
+                bundleID: resolved.bundleID,
                 isRunningOutput: runningOut
             ))
         }
@@ -132,6 +141,86 @@ public final class ProcessAudioTap: @unchecked Sendable {
             if a.isRunningOutput != b.isRunningOutput { return a.isRunningOutput }
             return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
         }
+    }
+
+    /// Resolves child helper processes (e.g. `com.google.Chrome.helper`, Electron Helpers, WebKit GPU)
+    /// back to their enclosing macOS parent app name & bundle ID.
+    public static func resolveAppIdentity(
+        runningAppName: String? = nil,
+        runningAppBundleID: String? = nil,
+        executablePath: String?,
+        rawBundleID: String?,
+        pid: pid_t = 0
+    ) -> (name: String, bundleID: String?) {
+        // 1. Walk up the executable path to the outermost `.app` bundle (handles Chrome/Electron/Arc/Brave helpers)
+        if let path = executablePath, let appPath = outermostAppBundlePath(from: path) {
+            let bundle = Bundle(path: appPath)
+            let bName = (bundle?.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
+                ?? (bundle?.object(forInfoDictionaryKey: "CFBundleName") as? String)
+                ?? URL(fileURLWithPath: appPath).deletingPathExtension().lastPathComponent
+            let bID = bundle?.bundleIdentifier ?? stripHelperSuffix(from: rawBundleID)
+            if !bName.isEmpty {
+                return (bName, bID)
+            }
+        }
+
+        // 2. Known WebKit / system browser media helpers
+        if let raw = rawBundleID {
+            if raw.hasPrefix("com.apple.WebKit") {
+                return ("Safari", "com.apple.Safari")
+            }
+            if let stripped = stripHelperSuffix(from: raw) {
+                if let parentApp = NSRunningApplication.runningApplications(withBundleIdentifier: stripped).first,
+                   let locName = parentApp.localizedName, !locName.isEmpty {
+                    return (locName, stripped)
+                }
+                if stripped == "com.google.Chrome" { return ("Google Chrome", stripped) }
+                if stripped == "company.thebrowser.Browser" { return ("Arc", stripped) }
+                if stripped == "com.brave.Browser" { return ("Brave Browser", stripped) }
+                if stripped == "com.microsoft.edgemac" { return ("Microsoft Edge", stripped) }
+                if stripped == "com.spotify.client" { return ("Spotify", stripped) }
+                let fallback = stripped.components(separatedBy: ".").last ?? stripped
+                return (fallback, stripped)
+            }
+        }
+
+        // 3. Direct top-level NSRunningApplication
+        if let name = runningAppName, !name.isEmpty {
+            return (name, runningAppBundleID ?? rawBundleID)
+        }
+
+        if let raw = rawBundleID, let last = raw.components(separatedBy: ".").last, !last.isEmpty {
+            return (last, raw)
+        }
+        return ("PID \(pid)", rawBundleID)
+    }
+
+    public static func outermostAppBundlePath(from executablePath: String) -> String? {
+        let components = (executablePath as NSString).pathComponents
+        for (idx, comp) in components.enumerated() {
+            if comp.hasSuffix(".app") {
+                return NSString.path(withComponents: Array(components[0...idx]))
+            }
+        }
+        return nil
+    }
+
+    private static func stripHelperSuffix(from bundleID: String?) -> String? {
+        guard let raw = bundleID else { return nil }
+        let patterns = [".helper.renderer", ".helper.gpu", ".helper.plugin", ".helper.audio", ".helper", ".Helper"]
+        for suffix in patterns {
+            if raw.hasSuffix(suffix) {
+                return String(raw.dropLast(suffix.count))
+            }
+        }
+        return nil
+    }
+
+    private static func executablePath(for pid: pid_t) -> String? {
+        var buf = [CChar](repeating: 0, count: Int(MAXPATHLEN) * 4)
+        let len = proc_pidpath(pid, &buf, UInt32(buf.count))
+        guard len > 0 else { return nil }
+        return String(cString: buf)
     }
 
     public static func selfAudioProcessObjectID() -> AudioObjectID? {
