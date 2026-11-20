@@ -17,7 +17,6 @@ struct PopoverView: View {
     var onRequestResize: (() -> Void)? = nil
 
     @State private var activeDrawer: PopoverDrawer = .none
-    @State private var reseedSpinAngle: Double = 0
     @State private var presetWhisper: String? = nil
 
     private let hair = Color.white.opacity(0.14)
@@ -406,25 +405,6 @@ struct PopoverView: View {
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(inkDim)
                 .frame(minWidth: 32, alignment: .trailing)
-
-            if state.isFocusPlaying {
-                Button {
-                    withAnimation(.easeOut(duration: 0.42)) {
-                        reseedSpinAngle += 360
-                    }
-                    state.reseedFocusPhrase()
-                } label: {
-                    Image(systemName: "arrow.trianglehead.2.clockwise")
-                        .font(.system(size: 10, weight: .medium))
-                        .rotationEffect(.degrees(reseedSpinAngle))
-                        .foregroundColor(inkSoft)
-                        .frame(width: 22, height: 22)
-                        .background(Color.white.opacity(0.05))
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .help("New harmonic phrase")
-            }
         }
     }
 
