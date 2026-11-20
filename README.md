@@ -16,12 +16,12 @@ brew install --cask graemecode/tap/satie
 ```
 
 ### Direct Download
-Download the notarized [Satie-2.1.1.dmg](https://github.com/graemecode/satie/releases/latest/download/Satie-2.1.1.dmg) (macOS 15 Sequoia or later, Apple Silicon), drag **Satie** to **Applications**, and launch.
+Download the notarized [Satie-2.2.0.dmg](https://github.com/graemecode/satie/releases/latest/download/Satie-2.2.0.dmg) (macOS 15 Sequoia or later, Apple Silicon), drag **Satie** to **Applications**, and launch.
 
 > **Tip:** Hide Apple's built-in icon in **System Settings → Menu Bar → Now Playing → Don't Show in Menu Bar**.
 
 ## Why People Keep It Running All Day
-- **Four offline psychoacoustic work soundscapes (`FOCUS` · `PULSE` · `RAIN` · `DRIFT`):** Synthesized live via `AVAudioEngine` with a **4×4 Hadamard FDN reverb**, circadian time-of-day harmonic voicing (Morning / Day / Night), felt-piano modal tones, subtle 14 Hz focus modulation (`PULSE`), and warm ~6 kHz ear-fatigue roll-off — zero audio sample files.
+- **Four offline procedural pieces (`FOCUS` Soft Light · `PULSE` Kinetic · `RAIN` Rain & Glass · `DRIFT` Gymnopédie):** Powered by a pure-Swift deterministic 32-bar score engine (`SatieScore`) and lock-free physical-modeling synthesizer (`AVAudioSourceNode`) — FM glassy bells (`-3¢/+3¢`, decaying modulation depth, `2×/4×/9×` overtones, asymmetric `tanh` pickup), 3-player wooden-body bowed strings (`520 / 1,150 / 2,900 Hz` formant tables + delayed vibrato), Pass 2+ harmony-preserving figure swaps & pentatonic water glints, tempo-synced dotted echo, dual-LFO chorus, and 4×4 Hadamard bandpass room reverb. Zero audio sample files.
 - **Auto-ducks for calls & music:** Uses Core Audio Process Taps to detect when Zoom, Loom, YouTube, Chrome, or Spotify starts playing — smoothly fades out your focus soundscape, visualizes your external audio live, and gently blooms back in after silence returns.
 - **Flow Session Timer (`∞` / `25M` / `50M`):** Subtle hairline progress arc ending with a single warm open-fifth chime.
 

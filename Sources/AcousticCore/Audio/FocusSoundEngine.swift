@@ -12,10 +12,10 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
 
     public var title: String {
         switch self {
-        case .focus: return "Deep Focus"
-        case .pulse: return "Flow Pulse"
-        case .rain: return "Velvet Rain"
-        case .drift: return "Night Drift"
+        case .focus: return "Soft Light"
+        case .pulse: return "Kinetic Pulse"
+        case .rain: return "Rain & Glass"
+        case .drift: return "Gymnopédie"
         }
     }
 
@@ -30,9 +30,9 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
 }
 
 public enum CircadianPhase: Int, Sendable {
-    case morning = 0    // 06:00 - 11:59 (open, luminous Lydian / Maj9)
-    case afternoon = 1  // 12:00 - 19:59 (grounded Dorian / Min9 drive)
-    case night = 2      // 20:00 - 05:59 (deep, warm low-passed dark ambient)
+    case morning = 0    // 06:00 - 11:59 (luminous, open)
+    case afternoon = 1  // 12:00 - 19:59 (balanced, grounded)
+    case night = 2      // 20:00 - 05:59 (warmer transposition & softer air)
 
     public static func current(date: Date = Date()) -> CircadianPhase {
         let hour = Calendar.current.component(.hour, from: date)
@@ -50,9 +50,13 @@ public enum CircadianPhase: Int, Sendable {
     }
 }
 
-/// Studio-grade procedural ambient focus synthesizer (AVAudioEngine + lock-free AVAudioSourceNode).
-/// Features 4×4 Hadamard FDN reverb, circadian harmonic voicing, modal felt-bell synthesis,
-/// Brain.fm-style subtle 14 Hz focus modulation, ear-fatigue air roll-off, and smooth auto-ducking.
+/// Studio-grade procedural furniture-music synthesizer (AVAudioEngine + lock-free AVAudioSourceNode).
+/// Implements Soft Light's two-layer score/engine design in native Swift:
+/// - Deterministic seeded 32-bar harmonic forms with Pass 2+ intra-chord swaps & water glints (`SatieScore`)
+/// - FM glassy bells (-3c/+3c carriers, decaying 1:1 FM depth, 2x/4x/9x overtones, asymmetric tanh pickup)
+/// - 3-player wooden-body bowed strings (520 / 1150 / 2900 Hz formant tables + delayed vibrato)
+/// - Tempo-synced dotted echo, dual-LFO stereo chorus, 4×4 Hadamard bandpass room reverb,
+///   95 Hz rumble cut, soft-knee bus compressor, and smooth Core Audio Process Tap auto-ducking.
 public final class FocusSoundEngine: @unchecked Sendable {
     private let engine = AVAudioEngine()
     private var sourceNode: AVAudioSourceNode?
@@ -103,12 +107,10 @@ public final class FocusSoundEngine: @unchecked Sendable {
         renderState.circadianAtom.store(phase.rawValue, ordering: .releasing)
     }
 
-    /// Smoothly fades out soundscape (~450ms) when external apps (Zoom, Spotify, Chrome) produce audio.
     public func setDucked(_ ducked: Bool) {
         renderState.isDuckedAtom.store(ducked ? 1 : 0, ordering: .releasing)
     }
 
-    /// Triggers a single gentle resolving fifth bell when a Flow Session finishes.
     public func triggerSessionChime() {
         renderState.chimeTriggerAtom.store(1, ordering: .releasing)
     }
@@ -121,498 +123,972 @@ public final class FocusSoundEngine: @unchecked Sendable {
         lifecycleLock.lock()
         defer { lifecycleLock.unlock() }
 
-        ensureEngineConfiguredLocked()
-        if !isEngineRunning {
-            do {
-                try engine.start()
-                isEngineRunning = true
-                Log.audio.info("FocusSoundEngine started (mode=\(self.currentMode.rawValue, privacy: .public), circadian=\(CircadianPhase.current().label, privacy: .public))")
-            } catch {
-                Log.audio.error("FocusSoundEngine failed to start: \(error.localizedDescription, privacy: .public)")
-                return
-            }
-        }
         renderState.isActiveAtom.store(1, ordering: .releasing)
+        if isEngineRunning && engine.isRunning { return }
+
+        let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!
+        if sourceNode == nil {
+            let state = self.renderState
+            let rb = self.ringBuffer
+            let node = AVAudioSourceNode(format: format) { _, _, frameCount, audioBufferList -> OSStatus in
+                let abl = UnsafeMutableAudioBufferListPointer(audioBufferList)
+                guard abl.count >= 2,
+                      let outL = abl[0].mData?.assumingMemoryBound(to: Float.self),
+                      let outR = abl[1].mData?.assumingMemoryBound(to: Float.self) else {
+                    return noErr
+                }
+                let frames = Int(frameCount)
+                state.render(outL: outL, outR: outR, frames: frames, sampleRate: 48_000)
+                if state.isAudibleOutput {
+                    rb.writePlanar(leftSrc: outL, rightSrc: outR, frameCount: frames)
+                }
+                return noErr
+            }
+            sourceNode = node
+            engine.attach(node)
+            engine.connect(node, to: engine.mainMixerNode, format: format)
+        }
+
+        do {
+            engine.prepare()
+            try engine.start()
+            isEngineRunning = true
+            Log.audio.info("Satie synth started (mode=\(self.currentMode.shortLabel, privacy: .public), circadian=\(CircadianPhase.current().label, privacy: .public))")
+        } catch {
+            renderState.isActiveAtom.store(0, ordering: .releasing)
+            Log.audio.error("Satie synth failed to start: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     public func stop() {
         renderState.isActiveAtom.store(0, ordering: .releasing)
-        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.45) { [weak self] in
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 0.55) { [weak self] in
             guard let self else { return }
             self.lifecycleLock.lock()
             defer { self.lifecycleLock.unlock() }
-            if self.renderState.isActiveAtom.load(ordering: .acquiring) == 0, self.isEngineRunning {
+            if self.renderState.isActiveAtom.load(ordering: .acquiring) == 0 && self.isEngineRunning {
                 self.engine.pause()
                 self.isEngineRunning = false
-                Log.audio.info("FocusSoundEngine paused after smooth fade-out")
             }
         }
     }
 
     public func stopImmediately() {
+        renderState.isActiveAtom.store(0, ordering: .releasing)
         lifecycleLock.lock()
         defer { lifecycleLock.unlock() }
-        renderState.isActiveAtom.store(0, ordering: .releasing)
         if isEngineRunning {
             engine.stop()
             isEngineRunning = false
         }
     }
 
-    /// Offline deterministic block render for unit testing DSP stability, zero NaNs, and auto-ducking.
+    /// Deterministic offline synthesis helper used by unit & psychoacoustic meter tests.
     public static func renderOfflineTestBlock(
         mode: FocusSoundscape,
         circadian: CircadianPhase = .afternoon,
         frames: Int = 4096,
-        sampleRate: Double = 48_000,
-        ducked: Bool = false
+        ducked: Bool = false,
+        warmupFrames: Int = 24_000,
+        seed: UInt32 = 42
     ) -> (left: [Float], right: [Float]) {
-        let state = FocusRenderState()
-        state.configure(sampleRate: sampleRate)
-        state.isActiveAtom.store(1, ordering: .releasing)
+        let state = FocusRenderState(seed: seed)
         state.modeAtom.store(FocusSoundscape.allCases.firstIndex(of: mode) ?? 0, ordering: .releasing)
         state.circadianAtom.store(circadian.rawValue, ordering: .releasing)
+        state.volumeBitsAtom.store(Float(0.75).bitPattern, ordering: .releasing)
+        state.isActiveAtom.store(1, ordering: .releasing)
         state.isDuckedAtom.store(ducked ? 1 : 0, ordering: .releasing)
-        state.volumeBitsAtom.store(Float(0.6).bitPattern, ordering: .releasing)
 
-        var outL = [Float](repeating: 0, count: frames)
-        var outR = [Float](repeating: 0, count: frames)
-        outL.withUnsafeMutableBufferPointer { lPtr in
-            outR.withUnsafeMutableBufferPointer { rPtr in
-                // Warm up 12000 samples (~250ms) so fade envelope settles
-                var warmL = [Float](repeating: 0, count: 1024)
-                var warmR = [Float](repeating: 0, count: 1024)
-                warmL.withUnsafeMutableBufferPointer { wl in
-                    warmR.withUnsafeMutableBufferPointer { wr in
-                        for _ in 0..<12 {
-                            state.render(outL: wl.baseAddress!, outR: wr.baseAddress!, frames: 1024)
-                        }
-                    }
+        var warmL = [Float](repeating: 0, count: 512)
+        var warmR = [Float](repeating: 0, count: 512)
+        let warmBlocks = max(1, warmupFrames / 512)
+        for _ in 0..<warmBlocks {
+            warmL.withUnsafeMutableBufferPointer { lb in
+                warmR.withUnsafeMutableBufferPointer { rb in
+                    state.render(outL: lb.baseAddress!, outR: rb.baseAddress!, frames: 512, sampleRate: 48_000)
                 }
-                state.render(outL: lPtr.baseAddress!, outR: rPtr.baseAddress!, frames: frames)
             }
         }
-        return (outL, outR)
-    }
 
-    private func ensureEngineConfiguredLocked() {
-        guard sourceNode == nil else { return }
-        let outFormat = engine.outputNode.outputFormat(forBus: 0)
-        let sr = outFormat.sampleRate > 0 ? outFormat.sampleRate : 48_000.0
-        guard let format = AVAudioFormat(standardFormatWithSampleRate: sr, channels: 2) else { return }
-
-        renderState.configure(sampleRate: sr)
-
-        let state = renderState
-        let rb = ringBuffer
-
-        let node = AVAudioSourceNode(format: format) { _, _, frameCount, audioBufferList -> OSStatus in
-            let abl = UnsafeMutableAudioBufferListPointer(audioBufferList)
-            guard abl.count >= 2,
-                  let outL = abl[0].mData?.assumingMemoryBound(to: Float.self),
-                  let outR = abl[1].mData?.assumingMemoryBound(to: Float.self) else {
-                return noErr
+        var l = [Float](repeating: 0, count: frames)
+        var r = [Float](repeating: 0, count: frames)
+        l.withUnsafeMutableBufferPointer { lb in
+            r.withUnsafeMutableBufferPointer { rb in
+                state.render(outL: lb.baseAddress!, outR: rb.baseAddress!, frames: frames, sampleRate: 48_000)
             }
-
-            let frames = Int(frameCount)
-            state.render(outL: outL, outR: outR, frames: frames)
-
-            // Feed dedicated Focus ring buffer only while un-ducked & audible
-            if state.masterEnv * state.duckEnv > 0.002 {
-                rb.writePlanar(leftSrc: outL, rightSrc: outR, frameCount: frames)
-            }
-            return noErr
         }
-
-        engine.attach(node)
-        engine.connect(node, to: engine.mainMixerNode, format: format)
-        sourceNode = node
+        return (l, r)
     }
 }
 
-// MARK: - Lock-Free Real-Time Psychoacoustic Synthesis State (4x4 Hadamard FDN Reverb)
+// MARK: - Precomputed Band-Limited Harmonic Wavetables
+
+private final class TimbreBank: @unchecked Sendable {
+    static let tableSize = 1024
+    static let tableMask = tableSize - 1
+
+    // Indexed by octave register (0: low, 1: mid, 2: high) to avoid aliasing
+    let stringTables: [[Float]]
+    let padTable: [Float]
+    let bassTable: [Float]
+    let sineTable: [Float]
+
+    init() {
+        let n = Self.tableSize
+        var sine = [Float](repeating: 0, count: n)
+        for i in 0..<n {
+            sine[i] = sin(Float(i) * (2.0 * Float.pi / Float(n)))
+        }
+        self.sineTable = sine
+
+        // Bass: [1, 0.55, 0.32, 0.14, 0.06]
+        let bassWeights: [Double] = [0, 1.0, 0.55, 0.32, 0.14, 0.06]
+        self.bassTable = Self.buildTable(maxHarmonic: 5) { h, _ in bassWeights[h] }
+
+        // Pad: 1/h / sqrt(1 + (f/620)^2) anchored around 260 Hz
+        self.padTable = Self.buildTable(maxHarmonic: 18, baseHz: 260.0) { h, f in
+            (1.0 / Double(h)) / sqrt(1.0 + pow(f / 620.0, 2.0))
+        }
+
+        // Strings: 3-peak wooden-body formant resonance (520 Hz, 1150 Hz, 2900 Hz)
+        let bump: (Double, Double, Double) -> Double = { freq, center, width in
+            let d = log2(max(1.0, freq) / center) / width
+            return exp(-0.5 * d * d)
+        }
+        let stringPartial: (Int, Double) -> Double = { h, f in
+            let body = 1.0
+                + 0.9 * bump(f, 520.0, 0.35)
+                + 0.7 * bump(f, 1150.0, 0.30)
+                + 0.6 * bump(f, 2900.0, 0.30)
+            return (body / Double(h) / sqrt(1.0 + pow(f / 3000.0, 2.0))) * 0.5
+        }
+        self.stringTables = [
+            Self.buildTable(maxHarmonic: 24, baseHz: 260.0, partial: stringPartial),
+            Self.buildTable(maxHarmonic: 14, baseHz: 520.0, partial: stringPartial),
+            Self.buildTable(maxHarmonic: 8,  baseHz: 1040.0, partial: stringPartial),
+        ]
+    }
+
+    private static func buildTable(
+        maxHarmonic: Int,
+        baseHz: Double = 220.0,
+        partial: (Int, Double) -> Double
+    ) -> [Float] {
+        let n = tableSize
+        var tbl = [Double](repeating: 0, count: n)
+        for h in 1...maxHarmonic {
+            let f = Double(h) * baseHz
+            if f > 9500.0 { break }
+            let amp = partial(h, f)
+            if abs(amp) < 1e-6 { continue }
+            for i in 0..<n {
+                let phase = Double(i) * (2.0 * Double.pi * Double(h)) / Double(n)
+                tbl[i] += amp * sin(phase)
+            }
+        }
+        var maxAbs = 0.0
+        for v in tbl { maxAbs = max(maxAbs, abs(v)) }
+        let norm = maxAbs > 1e-6 ? 1.0 / maxAbs : 1.0
+        return tbl.map { Float($0 * norm) }
+    }
+
+    @inline(__always)
+    static func lookup(_ table: [Float], phase01: Double) -> Float {
+        let f = (phase01 - floor(phase01)) * Double(tableSize)
+        let i0 = Int(f) & tableMask
+        let i1 = (i0 + 1) & tableMask
+        let frac = Float(f - floor(f))
+        return table[i0] + (table[i1] - table[i0]) * frac
+    }
+}
+
+// MARK: - Pre-Allocated Voice & DSP Primitives (Zero Allocations on Audio Thread)
+
+private struct BellVoice {
+    var active: Bool = false
+    var isFigure: Bool = true
+    var isGlint: Bool = false
+    var age: Double = 0
+    var maxAge: Double = 4.0
+    var freq: Double = 440
+    var phaseA: Double = 0
+    var phaseB: Double = 0
+    var modPhase: Double = 0
+    var ov2Phase: Double = 0
+    var ov4Phase: Double = 0
+    var ov9Phase: Double = 0
+    var hasOv9: Bool = false
+    var level: Float = 0
+    var ringTau: Double = 1.2
+    var fmPeak: Double = 0
+    var fmFloor: Double = 0
+    var ov2Amp: Float = 0
+    var ov4Amp: Float = 0
+    var ov9Amp: Float = 0
+    var panL: Float = 0.707
+    var panR: Float = 0.707
+
+    mutating func trigger(event: ScoredBellEvent) {
+        let f = 440.0 * pow(2.0, Double(event.midi - 69) / 12.0)
+        let ring = event.kind == .glint ? 0.5 : (1.0 + 0.55 * event.duration)
+        let bright = event.kind == .melody ? 1.35 : (event.kind == .glint ? 0.0 : 1.0)
+
+        active = true
+        isFigure = (event.kind == .figure)
+        isGlint = (event.kind == .glint)
+        age = 0
+        maxAge = ring * 4.2
+        freq = f
+        phaseA = 0
+        phaseB = 0
+        modPhase = 0
+        ov2Phase = 0
+        ov4Phase = 0
+        ov9Phase = 0
+        hasOv9 = (!isGlint) && (f * 9.0 < 9000.0)
+        level = Float(event.level)
+        ringTau = ring
+        fmPeak = (1.05 * bright * event.velocity + 0.08) * 0.42
+        fmFloor = 0.08 * 0.42
+        ov2Amp = isGlint ? 0 : 0.20
+        ov4Amp = isGlint ? 0 : Float(0.30 * bright * event.velocity)
+        ov9Amp = hasOv9 ? Float(0.16 * bright * event.velocity) : 0
+
+        let angle = Float((event.pan + 1.0) * 0.25 * Double.pi)
+        panL = cos(angle)
+        panR = sin(angle)
+    }
+
+    @inline(__always)
+    mutating func step(dt: Double, sineTable: [Float]) -> (Float, Float) {
+        guard active else { return (0, 0) }
+        age += dt
+        if age >= maxAge {
+            active = false
+            return (0, 0)
+        }
+
+        let env: Float
+        if age < 0.005 {
+            env = Float(age / 0.005)
+        } else {
+            env = Float(exp(-(age - 0.005) / ringTau))
+        }
+        if env < 0.0002 {
+            active = false
+            return (0, 0)
+        }
+
+        // Exponentially decaying FM depth (bright glassy attack -> pure warm sustain)
+        let fmIndex = fmFloor + (fmPeak - fmFloor) * exp(-age / 0.40)
+        modPhase += freq * dt
+        if modPhase >= 1.0 { modPhase -= floor(modPhase) }
+        let modVal = Double(TimbreBank.lookup(sineTable, phase01: modPhase)) * fmIndex
+
+        let detuneUp = 1.001734   // +3 cents
+        let detuneDn = 0.998269   // -3 cents
+        phaseA += freq * (isGlint ? 1.0 : detuneDn) * dt
+        if phaseA >= 1.0 { phaseA -= floor(phaseA) }
+
+        var sample: Float
+        if isGlint {
+            sample = TimbreBank.lookup(sineTable, phase01: phaseA + modVal * 0.1)
+        } else {
+            phaseB += freq * detuneUp * dt
+            if phaseB >= 1.0 { phaseB -= floor(phaseB) }
+            let cA = TimbreBank.lookup(sineTable, phase01: phaseA + modVal)
+            let cB = TimbreBank.lookup(sineTable, phase01: phaseB + modVal)
+            sample = 0.5 * (cA + cB)
+
+            ov2Phase += freq * 2.0 * dt
+            if ov2Phase >= 1.0 { ov2Phase -= floor(ov2Phase) }
+            sample += ov2Amp * Float(exp(-age / 0.90)) * TimbreBank.lookup(sineTable, phase01: ov2Phase)
+
+            ov4Phase += freq * 4.0 * dt
+            if ov4Phase >= 1.0 { ov4Phase -= floor(ov4Phase) }
+            sample += ov4Amp * Float(exp(-age / 0.28)) * TimbreBank.lookup(sineTable, phase01: ov4Phase)
+
+            if hasOv9 {
+                ov9Phase += freq * 9.0 * dt
+                if ov9Phase >= 1.0 { ov9Phase -= floor(ov9Phase) }
+                sample += ov9Amp * Float(exp(-age / 0.07)) * TimbreBank.lookup(sineTable, phase01: ov9Phase)
+            }
+        }
+
+        let sig = sample * env * level
+        return (sig * panL, sig * panR)
+    }
+}
+
+private struct StringVoice {
+    var active: Bool = false
+    var age: Double = 0
+    var totalDuration: Double = 6.0
+    var rise: Double = 1.2
+    var fall: Double = 1.5
+    var freq: Double = 440
+    var tableIndex: Int = 1
+    var level: Float = 0
+    var panL: Float = 0.707
+    var panR: Float = 0.707
+
+    // 3 players with independent detune and delayed vibrato
+    var p0: Double = 0, p1: Double = 0, p2: Double = 0
+    var d0: Double = 1, d1: Double = 1, d2: Double = 1
+    var vPhase0: Double = 0, vPhase1: Double = 0, vPhase2: Double = 0
+    var vRate0: Double = 5.2, vRate1: Double = 5.5, vRate2: Double = 5.8
+    var vDepth0: Double = 0.003, vDepth1: Double = 0.003, vDepth2: Double = 0.003
+
+    mutating func trigger(event: ScoredSustainEvent, rng: inout SeededRNG) {
+        let f = 440.0 * pow(2.0, Double(event.midi - 69) / 12.0)
+        active = true
+        age = 0
+        totalDuration = event.duration + 1.8
+        rise = min(1.2, totalDuration * 0.40)
+        fall = min(1.5, totalDuration * 0.50)
+        freq = f
+        tableIndex = f < 380 ? 0 : (f < 780 ? 1 : 2)
+        level = Float(event.level)
+
+        let angle = Float((event.pan + 1.0) * 0.25 * Double.pi)
+        panL = cos(angle)
+        panR = sin(angle)
+
+        p0 = rng.nextUnit(); p1 = rng.nextUnit(); p2 = rng.nextUnit()
+        d0 = pow(2.0, rng.between(-9.0, 9.0) / 1200.0)
+        d1 = pow(2.0, rng.between(-9.0, 9.0) / 1200.0)
+        d2 = pow(2.0, rng.between(-9.0, 9.0) / 1200.0)
+        vPhase0 = rng.nextUnit(); vPhase1 = rng.nextUnit(); vPhase2 = rng.nextUnit()
+        vRate0 = rng.between(4.9, 6.0)
+        vRate1 = rng.between(4.9, 6.0)
+        vRate2 = rng.between(4.9, 6.0)
+        // Vibrato width in frequency ratio (~4..7 cents)
+        vDepth0 = rng.between(4.0, 7.0) / 1731.2
+        vDepth1 = rng.between(4.0, 7.0) / 1731.2
+        vDepth2 = rng.between(4.0, 7.0) / 1731.2
+    }
+
+    @inline(__always)
+    mutating func step(dt: Double, bank: TimbreBank) -> (Float, Float) {
+        guard active else { return (0, 0) }
+        age += dt
+        if age >= totalDuration {
+            active = false
+            return (0, 0)
+        }
+
+        // Two-stage gentle bow swell -> sustain -> smooth fall
+        let env: Double
+        if age < rise * 0.5 {
+            env = 0.35 * (age / max(0.01, rise * 0.5))
+        } else if age < rise {
+            env = 0.35 + 0.65 * ((age - rise * 0.5) / max(0.01, rise * 0.5))
+        } else if age > totalDuration - fall {
+            env = max(0.0, (totalDuration - age) / max(0.01, fall))
+        } else {
+            env = 1.0
+        }
+
+        // Delayed vibrato arrives only after bow settles
+        let vibRamp = min(1.0, age / max(0.25, rise + 0.2))
+        vPhase0 += vRate0 * dt; if vPhase0 >= 1.0 { vPhase0 -= 1.0 }
+        vPhase1 += vRate1 * dt; if vPhase1 >= 1.0 { vPhase1 -= 1.0 }
+        vPhase2 += vRate2 * dt; if vPhase2 >= 1.0 { vPhase2 -= 1.0 }
+
+        let s0 = Double(TimbreBank.lookup(bank.sineTable, phase01: vPhase0)) * vDepth0 * vibRamp
+        let s1 = Double(TimbreBank.lookup(bank.sineTable, phase01: vPhase1)) * vDepth1 * vibRamp
+        let s2 = Double(TimbreBank.lookup(bank.sineTable, phase01: vPhase2)) * vDepth2 * vibRamp
+
+        p0 += freq * d0 * (1.0 + s0) * dt; if p0 >= 1.0 { p0 -= floor(p0) }
+        p1 += freq * d1 * (1.0 + s1) * dt; if p1 >= 1.0 { p1 -= floor(p1) }
+        p2 += freq * d2 * (1.0 + s2) * dt; if p2 >= 1.0 { p2 -= floor(p2) }
+
+        let tbl = bank.stringTables[tableIndex]
+        let sum = (TimbreBank.lookup(tbl, phase01: p0)
+                 + TimbreBank.lookup(tbl, phase01: p1)
+                 + TimbreBank.lookup(tbl, phase01: p2)) * (1.0 / 3.0)
+        let sig = sum * Float(env) * level
+        return (sig * panL, sig * panR)
+    }
+}
+
+private struct PadBassVoice {
+    var active: Bool = false
+    var isBass: Bool = false
+    var age: Double = 0
+    var duration: Double = 4.0
+    var freq: Double = 220
+    var phaseL: Double = 0
+    var phaseR: Double = 0
+    var level: Float = 0
+
+    mutating func trigger(event: ScoredSustainEvent) {
+        let f = 440.0 * pow(2.0, Double(event.midi - 69) / 12.0)
+        active = true
+        isBass = (event.kind == .bass)
+        age = 0
+        duration = event.duration + (isBass ? 0.4 : 0.0)
+        freq = f
+        phaseL = 0
+        phaseR = 0.13
+        level = Float(event.level)
+    }
+
+    @inline(__always)
+    mutating func step(dt: Double, bank: TimbreBank) -> (Float, Float) {
+        guard active else { return (0, 0) }
+        age += dt
+        if age >= duration {
+            active = false
+            return (0, 0)
+        }
+
+        if isBass {
+            let env: Float
+            if age < 0.012 {
+                env = Float(age / 0.012) * 0.48
+            } else if age < duration - 0.4 {
+                env = Float(0.16 + 0.32 * exp(-(age - 0.012) / 1.0))
+            } else {
+                let tail = age - (duration - 0.4)
+                env = Float(0.16 * exp(-tail / 0.07))
+            }
+            phaseL += freq * dt
+            if phaseL >= 1.0 { phaseL -= floor(phaseL) }
+            let s = TimbreBank.lookup(bank.bassTable, phase01: phaseL) * env * level
+            return (s, s)
+        } else {
+            let fade = min(1.6, duration * 0.5)
+            let env: Double
+            if age < fade {
+                env = age / max(0.01, fade)
+            } else if age > duration - fade {
+                env = max(0.0, (duration - age) / max(0.01, fade))
+            } else {
+                env = 1.0
+            }
+            // Wide -5c / +5c stereo pad (-0.55 / +0.55 pan)
+            phaseL += freq * 0.997116 * dt; if phaseL >= 1.0 { phaseL -= floor(phaseL) }
+            phaseR += freq * 1.002892 * dt; if phaseR >= 1.0 { phaseR -= floor(phaseR) }
+            let vL = TimbreBank.lookup(bank.padTable, phase01: phaseL) * Float(env) * level
+            let vR = TimbreBank.lookup(bank.padTable, phase01: phaseR) * Float(env) * level
+            return (vL * 0.85 + vR * 0.30, vR * 0.85 + vL * 0.30)
+        }
+    }
+}
+
+/// Stereo tempo-synced damped delay line (matches Soft Light's 0.75-beat & 1.5-beat echoes).
+private struct StereoEcho {
+    private var bufL: [Float]
+    private var bufR: [Float]
+    private var writeIdx: Int = 0
+    private var lpL: Float = 0
+    private var lpR: Float = 0
+    private let maxSamples: Int
+
+    init(maxSeconds: Double = 2.5, sampleRate: Double = 48_000) {
+        let cap = max(1024, Int(maxSeconds * sampleRate))
+        self.maxSamples = cap
+        self.bufL = [Float](repeating: 0, count: cap)
+        self.bufR = [Float](repeating: 0, count: cap)
+    }
+
+    @inline(__always)
+    mutating func process(_ inL: Float, _ inR: Float, delaySamples: Int, send: Float, feedback: Float, lpAlpha: Float) -> (Float, Float) {
+        let d = max(1, min(maxSamples - 1, delaySamples))
+        var readIdx = writeIdx - d
+        if readIdx < 0 { readIdx += maxSamples }
+
+        let dL = bufL[readIdx]
+        let dR = bufR[readIdx]
+        lpL += (dL - lpL) * lpAlpha
+        lpR += (dR - lpR) * lpAlpha
+
+        // Subtle cross-feed for airy width
+        bufL[writeIdx] = inL * send + lpL * feedback * 0.88 + lpR * feedback * 0.12
+        bufR[writeIdx] = inR * send + lpR * feedback * 0.88 + lpL * feedback * 0.12
+        writeIdx += 1
+        if writeIdx >= maxSamples { writeIdx = 0 }
+
+        return (inL + lpL, inR + lpR)
+    }
+
+    mutating func clear() {
+        for i in 0..<maxSamples { bufL[i] = 0; bufR[i] = 0 }
+        lpL = 0; lpR = 0
+    }
+}
+
+/// Dual-LFO stereo chorus matching Soft Light's 13ms/0.5Hz + 17.5ms/0.69Hz modulated taps.
+private struct StereoChorus {
+    private var bufL: [Float]
+    private var bufR: [Float]
+    private var writeIdx: Int = 0
+    private var phase1: Double = 0
+    private var phase2: Double = 0.37
+    private let cap: Int = 4096
+
+    init() {
+        self.bufL = [Float](repeating: 0, count: 4096)
+        self.bufR = [Float](repeating: 0, count: 4096)
+    }
+
+    @inline(__always)
+    mutating func process(_ inL: Float, _ inR: Float, dt: Double, sampleRate: Double, depthSec: Double, amount: Float) -> (Float, Float) {
+        bufL[writeIdx] = inL
+        bufR[writeIdx] = inR
+
+        phase1 += 0.50 * dt; if phase1 >= 1.0 { phase1 -= 1.0 }
+        phase2 += 0.69 * dt; if phase2 >= 1.0 { phase2 -= 1.0 }
+
+        let d1 = (0.0130 + depthSec * sin(phase1 * 2.0 * Double.pi)) * sampleRate
+        let d2 = (0.0175 + depthSec * sin(phase2 * 2.0 * Double.pi)) * sampleRate
+
+        let wL = readFrac(bufL, delay: d1) + readFrac(bufL, delay: d2)
+        let wR = readFrac(bufR, delay: d2) + readFrac(bufR, delay: d1)
+
+        writeIdx = (writeIdx + 1) & (cap - 1)
+        return (inL + wL * amount * 0.5, inR + wR * amount * 0.5)
+    }
+
+    @inline(__always)
+    private func readFrac(_ buf: [Float], delay: Double) -> Float {
+        let pos = Double(writeIdx) - delay
+        let i0 = Int(floor(pos)) & (cap - 1)
+        let i1 = (i0 + 1) & (cap - 1)
+        let frac = Float(pos - floor(pos))
+        return buf[i0] + (buf[i1] - buf[i0]) * frac
+    }
+
+    mutating func clear() {
+        for i in 0..<cap { bufL[i] = 0; bufR[i] = 0 }
+    }
+}
+
+/// 4×4 Hadamard Feedback Delay Network tuned to Soft Light's warm 2.4s bandpass room (220 Hz .. 5600 Hz).
+private struct HadamardRoomReverb {
+    private var d0: [Float], d1: [Float], d2: [Float], d3: [Float]
+    private var i0 = 0, i1 = 0, i2 = 0, i3 = 0
+    private var lp0: Float = 0, lp1: Float = 0, lp2: Float = 0, lp3: Float = 0
+    private var hp0: Float = 0, hp1: Float = 0, hp2: Float = 0, hp3: Float = 0
+
+    init() {
+        // Mutually prime delay lengths at 48 kHz (~31ms, 41ms, 54ms, 71ms)
+        d0 = [Float](repeating: 0, count: 1499)
+        d1 = [Float](repeating: 0, count: 1973)
+        d2 = [Float](repeating: 0, count: 2593)
+        d3 = [Float](repeating: 0, count: 3407)
+    }
+
+    @inline(__always)
+    mutating func process(_ inL: Float, _ inR: Float, decay: Float = 0.80, dampLP: Float = 0.46, dampHP: Float = 0.028) -> (Float, Float) {
+        let y0 = d0[i0]
+        let y1 = d1[i1]
+        let y2 = d2[i2]
+        let y3 = d3[i3]
+
+        // Bandpass damping (soft highs <5.6 kHz, no mud <220 Hz)
+        lp0 += (y0 - lp0) * dampLP; hp0 += (lp0 - hp0) * dampHP; let f0 = lp0 - hp0
+        lp1 += (y1 - lp1) * dampLP; hp1 += (lp1 - hp1) * dampHP; let f1 = lp1 - hp1
+        lp2 += (y2 - lp2) * dampLP; hp2 += (lp2 - hp2) * dampHP; let f2 = lp2 - hp2
+        lp3 += (y3 - lp3) * dampLP; hp3 += (lp3 - hp3) * dampHP; let f3 = lp3 - hp3
+
+        // Orthonormal 4×4 Hadamard mix
+        let m0 = 0.5 * (f0 + f1 + f2 + f3)
+        let m1 = 0.5 * (f0 - f1 + f2 - f3)
+        let m2 = 0.5 * (f0 + f1 - f2 - f3)
+        let m3 = 0.5 * (f0 - f1 - f2 + f3)
+
+        d0[i0] = inL * 0.55 + m0 * decay
+        d1[i1] = inR * 0.55 + m1 * decay
+        d2[i2] = inL * 0.45 + m2 * decay
+        d3[i3] = inR * 0.45 + m3 * decay
+
+        i0 += 1; if i0 >= d0.count { i0 = 0 }
+        i1 += 1; if i1 >= d1.count { i1 = 0 }
+        i2 += 1; if i2 >= d2.count { i2 = 0 }
+        i3 += 1; if i3 >= d3.count { i3 = 0 }
+
+        return (0.5 * (y0 + y2), 0.5 * (y1 + y3))
+    }
+
+    mutating func clear() {
+        for k in 0..<d0.count { d0[k] = 0 }
+        for k in 0..<d1.count { d1[k] = 0 }
+        for k in 0..<d2.count { d2[k] = 0 }
+        for k in 0..<d3.count { d3[k] = 0 }
+        lp0 = 0; lp1 = 0; lp2 = 0; lp3 = 0
+        hp0 = 0; hp1 = 0; hp2 = 0; hp3 = 0
+    }
+}
+
+/// Stereo Paul Kellet pink/brown rainfall texture for Rain & Glass mode.
+private struct RainTexture {
+    private var rng: UInt64
+    private var b0: Float = 0, b1: Float = 0, b2: Float = 0, b3: Float = 0, b4: Float = 0, b5: Float = 0, b6: Float = 0
+    private var lp: Float = 0
+    private var br: Float = 0
+
+    init(seed: UInt64) {
+        self.rng = seed
+    }
+
+    @inline(__always)
+    mutating func next(cutoffAlpha: Float) -> Float {
+        rng = rng &* 6364136223846793005 &+ 1442695040888963407
+        let white = (Float(Int32(bitPattern: UInt32(truncatingIfNeeded: rng >> 32))) / Float(Int32.max)) * 0.5
+        b0 = 0.99886 * b0 + white * 0.0555179
+        b1 = 0.99332 * b1 + white * 0.0750759
+        b2 = 0.96900 * b2 + white * 0.1538520
+        b3 = 0.86650 * b3 + white * 0.3104856
+        b4 = 0.55000 * b4 + white * 0.5329522
+        b5 = -0.7616 * b5 - white * 0.0168980
+        let pink = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.048
+        b6 = white * 0.115926
+        lp += (pink - lp) * cutoffAlpha
+        br += (pink - br) * 0.015
+        return lp * 0.65 + br * 1.15
+    }
+}
+
+// MARK: - Lock-Free Real-Time Audio Render State
 
 private final class FocusRenderState: @unchecked Sendable {
     let isActiveAtom = Atomic<Int>(0)
     let isDuckedAtom = Atomic<Int>(0)
     let modeAtom = Atomic<Int>(0)
     let circadianAtom = Atomic<Int>(1)
-    let volumeBitsAtom = Atomic<UInt32>(Float(0.48).bitPattern)
+    let volumeBitsAtom = Atomic<UInt32>(Float(0.65).bitPattern)
     let chimeTriggerAtom = Atomic<Int>(0)
 
-    var sr: Double = 48_000.0
-    var invSR: Double = 1.0 / 48_000.0
-    var time: Double = 0
-    var masterEnv: Float = 0
-    var duckEnv: Float = 1
+    private let bank = TimbreBank()
+    private var rng: SeededRNG
 
-    // Smooth mode crossfade weights [focus, pulse, rain, drift]
-    var wFocus: Float = 1
-    var wPulse: Float = 0
-    var wRain: Float = 0
-    var wDrift: Float = 0
+    // Voice pools (pre-allocated, fixed-size)
+    private var bells = [BellVoice](repeating: BellVoice(), count: 28)
+    private var nextBellSlot = 0
+    private var strings = [StringVoice](repeating: StringVoice(), count: 14)
+    private var nextStringSlot = 0
+    private var pads = [PadBassVoice](repeating: PadBassVoice(), count: 16)
+    private var nextPadSlot = 0
 
-    // 5 stereo pad oscillators + sub pulse
-    var padPhasesL: [Double] = [0, 0, 0, 0, 0]
-    var padPhasesR: [Double] = [0, 0, 0, 0, 0]
-    var pulsePhase: Double = 0
+    // Score bar clock state
+    private var activeModeIdx: Int = -1
+    private var activeCircadianRaw: Int = -1
+    private var currentBar: ComposedBar?
+    private var currentBarStartSec: Double = 0
+    private var nextBarIndex: Int = 0
+    private var barBellCursor: Int = 0
+    private var barSustainCursor: Int = 0
+    private var clockSec: Double = 0
 
-    // 5 modal felt-bell voices (fundamental + warm 2nd harmonic partial)
-    var bellPhases: [Double] = [0, 0, 0, 0, 0]
-    var bellFreqs: [Double] = [293.66, 440.0, 523.25, 659.25, 783.99]
-    var bellEnvs: [Float] = [0, 0, 0, 0, 0]
-    var bellTimers: [Double] = [0.5, 2.2, 4.6, 7.1, 10.4]
-    var bellPans: [Float] = [-0.48, 0.36, -0.24, 0.52, -0.10]
+    // Effects buses
+    private var figureEcho = StereoEcho()
+    private var melodyEcho = StereoEcho()
+    private var figureChorus = StereoChorus()
+    private var melodyChorus = StereoChorus()
+    private var stringChorus = StereoChorus()
+    private var room = HadamardRoomReverb()
+    private var rainL = RainTexture(seed: 0x9E3779B97F4A7C15)
+    private var rainR = RainTexture(seed: 0xBF58476D1CE4E5B9)
 
-    // Completion chime voice (warm open fifth)
-    var chimeEnv: Float = 0
-    var chimePhase1: Double = 0
-    var chimePhase2: Double = 0
+    // Filter & envelope states
+    private var strHpL: Float = 0, strHpR: Float = 0
+    private var strLpL: Float = 0, strLpR: Float = 0
+    private var padLpL: Float = 0, padLpR: Float = 0
+    private var masterHpL: Float = 0, masterHpR: Float = 0
+    private var masterLpL: Float = 0, masterLpR: Float = 0
+    private var presenceBpL: Float = 0, presenceBpR: Float = 0
+    private var compEnv: Float = 0
 
-    // Paul Kellet 7-pole stereo pink noise + warm brownian sub + 2-pole low-pass ear-fatigue filters
-    var pbL: [Float] = [0, 0, 0, 0, 0, 0, 0]
-    var pbR: [Float] = [0, 0, 0, 0, 0, 0, 0]
-    var brownL: Float = 0
-    var brownR: Float = 0
-    var lpPad1L: Float = 0, lpPad2L: Float = 0
-    var lpPad1R: Float = 0, lpPad2R: Float = 0
-    var rainLp1L: Float = 0, rainLp2L: Float = 0
-    var rainLp1R: Float = 0, rainLp2R: Float = 0
-    var outAirLpL: Float = 0, outAirLpR: Float = 0
+    // Pulse sub-heartbeat & 14 Hz neural modulation
+    private var pulsePhase: Double = 0
+    private var kickAge: Double = 10.0
+    private var kickOscPhase: Double = 0
+    private var lastBeatInt: Int = -1
 
-    // Soft resonant raindrop
-    var dropPhase: Double = 0
-    var dropEnv: Float = 0
-    var dropFreq: Double = 1200
-    var dropPan: Float = 0
+    // Session completion chime
+    private var chimeVoiceA = BellVoice()
+    private var chimeVoiceB = BellVoice()
 
-    // Fast RT-safe XorShift64 PRNG
-    var rng: UInt64 = 0x9e3779b97f4a7c15
+    // Smooth gains
+    private var activeGain: Float = 0
+    private var duckGain: Float = 1
+    private var smoothVol: Float = 0.65
+    private(set) var isAudibleOutput: Bool = false
 
-    // 4x4 Hadamard Feedback Delay Network (FDN) reverb (mutually prime delay lengths)
-    var fdnLens: [Int] = [6577, 8689, 10993, 13591]
-    var fdnBufs: [UnsafeMutablePointer<Float>?] = [nil, nil, nil, nil]
-    var fdnIdxs: [Int] = [0, 0, 0, 0]
-    var fdnDamp: [Float] = [0, 0, 0, 0]
-
-    // Circadian harmonic progressions (Morning = open F Lydian/Maj9, Afternoon = D Dorian, Night = dark C Min9)
-    let morningChords: [[Double]] = [
-        [87.31, 130.81, 174.61, 220.00, 329.63], // Fmaj7
-        [98.00, 146.83, 196.00, 246.94, 329.63], // G6
-        [65.41, 130.81, 196.00, 246.94, 293.66], // Cmaj9
-        [110.00, 164.81, 196.00, 246.94, 329.63] // Am9
-    ]
-    let afternoonChords: [[Double]] = [
-        [73.42, 110.00, 146.83, 220.00, 329.63], // D5/9
-        [65.41, 98.00,  146.83, 196.00, 293.66], // Cadd9
-        [87.31, 130.81, 164.81, 220.00, 329.63], // Fmaj7
-        [110.00, 146.83, 164.81, 246.94, 329.63] // Asus4/9
-    ]
-    let nightChords: [[Double]] = [
-        [65.41, 98.00,  130.81, 155.56, 233.08], // Cm7
-        [51.91, 103.83, 130.81, 155.56, 233.08], // Abmaj9
-        [58.27, 116.54, 146.83, 174.61, 261.63], // Bbadd9
-        [87.31, 130.81, 155.56, 196.00, 261.63]  // Fm9
-    ]
-
-    let morningScale: [Double]   = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25]
-    let afternoonScale: [Double] = [293.66, 329.63, 349.23, 440.00, 493.88, 523.25, 587.33, 659.25]
-    let nightScale: [Double]     = [196.00, 233.08, 261.63, 293.66, 311.13, 392.00, 466.16, 523.25]
-
-    deinit {
-        for ptr in fdnBufs { ptr?.deallocate() }
+    init(seed: UInt32 = 42) {
+        self.rng = SeededRNG(seed: seed)
     }
 
-    func configure(sampleRate: Double) {
-        sr = sampleRate
-        invSR = 1.0 / sampleRate
-        let scale = sampleRate / 48_000.0
-        let basePrimes = [6577, 8689, 10993, 13591]
-        for k in 0..<4 {
-            fdnBufs[k]?.deallocate()
-            let len = max(512, Int(Double(basePrimes[k]) * scale))
-            fdnLens[k] = len
-            let ptr = UnsafeMutablePointer<Float>.allocate(capacity: len)
-            ptr.initialize(repeating: 0, count: len)
-            fdnBufs[k] = ptr
-            fdnIdxs[k] = 0
-            fdnDamp[k] = 0
-        }
+    private func resetScore(for mode: FocusSoundscape, circadian: CircadianPhase) {
+        for i in 0..<bells.count { bells[i].active = false }
+        for i in 0..<strings.count { strings[i].active = false }
+        for i in 0..<pads.count { pads[i].active = false }
+        figureEcho.clear()
+        melodyEcho.clear()
+        figureChorus.clear()
+        melodyChorus.clear()
+        stringChorus.clear()
+        room.clear()
+
+        clockSec = 0
+        currentBarStartSec = 0
+        nextBarIndex = 0
+        lastBeatInt = -1
+        loadNextBar(mode: mode, circadian: circadian)
     }
 
-    @inline(__always)
-    private func nextWhite() -> Float {
-        rng ^= rng >> 12
-        rng ^= rng << 25
-        rng ^= rng >> 27
-        let v = (rng &* 0x2545F4914F6CDD1D) >> 40
-        return Float(v) * (2.0 / 16777216.0) - 1.0
+    private func loadNextBar(mode: FocusSoundscape, circadian: CircadianPhase) {
+        let composed = SatieScore.composeBar(mode: mode, barIndex: nextBarIndex, circadian: circadian, rng: &rng)
+        var sortedBells = composed.bells
+        sortedBells.sort { $0.at < $1.at }
+        var sortedSus = composed.sustained
+        sortedSus.sort { $0.at < $1.at }
+        currentBar = ComposedBar(
+            barIndex: composed.barIndex,
+            barInForm: composed.barInForm,
+            pass: composed.pass,
+            chordName: composed.chordName,
+            secondsPerBeat: composed.secondsPerBeat,
+            secondsPerBar: composed.secondsPerBar,
+            bells: sortedBells,
+            sustained: sortedSus,
+            didSwapFigure: composed.didSwapFigure,
+            allowedPitchClasses: composed.allowedPitchClasses
+        )
+        barBellCursor = 0
+        barSustainCursor = 0
+        nextBarIndex += 1
     }
 
-    func render(outL: UnsafeMutablePointer<Float>, outR: UnsafeMutablePointer<Float>, frames: Int) {
-        guard let b0 = fdnBufs[0], let b1 = fdnBufs[1], let b2 = fdnBufs[2], let b3 = fdnBufs[3] else {
-            outL.update(repeating: 0, count: frames)
-            outR.update(repeating: 0, count: frames)
-            return
-        }
-
-        let active = isActiveAtom.load(ordering: .relaxed) != 0
-        let ducked = isDuckedAtom.load(ordering: .relaxed) != 0
-        let modeIdx = modeAtom.load(ordering: .relaxed)
-        let circIdx = circadianAtom.load(ordering: .relaxed)
-        let targetVol = Float(bitPattern: volumeBitsAtom.load(ordering: .relaxed))
+    func render(outL: UnsafeMutablePointer<Float>, outR: UnsafeMutablePointer<Float>, frames: Int, sampleRate: Double) {
+        let wantActive = isActiveAtom.load(ordering: .acquiring) != 0
+        let wantDucked = isDuckedAtom.load(ordering: .acquiring) != 0
+        let modeIdx = max(0, min(FocusSoundscape.allCases.count - 1, modeAtom.load(ordering: .acquiring)))
+        let mode = FocusSoundscape.allCases[modeIdx]
+        let circadianRaw = circadianAtom.load(ordering: .acquiring)
+        let circadian = CircadianPhase(rawValue: circadianRaw) ?? .afternoon
+        let targetVol = Float(bitPattern: volumeBitsAtom.load(ordering: .acquiring))
 
         if chimeTriggerAtom.exchange(0, ordering: .acquiring) != 0 {
-            chimeEnv = 1.0
-            chimePhase1 = 0
-            chimePhase2 = 0
+            chimeVoiceA.trigger(event: ScoredBellEvent(kind: .melody, at: 0, midi: 69, duration: 2.2, velocity: 0.7, level: 0.16, pan: -0.15))
+            chimeVoiceB.trigger(event: ScoredBellEvent(kind: .melody, at: 0, midi: 76, duration: 2.6, velocity: 0.65, level: 0.14, pan: 0.15))
         }
 
-        let targetMaster: Float = active ? targetVol : 0.0
-        let targetDuck: Float = ducked ? 0.0 : 1.0
-        let tFocus: Float = modeIdx == 0 ? 1.0 : 0.0
-        let tPulse: Float = modeIdx == 1 ? 1.0 : 0.0
-        let tRain: Float  = modeIdx == 2 ? 1.0 : 0.0
-        let tDrift: Float = modeIdx == 3 ? 1.0 : 0.0
+        if wantActive && (modeIdx != activeModeIdx || circadianRaw != activeCircadianRaw) {
+            activeModeIdx = modeIdx
+            activeCircadianRaw = circadianRaw
+            resetScore(for: mode, circadian: circadian)
+        }
 
-        let envStep = Float(invSR * 3.8)
-        let duckStep = Float(invSR * (ducked ? 6.5 : 1.6)) // Fast calm duck-down, gentle bloom back up
-        let twoPi = Double.pi * 2.0
+        let targetActiveGain: Float = wantActive ? 1.0 : 0.0
+        let targetDuckGain: Float = wantDucked ? 0.0 : 1.0
+        let dt = 1.0 / sampleRate
 
-        let chords = circIdx == 0 ? morningChords : (circIdx == 2 ? nightChords : afternoonChords)
-        let scale = circIdx == 0 ? morningScale : (circIdx == 2 ? nightScale : afternoonScale)
-        let circadianCutoffBias: Float = circIdx == 0 ? 0.025 : (circIdx == 2 ? -0.022 : 0.0)
+        // Filter coefficients at 48 kHz
+        let echoLPAlpha = Float(1.0 - exp(-2.0 * Double.pi * 4500.0 / sampleRate))
+        let strHPAlpha  = Float(1.0 - exp(-2.0 * Double.pi * 260.0 / sampleRate))
+        let strLPAlpha  = Float(1.0 - exp(-2.0 * Double.pi * 6200.0 / sampleRate))
+        let padLPAlpha  = Float(1.0 - exp(-2.0 * Double.pi * 2200.0 / sampleRate))
+        let rumHPAlpha  = Float(1.0 - exp(-2.0 * Double.pi * 95.0 / sampleRate))
+        let airCutHz    = (circadian == .night) ? 4600.0 : 6200.0
+        let masterLPAlpha = Float(1.0 - exp(-2.0 * Double.pi * airCutHz / sampleRate))
+        let presAlpha   = Float(1.0 - exp(-2.0 * Double.pi * 2400.0 / sampleRate))
 
-        let len0 = fdnLens[0], len1 = fdnLens[1], len2 = fdnLens[2], len3 = fdnLens[3]
-        var idx0 = fdnIdxs[0], idx1 = fdnIdxs[1], idx2 = fdnIdxs[2], idx3 = fdnIdxs[3]
+        let spb = SatieScore.secondsPerBeat(for: mode)
+        let figEchoSamples = Int(0.75 * spb * sampleRate)
+        let melEchoSamples = Int(1.50 * spb * sampleRate)
+
+        let activeStep: Float = wantActive ? 0.00018 : 0.00032
+        let duckStep: Float   = wantDucked ? 0.00028 : 0.00009
+
+        var blockPeak: Float = 0
 
         for i in 0..<frames {
-            time += invSR
+            activeGain += (targetActiveGain - activeGain) * activeStep
+            duckGain += (targetDuckGain - duckGain) * duckStep
+            smoothVol += (targetVol - smoothVol) * 0.0006
 
-            masterEnv += (targetMaster - masterEnv) * envStep
-            duckEnv += (targetDuck - duckEnv) * duckStep
-            wFocus += (tFocus - wFocus) * envStep
-            wPulse += (tPulse - wPulse) * envStep
-            wRain  += (tRain  - wRain)  * envStep
-            wDrift += (tDrift - wDrift) * envStep
-
-            let totalGain = masterEnv * duckEnv
-            if totalGain < 0.00002 && chimeEnv < 0.0005 && !active {
+            let masterEnv = activeGain * duckGain
+            if masterEnv < 0.0001 && !chimeVoiceA.active && !chimeVoiceB.active {
                 outL[i] = 0
                 outR[i] = 0
                 continue
             }
 
-            // --- 1. Slow Circadian Chord Pad (20s harmonic cycles) ---
-            let chordPos = (time / 20.0).truncatingRemainder(dividingBy: Double(chords.count))
-            let cA = Int(chordPos) % chords.count
-            let cB = (cA + 1) % chords.count
-            let cFrac = chordPos - floor(chordPos)
-            let bl = max(0.0, min(1.0, (cFrac - 0.60) / 0.40))
-            let sBlend = bl * bl * (3.0 - 2.0 * bl)
-
-            var padL: Float = 0
-            var padR: Float = 0
-            let needPad = (wFocus + wPulse + wDrift) > 0.001
-            if needPad {
-                let chA = chords[cA]
-                let chB = chords[cB]
-                let breath = Float(0.76 + 0.24 * sin(time * 0.21))
-                // Subtle Brain.fm-style 14Hz neural focus amplitude modulation in PULSE mode
-                let betaMod: Float = 1.0 - wPulse * 0.14 * Float(0.5 + 0.5 * sin(time * twoPi * 14.0))
-
-                for v in 0..<5 {
-                    let f = chA[v] + (chB[v] - chA[v]) * sBlend
-                    let det = 0.24 + Double(v) * 0.08
-                    padPhasesL[v] += (f + det) * invSR
-                    if padPhasesL[v] >= 1.0 { padPhasesL[v] -= 1.0 }
-                    padPhasesR[v] += (f - det) * invSR
-                    if padPhasesR[v] >= 1.0 { padPhasesR[v] -= 1.0 }
-
-                    // Warm triangle-blended sine (richer, less fatiguing than pure clinical sine)
-                    let sL = sin(padPhasesL[v] * twoPi) + 0.14 * sin(padPhasesL[v] * twoPi * 2.0) + 0.05 * sin(padPhasesL[v] * twoPi * 3.0)
-                    let sR = sin(padPhasesR[v] * twoPi) + 0.14 * sin(padPhasesR[v] * twoPi * 2.0) + 0.05 * sin(padPhasesR[v] * twoPi * 3.0)
-                    let w: Float = v == 0 ? 0.26 : (v < 3 ? 0.19 : 0.11)
-                    padL += Float(sL) * w * breath * betaMod
-                    padR += Float(sR) * w * breath * betaMod
+            // Advance bar clock & trigger scored events sample-accurately
+            if let bar = currentBar {
+                let relTime = clockSec - currentBarStartSec
+                while barBellCursor < bar.bells.count && bar.bells[barBellCursor].at <= relTime {
+                    bells[nextBellSlot].trigger(event: bar.bells[barBellCursor])
+                    nextBellSlot = (nextBellSlot + 1) % bells.count
+                    barBellCursor += 1
                 }
+                while barSustainCursor < bar.sustained.count && bar.sustained[barSustainCursor].at <= relTime {
+                    let ev = bar.sustained[barSustainCursor]
+                    if ev.kind == .strings {
+                        strings[nextStringSlot].trigger(event: ev, rng: &rng)
+                        nextStringSlot = (nextStringSlot + 1) % strings.count
+                    } else {
+                        pads[nextPadSlot].trigger(event: ev)
+                        nextPadSlot = (nextPadSlot + 1) % pads.count
+                    }
+                    barSustainCursor += 1
+                }
+                if relTime >= bar.secondsPerBar {
+                    currentBarStartSec += bar.secondsPerBar
+                    loadNextBar(mode: mode, circadian: circadian)
+                }
+            }
+            clockSec += dt
 
-                // 2-pole warm breathing low-pass filter (12 dB/oct silk smoothness)
-                let cut = max(0.025, min(0.16, Float(0.055 + 0.045 * (0.5 + 0.5 * sin(time * 0.13))) + circadianCutoffBias))
-                lpPad1L += (padL - lpPad1L) * cut
-                lpPad2L += (lpPad1L - lpPad2L) * cut
-                lpPad1R += (padR - lpPad1R) * cut
-                lpPad2R += (lpPad1R - lpPad2R) * cut
+            // 1. Render Bells (split into Figure Bus vs Melody/Glint Bus)
+            var figL: Float = 0, figR: Float = 0
+            var melL: Float = 0, melR: Float = 0
+            for b in 0..<bells.count where bells[b].active {
+                let (sL, sR) = bells[b].step(dt: dt, sineTable: bank.sineTable)
+                if bells[b].isFigure {
+                    figL += sL; figR += sR
+                } else {
+                    melL += sL; melR += sR
+                }
             }
 
-            // --- 2. Muted Motoric Sub-Pulse (PULSE mode — steady 112 BPM focus cadence) ---
-            var pulseSig: Float = 0
-            if wPulse > 0.001 {
-                let beatPhase = (time * 112.0 / 60.0).truncatingRemainder(dividingBy: 1.0)
-                let subEnv = Float(pow(max(0.0, 1.0 - beatPhase * 2.6), 2.4))
-                let rootF = chords[cA][0]
-                pulsePhase += rootF * invSR
+            // Asymmetric pickup warmth on figure bus: (tanh(2.2x + 0.12) - tanh(0.12)) / 2.2
+            let bias: Float = 0.119427 // tanh(0.12)
+            figL = (tanh(2.2 * figL + 0.12) - bias) / 2.2
+            figR = (tanh(2.2 * figR + 0.12) - bias) / 2.2
+
+            // Tempo-synced dotted echo + dual-LFO chorus on figure & melody
+            let (feL, feR) = figureEcho.process(figL, figR, delaySamples: figEchoSamples, send: 0.22, feedback: 0.36, lpAlpha: echoLPAlpha)
+            let (fcL, fcR) = figureChorus.process(feL, feR, dt: dt, sampleRate: sampleRate, depthSec: 0.0020, amount: 0.30)
+
+            let (meL, meR) = melodyEcho.process(melL, melR, delaySamples: melEchoSamples, send: 0.22, feedback: 0.36, lpAlpha: echoLPAlpha)
+            let (mcL, mcR) = melodyChorus.process(meL, meR, dt: dt, sampleRate: sampleRate, depthSec: 0.0014, amount: 0.18)
+
+            // 2. Render 3-Player Wooden-Body Strings
+            var sL: Float = 0, sR: Float = 0
+            for st in 0..<strings.count where strings[st].active {
+                let (vL, vR) = strings[st].step(dt: dt, bank: bank)
+                sL += vL; sR += vR
+            }
+            strLpL += (sL - strLpL) * strLPAlpha; strLpR += (sR - strLpR) * strLPAlpha
+            strHpL += (strLpL - strHpL) * strHPAlpha; strHpR += (strLpR - strHpR) * strHPAlpha
+            let strCleanL = strLpL - strHpL
+            let strCleanR = strLpR - strHpR
+            let (scL, scR) = stringChorus.process(strCleanL, strCleanR, dt: dt, sampleRate: sampleRate, depthSec: 0.0040, amount: 0.45)
+
+            // 3. Render Warm Bass + Wide Stereo Pad
+            var pL: Float = 0, pR: Float = 0
+            var bsL: Float = 0, bsR: Float = 0
+            for k in 0..<pads.count where pads[k].active {
+                let (vL, vR) = pads[k].step(dt: dt, bank: bank)
+                if pads[k].isBass { bsL += vL; bsR += vR } else { pL += vL; pR += vR }
+            }
+            padLpL += (pL - padLpL) * padLPAlpha
+            padLpR += (pR - padLpR) * padLPAlpha
+
+            // Subtle 14 Hz neural modulation + soft damped sub-pulse on Kinetic Pulse mode
+            var pulseSub: Float = 0
+            if mode == .pulse {
+                pulsePhase += 14.0 * dt
                 if pulsePhase >= 1.0 { pulsePhase -= 1.0 }
-                // Soft rounded low throb (never clicky or clubby)
-                let attack = Float(min(1.0, beatPhase * 28.0))
-                pulseSig = Float(sin(pulsePhase * twoPi)) * subEnv * attack * 0.42
-            }
+                let mod = 0.88 + 0.12 * TimbreBank.lookup(bank.sineTable, phase01: pulsePhase)
+                padLpL *= mod
+                padLpR *= mod
 
-            // --- 3. Felt-Piano / Modal Glass Voices (5 independent prime-ratio cycles) ---
-            var bellL: Float = 0
-            var bellR: Float = 0
-            if (wFocus + wPulse + wDrift) > 0.001 {
-                let cycles: [Double] = [6.1, 9.7, 13.1, 17.3, 23.9]
-                let tempoScale: Double = wPulse > 0.5 ? 0.48 : (wDrift > 0.5 ? 1.15 : 0.88)
-                for b in 0..<5 {
-                    bellTimers[b] -= invSR
-                    if bellTimers[b] <= 0 {
-                        bellTimers[b] = cycles[b] * tempoScale * (0.78 + Double(abs(nextWhite())) * 0.45)
-                        let idx = Int(abs(nextWhite()) * Float(scale.count)) % scale.count
-                        bellFreqs[b] = scale[idx] * (wDrift > 0.5 && b == 4 ? 2.0 : 1.0)
-                        bellEnvs[b] = 1.0
-                        bellPans[b] = nextWhite() * 0.62
+                let beatInt = Int(clockSec / spb)
+                if beatInt != lastBeatInt {
+                    lastBeatInt = beatInt
+                    if beatInt % 2 == 0 {
+                        kickAge = 0
+                        kickOscPhase = 0
                     }
-                    if bellEnvs[b] > 0.0004 {
-                        bellPhases[b] += bellFreqs[b] * invSR
-                        if bellPhases[b] >= 1.0 { bellPhases[b] -= 1.0 }
-                        let e = bellEnvs[b]
-                        // Soft felt-hammer attack + warm resonant decay + decaying 2nd harmonic partial
-                        let feltAttack = (1.0 - e * e * e * e)
-                        let amp = e * e * feltAttack * 0.24
-                        let tone = Float(sin(bellPhases[b] * twoPi) + Double(e) * 0.22 * sin(bellPhases[b] * twoPi * 2.0)) * amp
-                        bellL += tone * 0.5 * (1.0 - bellPans[b])
-                        bellR += tone * 0.5 * (1.0 + bellPans[b])
-                        bellEnvs[b] *= Float(1.0 - invSR * (wPulse > 0.5 ? 0.68 : 0.30))
-                    }
+                }
+                if kickAge < 0.34 {
+                    let kFreq = 50.0 + 36.0 * exp(-kickAge * 18.0)
+                    kickOscPhase += kFreq * dt
+                    if kickOscPhase >= 1.0 { kickOscPhase -= 1.0 }
+                    let kEnv = Float(min(1.0, kickAge / 0.012) * exp(-kickAge * 8.5))
+                    pulseSub = TimbreBank.lookup(bank.sineTable, phase01: kickOscPhase) * kEnv * 0.14
+                    kickAge += dt
                 }
             }
 
-            // --- 4. Velvet Stereo Pink/Brown Rain (Paul Kellet + 2-pole warm smoothing) ---
-            var rainL: Float = 0
-            var rainR: Float = 0
-            if (wRain + wFocus + wPulse) > 0.001 {
-                let wL = nextWhite()
-                let wR = nextWhite()
-
-                pbL[0] = 0.99886 * pbL[0] + wL * 0.0555179
-                pbL[1] = 0.99332 * pbL[1] + wL * 0.0750759
-                pbL[2] = 0.96900 * pbL[2] + wL * 0.1538520
-                pbL[3] = 0.86650 * pbL[3] + wL * 0.3104856
-                pbL[4] = 0.55000 * pbL[4] + wL * 0.5329522
-                pbL[5] = -0.7616 * pbL[5] - wL * 0.0168980
-                let pinkL = (pbL[0] + pbL[1] + pbL[2] + pbL[3] + pbL[4] + pbL[5] + pbL[6] + wL * 0.5362) * 0.042
-                pbL[6] = wL * 0.115926
-
-                pbR[0] = 0.99886 * pbR[0] + wR * 0.0555179
-                pbR[1] = 0.99332 * pbR[1] + wR * 0.0750759
-                pbR[2] = 0.96900 * pbR[2] + wR * 0.1538520
-                pbR[3] = 0.86650 * pbR[3] + wR * 0.3104856
-                pbR[4] = 0.55000 * pbR[4] + wR * 0.5329522
-                pbR[5] = -0.7616 * pbR[5] - wR * 0.0168980
-                let pinkR = (pbR[0] + pbR[1] + pbR[2] + pbR[3] + pbR[4] + pbR[5] + pbR[6] + wR * 0.5362) * 0.042
-                pbR[6] = wR * 0.115926
-
-                brownL = (brownL + wL * 0.018) * 0.994
-                brownR = (brownR + wR * 0.018) * 0.994
-
-                let swL = Float(0.78 + 0.22 * sin(time * 0.19))
-                let swR = Float(0.78 + 0.22 * cos(time * 0.15 + 0.9))
-
-                rainLp1L += ((pinkL * 0.62 + brownL * 0.98) * swL - rainLp1L) * 0.20
-                rainLp2L += (rainLp1L - rainLp2L) * 0.26
-                rainLp1R += ((pinkR * 0.62 + brownR * 0.98) * swR - rainLp1R) * 0.20
-                rainLp2R += (rainLp1R - rainLp2R) * 0.26
-
-                if wRain > 0.05 {
-                    if dropEnv < 0.002 && nextWhite() > 0.99955 {
-                        dropEnv = 0.12
-                        dropFreq = 820.0 + Double(abs(nextWhite())) * 1100.0
-                        dropPan = nextWhite() * 0.78
-                    }
-                    if dropEnv > 0.0005 {
-                        dropPhase += dropFreq * invSR
-                        if dropPhase >= 1.0 { dropPhase -= 1.0 }
-                        let dSig = Float(sin(dropPhase * twoPi)) * dropEnv
-                        rainL += dSig * 0.5 * (1.0 - dropPan)
-                        rainR += dSig * 0.5 * (1.0 + dropPan)
-                        dropEnv *= Float(1.0 - invSR * 20.0)
-                    }
-                }
-                rainL += rainLp2L * 1.25
-                rainR += rainLp2R * 1.25
+            // Lush stereo Paul Kellet rainfall in Rain & Glass mode
+            var rTexL: Float = 0, rTexR: Float = 0
+            if mode == .rain {
+                let rainSwell = Float(0.5 + 0.5 * sin(clockSec * 0.22))
+                let cutAlpha = Float(1.0 - exp(-2.0 * Double.pi * (820.0 + Double(rainSwell) * 460.0) / sampleRate))
+                rTexL = rainL.next(cutoffAlpha: cutAlpha) * 0.58
+                rTexR = rainR.next(cutoffAlpha: cutAlpha) * 0.58
             }
 
-            // --- 5. Mix active modes ---
-            let fL = lpPad2L * 0.96 + bellL * 0.62 + rainLp2L * 0.14
-            let fR = lpPad2R * 0.96 + bellR * 0.62 + rainLp2R * 0.14
+            // 4. Mix into Dry Bus + 4×4 Hadamard Stereo Room Reverb
+            let dryL = fcL + mcL + scL + padLpL + bsL + pulseSub + rTexL
+            let dryR = fcR + mcR + scR + padLpR + bsR + pulseSub + rTexR
 
-            let pL = lpPad2L * 0.72 + pulseSig + bellL * 0.75 + rainLp2L * 0.16
-            let pR = lpPad2R * 0.72 + pulseSig + bellR * 0.75 + rainLp2R * 0.16
+            let revInL = dryL + strCleanL * 0.55
+            let revInR = dryR + strCleanR * 0.55
+            let (wetL, wetR) = room.process(revInL, revInR, decay: mode == .drift ? 0.84 : 0.79)
 
-            let rL = rainL * 1.08 + lpPad2L * 0.15
-            let rR = rainR * 1.08 + lpPad2R * 0.15
+            var mixL = dryL + wetL * 0.34
+            var mixR = dryR + wetR * 0.34
 
-            let dL = lpPad2L * 0.55 + bellL * 1.25
-            let dR = lpPad2R * 0.55 + bellR * 1.25
+            // 5. Master Tone Bus: 95 Hz rumble cut + gentle 2.4 kHz presence + anti-fatigue air roll-off
+            masterHpL += (mixL - masterHpL) * rumHPAlpha
+            masterHpR += (mixR - masterHpR) * rumHPAlpha
+            mixL -= masterHpL
+            mixR -= masterHpR
 
-            var dryL = fL * wFocus + pL * wPulse + rL * wRain + dL * wDrift
-            var dryR = fR * wFocus + pR * wPulse + rR * wRain + dR * wDrift
+            // Subtle presence lift for MacBook speakers
+            presenceBpL += (mixL - presenceBpL) * presAlpha
+            presenceBpR += (mixR - presenceBpR) * presAlpha
+            let hiMidL = mixL - presenceBpL
+            let hiMidR = mixR - presenceBpR
+            mixL += hiMidL * 0.16
+            mixR += hiMidR * 0.16
 
-            // Optional warm completion chime (open fifth A4 + E5)
-            var chimeSig: Float = 0
-            if chimeEnv > 0.0004 {
-                chimePhase1 += 440.0 * invSR
-                chimePhase2 += 659.25 * invSR
-                if chimePhase1 >= 1.0 { chimePhase1 -= 1.0 }
-                if chimePhase2 >= 1.0 { chimePhase2 -= 1.0 }
-                let ce = chimeEnv * chimeEnv * (1.0 - chimeEnv * chimeEnv * chimeEnv) * 1.6
-                chimeSig = Float(sin(chimePhase1 * twoPi) + 0.65 * sin(chimePhase2 * twoPi)) * ce * 0.24
-                chimeEnv *= Float(1.0 - invSR * 0.26)
-                dryL += chimeSig
-                dryR += chimeSig
+            // Smooth upper-air roll-off (keeps >5 kHz fatigue energy tightly bounded)
+            masterLpL += (mixL - masterLpL) * masterLPAlpha
+            masterLpR += (mixR - masterLpR) * masterLPAlpha
+            mixL = masterLpL
+            mixR = masterLpR
+
+            // 6. Gentle bus glue compressor (-21 dB threshold, 1.6:1 ratio)
+            let instLevel = max(abs(mixL), abs(mixR))
+            let compCoeff: Float = instLevel > compEnv ? 0.0007 : 0.00005
+            compEnv += (instLevel - compEnv) * compCoeff
+            let threshold: Float = 0.09 // ~-21 dBFS
+            let compGain: Float
+            if compEnv > threshold {
+                let over = compEnv / threshold
+                compGain = pow(over, -0.375) // 1.6:1 ratio
+            } else {
+                compGain = 1.0
             }
 
-            // --- 6. True 4x4 Hadamard FDN Reverb (zero metallic ringing, velvet studio hall) ---
-            let t0 = b0[idx0], t1 = b1[idx1], t2 = b2[idx2], t3 = b3[idx3]
-            // Per-line high-frequency air damping
-            fdnDamp[0] += (t0 - fdnDamp[0]) * 0.22
-            fdnDamp[1] += (t1 - fdnDamp[1]) * 0.20
-            fdnDamp[2] += (t2 - fdnDamp[2]) * 0.18
-            fdnDamp[3] += (t3 - fdnDamp[3]) * 0.16
+            // Output scaling + Flow completion chime
+            var finalL = mixL * compGain * 2.15 * masterEnv * smoothVol
+            var finalR = mixR * compGain * 2.15 * masterEnv * smoothVol
 
-            let y0 = fdnDamp[0], y1 = fdnDamp[1], y2 = fdnDamp[2], y3 = fdnDamp[3]
-            // Unitary 4x4 Hadamard feedback matrix (scale 0.5 * fbGain)
-            let fb: Float = 0.5 * (0.76 + wDrift * 0.08 - wRain * 0.16)
-            let h0 = (y0 + y1 + y2 + y3) * fb
-            let h1 = (y0 - y1 + y2 - y3) * fb
-            let h2 = (y0 + y1 - y2 - y3) * fb
-            let h3 = (y0 - y1 - y2 + y3) * fb
+            if chimeVoiceA.active || chimeVoiceB.active {
+                let (cAL, cAR) = chimeVoiceA.step(dt: dt, sineTable: bank.sineTable)
+                let (cBL, cBR) = chimeVoiceB.step(dt: dt, sineTable: bank.sineTable)
+                finalL += (cAL + cBL) * 1.4
+                finalR += (cAR + cBR) * 1.4
+            }
 
-            b0[idx0] = h0 + dryL * 0.45
-            b1[idx1] = h1 + dryR * 0.45
-            b2[idx2] = h2 + dryL * 0.35
-            b3[idx3] = h3 + dryR * 0.35
+            // Soft safety limiter (never clips)
+            finalL = tanh(finalL * 0.95) * 0.95
+            finalR = tanh(finalR * 0.95) * 0.95
 
-            idx0 += 1; if idx0 >= len0 { idx0 = 0 }
-            idx1 += 1; if idx1 >= len1 { idx1 = 0 }
-            idx2 += 1; if idx2 >= len2 { idx2 = 0 }
-            idx3 += 1; if idx3 >= len3 { idx3 = 0 }
-
-            let wetL = (y0 + y2) * 0.55
-            let wetR = (y1 + y3) * 0.55
-            let wetAmt = wFocus * 0.44 + wPulse * 0.34 + wRain * 0.18 + wDrift * 0.58
-
-            // Gentle ~6kHz ear-fatigue air roll-off + analog soft saturation
-            let mixedL = (dryL + wetL * wetAmt) * totalGain + chimeSig * 0.35
-            let mixedR = (dryR + wetR * wetAmt) * totalGain + chimeSig * 0.35
-            outAirLpL += (mixedL - outAirLpL) * 0.52
-            outAirLpR += (mixedR - outAirLpR) * 0.52
-
-            outL[i] = tanh(outAirLpL * 1.12)
-            outR[i] = tanh(outAirLpR * 1.12)
+            outL[i] = finalL
+            outR[i] = finalR
+            blockPeak = max(blockPeak, abs(finalL), abs(finalR))
         }
 
-        fdnIdxs[0] = idx0; fdnIdxs[1] = idx1; fdnIdxs[2] = idx2; fdnIdxs[3] = idx3
+        isAudibleOutput = blockPeak > 0.0008
     }
 }

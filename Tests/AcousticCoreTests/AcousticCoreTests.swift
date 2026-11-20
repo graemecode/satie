@@ -279,4 +279,68 @@ struct AcousticCoreTests {
         #expect(p2.origin.y + panel.height <= visible.maxY - 8)
         #expect(abs((p2.origin.x + panel.width * 0.5) - visibleBtn.midX) <= 1.0)
     }
+
+    @Test("SatieScore is deterministic, varies on Pass 2+, stays strictly in key, and handles sleep wake cleanly")
+    func satieScoreInvariantsAndSleepGuard() {
+        var rngA = SeededRNG(seed: 42)
+        var rngB = SeededRNG(seed: 42)
+        let pass1A = (0..<32).map { SatieScore.composeBar(mode: .focus, barIndex: $0, rng: &rngA) }
+        let pass1B = (0..<32).map { SatieScore.composeBar(mode: .focus, barIndex: $0, rng: &rngB) }
+        #expect(pass1A == pass1B)
+
+        // Pass 2+ introduces variation (swaps / dropouts / octave lifts) while preserving harmony
+        let pass2 = (32..<64).map { SatieScore.composeBar(mode: .focus, barIndex: $0, rng: &rngA) }
+        let anySwapped = pass2.contains(where: { $0.didSwapFigure })
+        #expect(anySwapped)
+
+        for bar in pass1A + pass2 {
+            for bell in bar.bells {
+                let pc = ((bell.midi % 12) + 12) % 12
+                #expect(bar.allowedPitchClasses.contains(pc), "Bell MIDI \(bell.midi) left harmony on bar \(bar.barInForm)")
+            }
+            for sus in bar.sustained {
+                let pc = ((sus.midi % 12) + 12) % 12
+                #expect(bar.allowedPitchClasses.contains(pc), "Sustain MIDI \(sus.midi) left harmony on bar \(bar.barInForm)")
+            }
+        }
+
+        // Sleep guard (`stillDue`): ended bar returns zero events; mid-bar drops late bells & trims held notes
+        let bar0 = pass1A[0]
+        let ended = SatieScore.stillDue(bar0, barStart: 0.0, now: bar0.secondsPerBar + 2.0)
+        #expect(ended.bells.isEmpty && ended.sustained.isEmpty)
+
+        let mid = SatieScore.stillDue(bar0, barStart: 0.0, now: 1.5)
+        #expect(mid.bells.allSatisfy { $0.at >= 1.5 })
+        #expect(mid.sustained.allSatisfy { $0.at >= 1.5 && $0.duration >= SatieScore.shortestLateNoteSeconds })
+    }
+
+    @Test("Psychoacoustic spectral meter confirms laptop-speaker survival and low >5.5kHz fatigue energy")
+    func psychoacousticSpectralGrading() {
+        let dsp = AcousticDSP()
+        for mode in FocusSoundscape.allCases {
+            let (l, r) = FocusSoundEngine.renderOfflineTestBlock(
+                mode: mode,
+                circadian: .afternoon,
+                frames: 4096,
+                ducked: false,
+                warmupFrames: 36_000,
+                seed: 7
+            )
+            let rb = StereoRingBuffer()
+            l.withUnsafeBufferPointer { lb in
+                r.withUnsafeBufferPointer { rbPtr in
+                    rb.writePlanar(leftSrc: lb.baseAddress!, rightSrc: rbPtr.baseAddress!, frameCount: l.count)
+                }
+            }
+            var snap = AcousticSnapshot.empty
+            for _ in 0..<6 {
+                snap = dsp.process(ringBuffer: rb, sampleRate: 48_000, dt: 1.0 / 60.0, demoMode: false)
+            }
+            // Midband laptop-speaker range (bands 6..18 ≈ 250 Hz .. 4 kHz) must carry clear energy
+            let midAvg = snap.bands24[6...18].reduce(0, +) / 13.0
+            let highAvg = snap.bands24[21...23].reduce(0, +) / 3.0
+            #expect(midAvg > 0.08, "Mode \(mode.shortLabel) too weak in laptop-speaker midband (\(midAvg))")
+            #expect(highAvg < midAvg * 0.95 + 0.25, "Mode \(mode.shortLabel) harsh upper energy too high (\(highAvg))")
+        }
+    }
 }
