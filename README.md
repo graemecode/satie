@@ -6,7 +6,7 @@ Named after **Erik Satie**, who invented *musique d'ameublement* ("furniture mus
 
 **Website & live preview:** [strangechances.com/satie](https://strangechances.com/satie/)
 
-Zero subscriptions, zero virtual audio drivers, zero Electron bloat — **2.4 MB native Apple Silicon app**, **Apple Developer ID signed & notarized**.
+Zero subscriptions, zero virtual audio drivers, zero Electron bloat — **native Apple Silicon app with 45 studio-recorded CC0 acoustic multi-samples + real-time physical & granular synthesis**, **Apple Developer ID signed & notarized**.
 
 ## Install
 
@@ -16,12 +16,12 @@ brew install --cask graemecode/tap/satie
 ```
 
 ### Direct Download
-Download the notarized [Satie-2.4.0.dmg](https://github.com/graemecode/satie/releases/latest/download/Satie-2.4.0.dmg) (macOS 15 Sequoia or later, Apple Silicon), drag **Satie** to **Applications**, and launch.
+Download the notarized [Satie-2.5.0.dmg](https://github.com/graemecode/satie/releases/latest/download/Satie-2.5.0.dmg) (macOS 15 Sequoia or later, Apple Silicon), drag **Satie** to **Applications**, and launch.
 
 > **Tip:** Hide Apple's built-in icon in **System Settings → Menu Bar → Now Playing → Don't Show in Menu Bar**.
 
 ## Why People Keep It Running All Day
-- **Four offline procedural pieces (`FOCUS` Soft Light · `PULSE` Kinetic · `RAIN` Rain & Glass · `DRIFT` Gymnopédie):** Powered by a pure-Swift deterministic 32-bar score engine (`SatieScore`) and lock-free physical-modeling synthesizer (`AVAudioSourceNode`) — FM glassy bells (`-3¢/+3¢`, decaying modulation depth, `2×/4×/9×` overtones, asymmetric `tanh` pickup), 3-player wooden-body bowed strings (`520 / 1,150 / 2,900 Hz` formant tables + delayed vibrato), Pass 2+ harmony-preserving figure swaps & pentatonic water glints, tempo-synced dotted echo, dual-LFO chorus, and 4×4 Hadamard bandpass room reverb. Zero audio sample files.
+- **Four distinct studio-grade worlds (`FOCUS` Soft Light · `PULSE` Kinetic · `RAIN` Rain & Glass · `DRIFT` Gymnopédie):** Fuses **45 studio-recorded CC0-1.0 acoustic multi-samples** (Versilian Studios / VCSL Upright Felt Piano, Soft-Mallet Vibraphone, Concert Harp, Bowed Cello Section, Friction-Bowed Wine Glasses) played via 4-point Hermite cubic interpolation with **Mutable Instruments *Rings*** 56-mode physical modal resonators, **Mutable Instruments *Beads*** 14-grain live stereo granular clouds (octave shimmer & reverse halos), **3D Woodworth Binaural spatialization**, **3-layer Minnaert physical rainfall**, **Roland RE-201-style wow/flutter Tape Space Echo**, an **8×8 modulated Hadamard FDN acoustic chamber** with early reflections & 4-stage allpass diffusion, **Eno prime-length (5/7/11/13-bar) macro evolution**, and a **24 dB/oct elliptical vinyl-mastering output bus** (strict mono sub-bass, RMS optical glue, 2.5 ms lookahead true-peak limiter) — all lock-free and allocation-free on the Core Audio thread at ~3.5% CPU.
 - **Auto-ducks for calls & music:** Uses Core Audio Process Taps to detect when Zoom, Loom, YouTube, Chrome, or Spotify starts playing — smoothly fades out your focus soundscape, visualizes your external audio live, and gently blooms back in after silence returns.
 - **Flow Session Timer (`∞` / `25M` / `50M`):** Subtle hairline progress arc ending with a single warm open-fifth chime.
 

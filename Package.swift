@@ -14,6 +14,9 @@ let package = Package(
         .target(
             name: "AcousticCore",
             path: "Sources/AcousticCore",
+            resources: [
+                .copy("Resources/Samples")
+            ],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("ApplicationServices"),

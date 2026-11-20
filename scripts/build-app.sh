@@ -6,8 +6,8 @@ APP_NAME="Satie"
 DISPLAY_NAME="Satie"
 BUNDLE_ID="com.strangechances.Satie"
 TEAM_ID="6KM3577ETV"
-VERSION="2.4.0"
-BUILD_NUM="11"
+VERSION="2.5.0"
+BUILD_NUM="12"
 BUILD_DIR="$ROOT_DIR/build"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 CONTENTS="$APP_BUNDLE/Contents"
@@ -65,6 +65,11 @@ rm -rf "$ICONSET"
 swift "$ROOT_DIR/scripts/make-icon.swift" "$ICONSET"
 iconutil -c icns "$ICONSET" -o "$RES_DIR/AppIcon.icns"
 rm -rf "$ICONSET"
+
+if [[ -d "$ROOT_DIR/Sources/AcousticCore/Resources/Samples" ]]; then
+  echo "==> Bundling CC0 studio acoustic samples..."
+  cp -R "$ROOT_DIR/Sources/AcousticCore/Resources/Samples" "$RES_DIR/Samples"
+fi
 
 echo "==> Writing Info.plist..."
 cat > "$CONTENTS/Info.plist" << EOF

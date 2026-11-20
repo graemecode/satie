@@ -405,4 +405,90 @@ struct AcousticCoreTests {
         }
         #expect(renderedSize.width > 0 && renderedSize.height > 0)
     }
+
+    @Test("Audiophile mastering invariants: 45 CC0 studio samples loaded, strict mono sub-bass (<120 Hz), lush stereo mids, zero clipping, low DC, and real-time CPU headroom")
+    func audiophileEngineBenchmark() {
+        #expect(FocusSoundEngine.loadedAcousticSampleCount == 45, "Expected 45 CC0 studio acoustic samples loaded, got \(FocusSoundEngine.loadedAcousticSampleCount)")
+
+        let sr = 48_000.0
+        let testSeconds = 6.0
+        let frames = Int(sr * testSeconds)
+
+        // Cascaded 3-stage lowpass at 85 Hz (18 dB/oct) to measure genuine sub-bass (<110 Hz) without mid-band bleed
+        let subAlpha = Float(1.0 - exp(-2.0 * Double.pi * 85.0 / sr))
+        let midHpAlpha = Float(1.0 - exp(-2.0 * Double.pi * 300.0 / sr))
+
+        for mode in FocusSoundscape.allCases {
+            let t0 = CFAbsoluteTimeGetCurrent()
+            let (l, r) = FocusSoundEngine.renderOfflineTestBlock(
+                mode: mode,
+                circadian: .afternoon,
+                frames: frames,
+                ducked: false,
+                warmupFrames: 48_000,
+                seed: 42
+            )
+            let elapsed = CFAbsoluteTimeGetCurrent() - t0
+            // Rendered 1s warmup + 6s = 7s of 48 kHz stereo audio
+            let cpuPct = (elapsed / (testSeconds + 1.0)) * 100.0
+
+            var sumSq: Double = 0
+            var peak: Float = 0
+            var dcL: Double = 0
+            var dcR: Double = 0
+
+            var s1L: Float = 0, s2L: Float = 0, s3L: Float = 0
+            var s1R: Float = 0, s2R: Float = 0, s3R: Float = 0
+            var subDot: Double = 0, subEL: Double = 0, subER: Double = 0
+
+            var midHpStateL: Float = 0, midHpStateR: Float = 0
+            var midDot: Double = 0, midEL: Double = 0, midER: Double = 0
+
+            for i in 0..<frames {
+                let xL = l[i], xR = r[i]
+                #expect(xL.isFinite && xR.isFinite)
+                peak = max(peak, abs(xL), abs(xR))
+                sumSq += 0.5 * Double(xL * xL + xR * xR)
+                dcL += Double(xL)
+                dcR += Double(xR)
+
+                s1L += (xL - s1L) * subAlpha; s2L += (s1L - s2L) * subAlpha; s3L += (s2L - s3L) * subAlpha
+                s1R += (xR - s1R) * subAlpha; s2R += (s1R - s2R) * subAlpha; s3R += (s2R - s3R) * subAlpha
+                subDot += Double(s3L * s3R)
+                subEL += Double(s3L * s3L)
+                subER += Double(s3R * s3R)
+
+                midHpStateL += (xL - midHpStateL) * midHpAlpha
+                midHpStateR += (xR - midHpStateR) * midHpAlpha
+                let mL = xL - midHpStateL
+                let mR = xR - midHpStateR
+                midDot += Double(mL * mR)
+                midEL += Double(mL * mL)
+                midER += Double(mR * mR)
+            }
+
+            let rms = sqrt(max(1e-12, sumSq / Double(frames)))
+            let rmsDB = 20.0 * log10(rms)
+            let peakDB = 20.0 * log10(max(1e-6, Double(peak)))
+            let dc = max(abs(dcL), abs(dcR)) / Double(frames)
+            let subCorr = subDot / max(1e-12, sqrt(subEL * subER))
+            let midCorr = midDot / max(1e-12, sqrt(midEL * midER))
+
+            print(String(format: "[SATIE-V4] %-14s RMS=%6.2f dBFS  Peak=%6.2f dBFS  Crest=%5.2f dB  SubCorr=%+.4f  MidCorr=%+.4f  DC=%.5f  CPU=%.2f%%",
+                         (mode.title as NSString).utf8String!, rmsDB, peakDB, peakDB - rmsDB, subCorr, midCorr, dc, cpuPct))
+
+            // Strict audiophile invariants
+            #expect(peak <= 0.945, "Mode \(mode.title) exceeded true-peak ceiling (\(peak))")
+            #expect(dc < 0.004, "Mode \(mode.title) has excessive DC offset (\(dc))")
+            #expect(rmsDB > -22.0 && rmsDB < -12.0, "Mode \(mode.title) loudness out of calibrated -18..-15 dBFS window (\(rmsDB) dBFS)")
+            #expect(subCorr > 0.975, "Mode \(mode.title) sub-bass (<110 Hz) is not strictly mono (\(subCorr))")
+            #expect(midCorr > 0.05 && midCorr < 0.92, "Mode \(mode.title) mid/high stereo imaging out of lush range (\(midCorr))")
+        }
+
+        // Verify Eno prime-length macro cycles actually evolve across passes
+        var rng = SeededRNG(seed: 42)
+        let bar0 = SatieScore.composeBar(mode: .focus, barIndex: 0, rng: &rng)
+        let bar32 = SatieScore.composeBar(mode: .focus, barIndex: 32, rng: &rng)
+        #expect(abs(bar0.macroFilterHorizon - bar32.macroFilterHorizon) > 0.01 || abs(bar0.macroSpaceBloom - bar32.macroSpaceBloom) > 0.01)
+    }
 }

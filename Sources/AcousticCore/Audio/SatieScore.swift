@@ -82,12 +82,17 @@ public struct ComposedBar: Sendable, Equatable {
     public let barInForm: Int
     public let pass: Int
     public let chordName: String
+    public let rootMidi: Int
     public let secondsPerBeat: Double
     public let secondsPerBar: Double
     public let bells: [ScoredBellEvent]
     public let sustained: [ScoredSustainEvent]
     public let didSwapFigure: Bool
     public let allowedPitchClasses: Set<Int>
+    /// Eno incommensurate prime-length (5, 7, 11, 13 bar) macro evolution curves ∈ [0, 1]
+    public let macroFilterHorizon: Double
+    public let macroSpaceBloom: Double
+    public let macroResonance: Double
 }
 
 /// Pure, deterministic, audio-free score generator for Satie's four work soundscapes.
@@ -168,6 +173,21 @@ public enum SatieScore {
     ]
     private static let dorianGlints: [Int] = [81, 84, 86, 88, 91, 93]
 
+    // MARK: - Rain & Glass (60 BPM Hiroshi Yoshimura 'Green' F Lydian / C Major9 kankyō ongaku)
+
+    private static let chordFmaj9 = ChordDef(name: "Fmaj7", root: 41, figure: [53, 60, 64, 67, 72, 69, 64, 60], held: [53, 60, 64, 67])
+    private static let chordCmaj9 = ChordDef(name: "Cadd9", root: 48, figure: [55, 60, 62, 67, 71, 67, 64, 60], held: [55, 60, 62, 67])
+    private static let chordDm11  = ChordDef(name: "Dm9",   root: 38, figure: [50, 57, 60, 64, 67, 64, 60, 57], held: [50, 57, 60, 64])
+    private static let chordAm9   = ChordDef(name: "Am7",   root: 45, figure: [57, 60, 64, 67, 71, 67, 64, 60], held: [57, 60, 64, 67])
+
+    private static let rainForm: [ChordDef] = [
+        chordFmaj9, chordFmaj9, chordCmaj9, chordCmaj9, chordFmaj9, chordFmaj9, chordAm9, chordAm9,
+        chordDm11, chordDm11, chordCmaj9, chordCmaj9, chordFmaj9, chordFmaj9, chordCmaj9, chordCmaj9,
+        chordAm9, chordAm9, chordFmaj9, chordFmaj9, chordDm11, chordDm11, chordCmaj9, chordCmaj9,
+        chordFmaj9, chordFmaj9, chordAm9, chordAm9, chordDm11, chordCmaj9, chordFmaj9, chordFmaj9,
+    ]
+    private static let rainGlints: [Int] = [79, 81, 84, 86, 88, 91]
+
     // MARK: - Gymnopédie / Drift (54 BPM Gmaj7 <-> Dmaj7 nocturnal spaciousness)
 
     private static let chordGmaj7 = ChordDef(name: "Gmaj7", root: 43, figure: [55, 59, 62, 66, 71, 66, 62, 59], held: [55, 59, 62, 66])
@@ -244,13 +264,27 @@ public enum SatieScore {
         case .focus:
             form = softLightForm
             glints = softLightGlints
-        case .pulse, .rain:
+        case .pulse:
             form = pulseForm
             glints = dorianGlints
+        case .rain:
+            form = rainForm
+            glints = rainGlints
         case .drift:
             form = driftForm
             glints = driftGlints
         }
+
+        // Brian Eno incommensurate prime-length macro cycles (5, 7, 11, 13 bars -> 5,005-bar non-repeating arc)
+        let bD = Double(barIndex)
+        let cyc5  = 0.5 + 0.5 * sin(2.0 * Double.pi * bD / 5.0)
+        let cyc7  = 0.5 + 0.5 * sin(2.0 * Double.pi * bD / 7.0 + 0.9)
+        let cyc11 = 0.5 + 0.5 * sin(2.0 * Double.pi * bD / 11.0 + 1.8)
+        let cyc13 = 0.5 + 0.5 * sin(2.0 * Double.pi * bD / 13.0 + 2.7)
+        let macroFilterHorizon = 0.55 + 0.45 * (0.6 * cyc5 + 0.4 * cyc13)
+        let macroSpaceBloom    = 0.35 + 0.65 * cyc7
+        let macroResonance     = 0.25 + 0.75 * (0.5 * cyc11 + 0.5 * cyc5)
+        let maSilenceWindow    = (barIndex > 1 && cyc11 > 0.88) // Authentic Japanese Ma (間) breathing rest
 
         let chord = form[bar]
         let fullness = softLightFullness[bar]
@@ -362,12 +396,14 @@ public enum SatieScore {
             }
 
         case .pulse:
-            // Driving 8th-note marimba/FM arpeggio with rhythmic accents
+            // Donato Dozzy / Floating Points hypnotic arpeggio + polyrhythmic 3:4 Buchla vactrol counter-plucks
             for (step, rawMidi) in figure.enumerated() {
                 if section == 0 && step == 7 { continue }
                 let accent = (step == 0 || step == 3 || step == 6) ? 1.0 : 0.62
                 let velocity = accent * rng.between(0.84, 1.0)
-                let at = max(0.0, Double(step) * 0.5 * spb + rng.between(-0.003, 0.005))
+                // Subtle micro-swing (+10ms on odd 8ths) gives warm analog groove
+                let swingOffset = (step % 2 == 1) ? 0.010 : 0.0
+                let at = max(0.0, Double(step) * 0.5 * spb + swingOffset + rng.between(-0.002, 0.004))
                 let midi = rawMidi + shift
                 bells.append(ScoredBellEvent(
                     kind: .figure,
@@ -375,79 +411,53 @@ public enum SatieScore {
                     midi: midi,
                     duration: 0.42,
                     velocity: velocity,
-                    level: 0.155 * velocity * fullness,
-                    pan: -0.42 + 0.14 * Double(step % 4)
+                    level: 0.145 * velocity * fullness,
+                    pan: -0.36 + 0.12 * Double(step % 4)
                 ))
-                if section >= 1 && (step == 0 || step == 4) {
-                    bells.append(ScoredBellEvent(
-                        kind: .melody,
-                        at: at + 0.008,
-                        midi: midi + 12,
-                        duration: 0.35,
-                        velocity: 0.58,
-                        level: 0.045 * fullness,
-                        pan: 0.38
-                    ))
-                }
             }
-            if rng.nextUnit() < 0.40 {
+            // Polyrhythmic 3-against-4 Buchla LPG counter-plucks (displaced across the 4-beat bar)
+            let polyOffsets: [Double] = [0.0, 1.3333, 2.6667]
+            for (idx, beatPos) in polyOffsets.enumerated() {
+                if section == 0 && idx == 2 { continue }
+                if pass > 0 && rng.nextUnit() < 0.25 { continue }
+                let rawMidi = figure[(idx * 2 + (bar % 3)) % figure.count]
+                let midi = rawMidi + 12 + shift
+                bells.append(ScoredBellEvent(
+                    kind: .melody,
+                    at: beatPos * spb + 0.006,
+                    midi: midi,
+                    duration: 0.34,
+                    velocity: rng.between(0.55, 0.85),
+                    level: 0.068 * fullness * (0.75 + 0.25 * cyc13),
+                    pan: idx == 1 ? -0.48 : 0.48
+                ))
+            }
+            if rng.nextUnit() < 0.35 {
                 let midi = glints[rng.nextInt(glints.count)] + shift
                 bells.append(ScoredBellEvent(
                     kind: .glint,
                     at: rng.between(0.0, barLen),
                     midi: midi,
-                    duration: 0.18,
-                    velocity: 0.28,
+                    duration: 0.20,
+                    velocity: 0.26,
                     level: rng.between(0.012, 0.022),
                     pan: rng.between(-0.65, 0.65)
                 ))
             }
 
         case .rain:
-            // Ultra-sparse low felt bells floating inside lush rainfall
-            if bar % 2 == 0 || rng.nextUnit() < 0.45 {
-                let idx = rng.nextInt(min(4, figure.count))
+            // Hiroshi Yoshimura 'Green': sparse resonant crystal singing bowls floating inside 3-layer rainfall
+            if !maSilenceWindow && (bar % 2 == 0 || rng.nextUnit() < 0.42) {
+                let idx = rng.nextInt(min(5, figure.count))
                 let midi = figure[idx] + shift
                 bells.append(ScoredBellEvent(
                     kind: .melody,
-                    at: rng.between(0.1, barLen * 0.65),
+                    at: rng.between(0.15, barLen * 0.62),
                     midi: midi,
-                    duration: 1.4,
-                    velocity: rng.between(0.60, 0.82),
-                    level: 0.085 * fullness,
-                    pan: rng.between(-0.45, 0.45)
-                ))
-            }
-            if rng.nextUnit() < 0.60 {
-                let midi = glints[rng.nextInt(glints.count)] + shift
-                bells.append(ScoredBellEvent(
-                    kind: .glint,
-                    at: rng.between(0.0, barLen),
-                    midi: midi,
-                    duration: 0.26,
-                    velocity: 0.26,
-                    level: rng.between(0.012, 0.022),
-                    pan: rng.between(-0.75, 0.75)
-                ))
-            }
-
-        case .drift:
-            // Gymnopédie / nocturnal kankyō ongaku: generous silence + slow luminous bell phrases
-            let stepsToPlay = (section == 0 || section == 3) ? [0, 4] : [0, 3, 6]
-            for step in stepsToPlay where step < figure.count {
-                if pass > 0 && rng.nextUnit() < 0.22 { continue }
-                let velocity = rng.between(0.68, 0.90)
-                let at = Double(step) * 0.5 * spb + rng.between(-0.008, 0.016)
-                let octaveLift = (pass > 0 && step > 0 && rng.nextUnit() < 0.18) ? 12 : 0
-                let midi = figure[step] + shift + octaveLift
-                bells.append(ScoredBellEvent(
-                    kind: .melody,
-                    at: max(0, at),
-                    midi: midi,
-                    duration: 1.65,
-                    velocity: velocity,
-                    level: 0.135 * velocity * fullness,
-                    pan: step == 0 ? -0.22 : 0.26
+                    duration: 1.85,
+                    velocity: rng.between(0.58, 0.82),
+                    level: 0.095 * fullness,
+                    pan: rng.between(-0.48, 0.48)
                 ))
             }
             if rng.nextUnit() < 0.55 {
@@ -456,9 +466,43 @@ public enum SatieScore {
                     kind: .glint,
                     at: rng.between(0.0, barLen),
                     midi: midi,
-                    duration: 0.30,
+                    duration: 0.34,
                     velocity: 0.28,
-                    level: rng.between(0.012, 0.022),
+                    level: rng.between(0.015, 0.026),
+                    pan: rng.between(-0.75, 0.75)
+                ))
+            }
+
+        case .drift:
+            // Gymnopédie / Sakamoto '12' felt piano: authentic Japanese Ma (間) negative space + luminous phrases
+            if !maSilenceWindow {
+                let stepsToPlay = (section == 0 || section == 3) ? [0, 4] : [0, 3, 6]
+                for step in stepsToPlay where step < figure.count {
+                    if pass > 0 && rng.nextUnit() < 0.24 { continue }
+                    let velocity = rng.between(0.62, 0.88)
+                    let at = Double(step) * 0.5 * spb + rng.between(-0.010, 0.022)
+                    let octaveLift = (pass > 0 && step > 0 && rng.nextUnit() < 0.16) ? 12 : 0
+                    let midi = figure[step] + shift + octaveLift
+                    bells.append(ScoredBellEvent(
+                        kind: .melody,
+                        at: max(0, at),
+                        midi: midi,
+                        duration: 1.95,
+                        velocity: velocity,
+                        level: 0.140 * velocity * fullness,
+                        pan: step == 0 ? -0.24 : 0.28
+                    ))
+                }
+            }
+            if rng.nextUnit() < 0.42 {
+                let midi = glints[rng.nextInt(glints.count)] + shift
+                bells.append(ScoredBellEvent(
+                    kind: .glint,
+                    at: rng.between(0.0, barLen),
+                    midi: midi,
+                    duration: 0.35,
+                    velocity: 0.26,
+                    level: rng.between(0.010, 0.019),
                     pan: rng.between(-0.72, 0.72)
                 ))
             }
@@ -521,12 +565,16 @@ public enum SatieScore {
             barInForm: bar,
             pass: pass,
             chordName: chord.name,
+            rootMidi: chord.root + shift,
             secondsPerBeat: spb,
             secondsPerBar: barLen,
             bells: bells,
             sustained: sustained,
             didSwapFigure: didSwap,
-            allowedPitchClasses: allowed
+            allowedPitchClasses: allowed,
+            macroFilterHorizon: macroFilterHorizon,
+            macroSpaceBloom: macroSpaceBloom,
+            macroResonance: macroResonance
         )
     }
 
@@ -540,12 +588,16 @@ public enum SatieScore {
                 barInForm: bar.barInForm,
                 pass: bar.pass,
                 chordName: bar.chordName,
+                rootMidi: bar.rootMidi,
                 secondsPerBeat: bar.secondsPerBeat,
                 secondsPerBar: bar.secondsPerBar,
                 bells: [],
                 sustained: [],
                 didSwapFigure: bar.didSwapFigure,
-                allowedPitchClasses: bar.allowedPitchClasses
+                allowedPitchClasses: bar.allowedPitchClasses,
+                macroFilterHorizon: bar.macroFilterHorizon,
+                macroSpaceBloom: bar.macroSpaceBloom,
+                macroResonance: bar.macroResonance
             )
         }
         let late = max(0.0, now - barStart)
@@ -568,12 +620,16 @@ public enum SatieScore {
             barInForm: bar.barInForm,
             pass: bar.pass,
             chordName: bar.chordName,
+            rootMidi: bar.rootMidi,
             secondsPerBeat: bar.secondsPerBeat,
             secondsPerBar: bar.secondsPerBar,
             bells: keptBells,
             sustained: keptSustained,
             didSwapFigure: bar.didSwapFigure,
-            allowedPitchClasses: bar.allowedPitchClasses
+            allowedPitchClasses: bar.allowedPitchClasses,
+            macroFilterHorizon: bar.macroFilterHorizon,
+            macroSpaceBloom: bar.macroSpaceBloom,
+            macroResonance: bar.macroResonance
         )
     }
 }
