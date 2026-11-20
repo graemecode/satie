@@ -2,12 +2,6 @@ import AcousticCore
 import AppKit
 import SwiftUI
 
-private enum PopoverDrawer: Equatable {
-    case none
-    case timer
-    case sculpt
-}
-
 struct PopoverView: View {
     @ObservedObject var state: AppState
     let onOpenMiniHUD: () -> Void
@@ -16,8 +10,10 @@ struct PopoverView: View {
     let onQuit: () -> Void
     var onRequestResize: (() -> Void)? = nil
 
-    @State private var activeDrawer: PopoverDrawer = .none
+    @State private var showOptions: Bool = false
     @State private var presetWhisper: String? = nil
+
+    private let timerPresets: [Int] = [0, 15, 25, 45, 60, 90]
 
     private let hair = Color.white.opacity(0.14)
     private let hairSoft = Color.white.opacity(0.08)
@@ -185,36 +181,33 @@ struct PopoverView: View {
             }
             .padding(.top, 1)
 
-            // 3. Dead-Center Braun Transport Triad: [⏱ Timer]   [▶/⏸ Hero White]   [≡ Sculpt]
+            // 3. Pure Dead-Center Play / Pause + One Consolidated Options Button
             HStack(spacing: 16) {
-                // Left wing (right-aligned so countdown pill expands leftward without shifting Play/Pause)
+                // Left wing: Previous Track for external playback, or live timer pill ONLY when a timer is set
                 HStack(spacing: 10) {
                     if !state.isFocusAudible && state.metadata.canControlPlayback {
                         CircularControlButton(systemName: "backward.fill", isActive: false, help: "Previous Track") {
                             state.media.previousTrack()
                         }
-                    } else {
+                    } else if let countdown = compactCountdown {
                         Button {
-                            toggleDrawer(.timer)
+                            toggleOptions()
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "timer")
-                                    .font(.system(size: 12.5, weight: .medium))
-                                if let countdown = compactCountdown {
-                                    Text(countdown)
-                                        .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
-                                }
+                                    .font(.system(size: 10.5, weight: .medium))
+                                Text(countdown)
+                                    .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
                             }
-                            .foregroundColor(activeDrawer == .timer ? .black : (state.flowMinutes > 0 ? .white : inkSoft))
-                            .padding(.horizontal, compactCountdown != nil ? 10 : 0)
-                            .frame(minWidth: 34, minHeight: 34)
-                            .frame(height: 34)
-                            .background(activeDrawer == .timer ? Color.white : Color.white.opacity(state.flowMinutes > 0 ? 0.13 : 0.06))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .frame(height: 30)
+                            .background(Color.white.opacity(0.11))
                             .clipShape(Capsule())
-                            .overlay(Capsule().stroke(activeDrawer == .timer ? Color.clear : hairSoft, lineWidth: 1))
+                            .overlay(Capsule().stroke(hairSoft, lineWidth: 1))
                         }
                         .buttonStyle(.plain)
-                        .help("Focus Timer & Circadian Curve")
+                        .help("Adjust or clear sleep timer")
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
@@ -241,7 +234,7 @@ struct PopoverView: View {
                 .buttonStyle(.plain)
                 .help(state.isFocusPlaying ? "Pause \(state.focusMode.title) (Space)" : "Play \(state.focusMode.title) (Space)")
 
-                // Right wing (left-aligned to mirror left wing)
+                // Right wing: One consolidated Options button (plus amber mute indicator only when Mac is muted)
                 HStack(spacing: 10) {
                     if !state.isFocusAudible && state.metadata.canControlPlayback {
                         CircularControlButton(systemName: "forward.fill", isActive: false, help: "Next Track") {
@@ -250,11 +243,11 @@ struct PopoverView: View {
                     } else {
                         CircularControlButton(
                             systemName: "slider.horizontal.3",
-                            isActive: activeDrawer == .sculpt,
-                            hasIndicatorDot: state.maskingBed != .off,
-                            help: "Sound options (Background noise, Pause for calls)"
+                            isActive: showOptions,
+                            hasIndicatorDot: state.maskingBed != .off || state.flowMinutes > 0,
+                            help: "Options (Timer, Background noise, Pause for calls)"
                         ) {
-                            toggleDrawer(.sculpt)
+                            toggleOptions()
                         }
                     }
 
@@ -273,20 +266,15 @@ struct PopoverView: View {
             }
             .padding(.vertical, 2)
 
-            // 4. Inline Volume Hairline (always 1 drag away when playing and sculptor drawer is closed)
-            if state.isFocusPlaying && activeDrawer != .sculpt {
+            // 4. Inline Volume Hairline (always 1 drag away when playing and options drawer is closed)
+            if state.isFocusPlaying && !showOptions {
                 volumeSliderRow
                     .padding(.horizontal, 4)
             }
 
-            // 5. Expandable Contextual Drawer: Braun/Leica Radial Timer OR Live Sound Sculptor
-            if activeDrawer == .timer {
-                RadialTimerView(state: state) {
-                    toggleDrawer(.none)
-                }
-                .transition(.opacity)
-            } else if activeDrawer == .sculpt {
-                liveSculptorDrawer
+            // 5. One Consolidated Options Drawer
+            if showOptions {
+                optionsDrawer
                     .transition(.opacity)
             }
 
@@ -309,10 +297,42 @@ struct PopoverView: View {
         )
     }
 
-    // MARK: - Sound Options Drawer (Background Noise + Pause for Calls + Volume + Window Actions)
+    // MARK: - Consolidated Options Drawer (Timer + Background Noise + Pause for Calls + Volume + Window Actions)
 
-    private var liveSculptorDrawer: some View {
-        VStack(spacing: 11) {
+    private var optionsDrawer: some View {
+        VStack(spacing: 12) {
+            // Focus / Sleep Timer
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("TIMER")
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(inkSoft)
+                    Spacer()
+                    Text(timerStatusLabel)
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(state.flowMinutes > 0 ? inkSoft : inkDim)
+                }
+
+                HStack(spacing: 4) {
+                    ForEach(timerPresets, id: \.self) { mins in
+                        let on = state.flowMinutes == mins
+                        Button {
+                            state.setFlowMinutes(mins)
+                            state.performHaptic()
+                        } label: {
+                            Text(mins == 0 ? "∞" : "\(mins)m")
+                                .font(.system(size: 10, weight: on ? .semibold : .regular, design: .monospaced))
+                                .foregroundColor(on ? .black : inkSoft)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 25)
+                                .background(on ? Color.white : Color.white.opacity(0.05))
+                                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
             // Optional Rain or Brown Noise layer underneath any soundscape
             VStack(alignment: .leading, spacing: 6) {
                 VStack(alignment: .leading, spacing: 1) {
@@ -365,7 +385,7 @@ struct PopoverView: View {
 
             volumeSliderRow
 
-            // Quiet 1-line utility footer (keeps main face pure while leaving every window/quit action 1 click away)
+            // Quiet 1-line utility footer
             HStack(spacing: 12) {
                 Button("MINI HUD") { onOpenMiniHUD() }
                     .buttonStyle(QuietTextLinkStyle())
@@ -410,12 +430,19 @@ struct PopoverView: View {
 
     // MARK: - Helpers
 
-    private func toggleDrawer(_ target: PopoverDrawer) {
+    private func toggleOptions() {
         state.performHaptic()
-        activeDrawer = (activeDrawer == target) ? .none : target
+        showOptions.toggle()
         DispatchQueue.main.async {
             onRequestResize?()
         }
+    }
+
+    private var timerStatusLabel: String {
+        if let countdown = compactCountdown {
+            return "\(countdown) REMAINING"
+        }
+        return state.flowMinutes > 0 ? "FADES OUT AFTER \(state.flowMinutes)M" : "NO LIMIT"
     }
 
     private var isShowingVerifiedExternalTrack: Bool {

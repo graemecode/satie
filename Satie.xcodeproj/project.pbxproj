@@ -41,7 +41,6 @@
 		7CE468E46813C7F49CFB098D /* AutoDuckGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47A065BEE6F1EA661BC3BAC9 /* AutoDuckGate.swift */; };
 		8463B97894684EF90CC28AC7 /* SchematicOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC497A2AF3C2921B429F0548 /* SchematicOverlayView.swift */; };
 		850E3CDC515EFD13D4CC23FF /* ServiceManagement.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 72EC84C2CB6EADBE4C0A7780 /* ServiceManagement.framework */; };
-		8F168072423D36D8402BDC27 /* RadialTimerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA117CD8654532BB3562E0F1 /* RadialTimerView.swift */; };
 		97CE96B78B5D3A3AF976489B /* AppKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 81FA047C9BB90CDE3BCB41AA /* AppKit.framework */; };
 		9882E95E27C57C48142B0FBD /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2E99D8026CE501ABDECE5557 /* IOKit.framework */; };
 		99904B12FE64BE0FA1112FB0 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3FBF69E89938FDEEECD64A8 /* AppDelegate.swift */; };
@@ -117,7 +116,6 @@
 		D9F0E70D2C1A26D3B9E6EF9D /* SatieScore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SatieScore.swift; sourceTree = "<group>"; };
 		E54F49B63B355BED408C30E8 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		E6A77F0F102AD2689782C533 /* StudioWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioWindowController.swift; sourceTree = "<group>"; };
-		EA117CD8654532BB3562E0F1 /* RadialTimerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RadialTimerView.swift; sourceTree = "<group>"; };
 		EC8E104331B3F39C4E04B1C7 /* MenuBarIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIconView.swift; sourceTree = "<group>"; };
 		ECF78C003BD8651395C98184 /* MenuBarPositioner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPositioner.swift; sourceTree = "<group>"; };
 		EEB36770D577E1C7C1D5E764 /* MiniHUDWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniHUDWindow.swift; sourceTree = "<group>"; };
@@ -225,7 +223,6 @@
 				EC8E104331B3F39C4E04B1C7 /* MenuBarIconView.swift */,
 				EEB36770D577E1C7C1D5E764 /* MiniHUDWindow.swift */,
 				A3DA4821A4C1D37DA91900FD /* PopoverView.swift */,
-				EA117CD8654532BB3562E0F1 /* RadialTimerView.swift */,
 				C59C66190E52376DA2CF8F48 /* SoundscapeGlyphs.swift */,
 				E6A77F0F102AD2689782C533 /* StudioWindowController.swift */,
 			);
@@ -304,7 +301,7 @@
 			path = Renderer;
 			sourceTree = "<group>";
 		};
-		"TEMP_0E91C9D7-9F0A-4486-8701-2C1928EA9398" /* Resources */ = {
+		"TEMP_27F9B851-3A30-48A0-8B5D-5089CAB96F27" /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -431,7 +428,6 @@
 				F4759CBE84120EB068CD0661 /* MetalVisualizerView.swift in Sources */,
 				E37A650506AFCB8A76C673A8 /* MiniHUDWindow.swift in Sources */,
 				414D266FE2F48BDC9A5138A9 /* PopoverView.swift in Sources */,
-				8F168072423D36D8402BDC27 /* RadialTimerView.swift in Sources */,
 				8463B97894684EF90CC28AC7 /* SchematicOverlayView.swift in Sources */,
 				331C0996E774660614D3B327 /* Shaders.metal in Sources */,
 				3D5920898AAF0757A9524D87 /* SoundscapeGlyphs.swift in Sources */,
