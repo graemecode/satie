@@ -83,9 +83,11 @@ final class AppState: ObservableObject {
         didSet {
             settings.autoDuck = autoDuckEnabled
             if !autoDuckEnabled && isAutoDucked {
+                autoDuckGate.reset()
                 isAutoDucked = false
                 duckedByAppName = nil
                 focusSound.setDucked(false)
+                syncNowPlaying()
             }
         }
     }
@@ -129,7 +131,8 @@ final class AppState: ObservableObject {
     private var menuBarTimer: Timer?
     private var currentMenuBarHz: Double = 24.0
     private var housekeepingTimer: Timer?
-    private var externalSilentSince: CFTimeInterval?
+    private var duckMonitorTimer: Timer?
+    private var autoDuckGate = AutoDuckGate()
     private var isSleeping: Bool = false
     private var sleepObservers: [NSObjectProtocol] = []
 
@@ -243,7 +246,15 @@ final class AppState: ObservableObject {
 
         scheduleMenuBarTimer(hz: 24.0)
 
-        // 1 Hz housekeeping: auto-ducking monitor, flow timer countdown, circadian check, process refresh
+        // 4 Hz notification-immune auto-ducking monitor (zero work when focus sound is off)
+        duckMonitorTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, !self.isSleeping else { return }
+                self.tickAutoDuck()
+            }
+        }
+
+        // 1 Hz housekeeping: flow timer countdown, circadian check, mute sync, process refresh
         housekeepingTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, !self.isSleeping else { return }
@@ -260,6 +271,7 @@ final class AppState: ObservableObject {
         sleepObservers.removeAll()
         menuBarTimer?.invalidate()
         housekeepingTimer?.invalidate()
+        duckMonitorTimer?.invalidate()
         focusSound.stopImmediately()
         nowPlaying.clear()
         media.stop()
@@ -278,9 +290,9 @@ final class AppState: ObservableObject {
         } else {
             focusMode = mode
             circadianPhase = .current()
+            autoDuckGate.reset()
             isAutoDucked = false
             duckedByAppName = nil
-            externalSilentSince = nil
             focusSound.start(mode: mode)
             isFocusPlaying = true
             if flowDuration != .infinite && flowRemainingSeconds == nil {
@@ -292,6 +304,7 @@ final class AppState: ObservableObject {
 
     func stopFocusSound() {
         focusSound.stop()
+        autoDuckGate.reset()
         isFocusPlaying = false
         isAutoDucked = false
         duckedByAppName = nil
@@ -415,8 +428,8 @@ final class AppState: ObservableObject {
             isSystemMuted = muted
         }
 
-        // Refresh process list every 2s (or every 1s while Focus sound is playing for snappy auto-ducking)
-        if isFocusPlaying || housekeepingTickCount % 3 == 0 {
+        // Refresh process list every 3s when idle (4 Hz duck monitor refreshes when focus sound is active)
+        if !isFocusPlaying && housekeepingTickCount % 3 == 0 {
             refreshAudioProcesses()
         }
 
@@ -425,35 +438,6 @@ final class AppState: ObservableObject {
         if nowPhase != circadianPhase {
             circadianPhase = nowPhase
             focusSound.setCircadianPhase(nowPhase)
-        }
-
-        // Auto-duck Focus Sound when ANY external Mac app outputs audio (Zoom, Spotify, Chrome, Loom...)
-        if isFocusPlaying && autoDuckEnabled {
-            let activeExternal = audioProcesses.first(where: { $0.isRunningOutput })
-            if let ext = activeExternal {
-                externalSilentSince = nil
-                if !isAutoDucked || duckedByAppName != ext.name {
-                    isAutoDucked = true
-                    duckedByAppName = ext.name
-                    focusSound.setDucked(true)
-                    syncNowPlaying()
-                    Log.audio.info("Auto-ducked focus soundscape for external app: \(ext.name, privacy: .public)")
-                }
-            } else if isAutoDucked {
-                let now = CACurrentMediaTime()
-                if let since = externalSilentSince {
-                    if now - since >= 2.5 {
-                        isAutoDucked = false
-                        duckedByAppName = nil
-                        externalSilentSince = nil
-                        focusSound.setDucked(false)
-                        syncNowPlaying()
-                        Log.audio.info("External audio ended; smoothly resuming focus soundscape")
-                    }
-                } else {
-                    externalSilentSince = now
-                }
-            }
         }
 
         // Flow Session Timer countdown (pauses gracefully while auto-ducked on a call)
@@ -471,6 +455,27 @@ final class AppState: ObservableObject {
                 }
             } else {
                 flowRemainingSeconds = next
+            }
+        }
+    }
+
+    private func tickAutoDuck() {
+        guard isFocusPlaying && autoDuckEnabled else { return }
+        let procs = ProcessAudioTap.listAudioProcesses()
+        audioProcesses = procs
+        let isTapActive: Bool
+        if case .active = tapStatus { isTapActive = true } else { isTapActive = false }
+        let externalRMS: Float? = isTapActive ? audioTap.ringBuffer.recentRMS(frameCount: 2048) : nil
+        let decision = autoDuckGate.evaluate(now: CACurrentMediaTime(), activeProcesses: procs, externalRMS: externalRMS)
+        if decision.isDucked != isAutoDucked || decision.duckedByAppName != duckedByAppName {
+            isAutoDucked = decision.isDucked
+            duckedByAppName = decision.duckedByAppName
+            focusSound.setDucked(decision.isDucked)
+            syncNowPlaying()
+            if decision.isDucked, let app = decision.duckedByAppName {
+                Log.audio.info("Auto-ducked focus soundscape for sustained audio from \(app, privacy: .public)")
+            } else {
+                Log.audio.info("Sustained external audio ended; smoothly resuming focus soundscape")
             }
         }
     }

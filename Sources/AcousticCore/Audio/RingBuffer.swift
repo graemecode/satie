@@ -84,6 +84,22 @@ public final class StereoRingBuffer: @unchecked Sendable {
         return end
     }
 
+    /// Computes the stereo RMS energy of the latest `frameCount` frames without allocating.
+    public func recentRMS(frameCount: Int = 2048) -> Float {
+        let end = writeIndex.load(ordering: .acquiring)
+        let n = min(frameCount, capacity)
+        guard n > 0 else { return 0 }
+        let start = end &- n
+        var sumSq: Float = 0
+        for i in 0..<n {
+            let slot = (start &+ i) & mask
+            let l = left[slot]
+            let r = right[slot]
+            sumSq += l * l + r * r
+        }
+        return sqrt(sumSq / Float(n * 2))
+    }
+
     public func clear() {
         left.update(repeating: 0, count: capacity)
         right.update(repeating: 0, count: capacity)

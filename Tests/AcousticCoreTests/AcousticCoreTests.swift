@@ -343,4 +343,43 @@ struct AcousticCoreTests {
             #expect(highAvg < midAvg * 0.95 + 0.25, "Mode \(mode.shortLabel) harsh upper energy too high (\(highAvg))")
         }
     }
+
+    @Test("AutoDuckGate ignores notifications, system alerts, and silent streams, but ducks sustained media/calls")
+    func autoDuckNotificationImmunity() {
+        var gate = AutoDuckGate()
+
+        let sysAlert = AudioProcessInfo(objectID: 1, pid: 10, name: "systemsoundserverd", bundleID: "com.apple.systemsoundserverd", isRunningOutput: true)
+        let messages = AudioProcessInfo(objectID: 2, pid: 11, name: "Messages", bundleID: "com.apple.MobileSMS", isRunningOutput: true)
+        let chrome = AudioProcessInfo(objectID: 3, pid: 12, name: "Google Chrome", bundleID: "com.google.Chrome", isRunningOutput: true)
+        let spotify = AudioProcessInfo(objectID: 4, pid: 13, name: "Spotify", bundleID: "com.spotify.client", isRunningOutput: true)
+
+        // 1. System alerts & Messages never duck even if sustained
+        for step in 0..<12 {
+            let d = gate.evaluate(now: Double(step) * 0.25, activeProcesses: [sysAlert, messages], externalRMS: 0.12)
+            #expect(d.isDucked == false)
+        }
+
+        // 2. Short 0.75s notification ping from Chrome/Slack never ducks
+        for step in 0..<3 {
+            let d = gate.evaluate(now: 10.0 + Double(step) * 0.25, activeProcesses: [chrome], externalRMS: 0.08)
+            #expect(d.isDucked == false)
+        }
+        // Chime stops -> timer resets cleanly
+        #expect(gate.evaluate(now: 11.0, activeProcesses: [], externalRMS: 0.0).isDucked == false)
+
+        // 3. Idle Chrome stream with silent RMS never ghost-ducks
+        for step in 0..<12 {
+            let d = gate.evaluate(now: 20.0 + Double(step) * 0.25, activeProcesses: [chrome], externalRMS: 0.0005)
+            #expect(d.isDucked == false)
+        }
+
+        // 4. Sustained Spotify playback (>= 0.9s with real RMS) cleanly ducks and unducks after 3.0s silence
+        #expect(gate.evaluate(now: 30.0, activeProcesses: [spotify], externalRMS: 0.05).isDucked == false)
+        #expect(gate.evaluate(now: 31.0, activeProcesses: [spotify], externalRMS: 0.05).isDucked == true)
+        // Brief 1.5s pause between songs stays ducked
+        #expect(gate.evaluate(now: 32.0, activeProcesses: [], externalRMS: 0.0).isDucked == true)
+        #expect(gate.evaluate(now: 33.5, activeProcesses: [], externalRMS: 0.0).isDucked == true)
+        // After 3.0s continuous silence, smoothly resumes
+        #expect(gate.evaluate(now: 35.2, activeProcesses: [], externalRMS: 0.0).isDucked == false)
+    }
 }
