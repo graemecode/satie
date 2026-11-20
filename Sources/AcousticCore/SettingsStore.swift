@@ -43,8 +43,9 @@ public final class SettingsStore: @unchecked Sendable {
     private enum Keys {
         static let presetRaw = "ac.preset"
         static let amberPhosphor = "ac.amberPhosphor"
-        static let showMenuBarKey = "ac.showMenuBarKey"
         static let sensitivity = "ac.sensitivity"
+        static let focusMode = "ac.focusMode"
+        static let focusVolume = "ac.focusVolume"
         static let miniHUDFrame = "ac.miniHUDFrame"
         static let studioFrame = "ac.studioFrame"
     }
@@ -63,14 +64,6 @@ public final class SettingsStore: @unchecked Sendable {
         set { defaults.set(newValue, forKey: Keys.amberPhosphor) }
     }
 
-    public var showMenuBarKey: Bool {
-        get {
-            if defaults.object(forKey: Keys.showMenuBarKey) == nil { return true }
-            return defaults.bool(forKey: Keys.showMenuBarKey)
-        }
-        set { defaults.set(newValue, forKey: Keys.showMenuBarKey) }
-    }
-
     public var sensitivity: SensitivityMode {
         get {
             guard let raw = defaults.string(forKey: Keys.sensitivity),
@@ -78,6 +71,23 @@ public final class SettingsStore: @unchecked Sendable {
             return mode
         }
         set { defaults.set(newValue.rawValue, forKey: Keys.sensitivity) }
+    }
+
+    public var focusMode: FocusSoundscape {
+        get {
+            guard let raw = defaults.string(forKey: Keys.focusMode),
+                  let mode = FocusSoundscape(rawValue: raw) else { return .focus }
+            return mode
+        }
+        set { defaults.set(newValue.rawValue, forKey: Keys.focusMode) }
+    }
+
+    public var focusVolume: Float {
+        get {
+            if defaults.object(forKey: Keys.focusVolume) == nil { return 0.45 }
+            return max(0.05, min(1.0, defaults.float(forKey: Keys.focusVolume)))
+        }
+        set { defaults.set(max(0.05, min(1.0, newValue)), forKey: Keys.focusVolume) }
     }
 
     public var miniHUDOrigin: NSPoint? {

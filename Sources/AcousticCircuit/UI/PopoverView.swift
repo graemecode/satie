@@ -110,14 +110,14 @@ struct PopoverView: View {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 5) {
-                        Text(state.metadata.sourceApp)
+                        Text(state.activeSourceLabel)
                         Text("·")
-                        Text("\(Int(round(state.audioTap.sampleRate / 1000))) KHZ")
+                        Text("\(Int(round((state.isFocusPlaying ? 48_000 : state.audioTap.sampleRate) / 1000))) KHZ")
                     }
                     .font(.system(size: 9.5, weight: .regular, design: .monospaced))
                     .foregroundColor(inkDim)
 
-                    Text(state.metadata.title)
+                    Text(state.activeTitle)
                         .font(.system(size: 13.5, weight: .medium))
                         .foregroundColor(.white)
                         .lineLimit(1)
@@ -196,26 +196,30 @@ struct PopoverView: View {
 
             // Transport + Scrub / Live Signal bar (only shows transport buttons when a verified control path exists)
             HStack(spacing: 10) {
-                if state.metadata.canControlPlayback {
+                if state.canTogglePrimaryPlayback {
                     HStack(spacing: 4) {
-                        Button { state.media.previousTrack() } label: {
-                            Image(systemName: "backward.fill").font(.system(size: 10))
-                                .frame(width: 26, height: 26)
+                        if !state.isFocusPlaying {
+                            Button { state.media.previousTrack() } label: {
+                                Image(systemName: "backward.fill").font(.system(size: 10))
+                                    .frame(width: 26, height: 26)
+                            }
+                            .buttonStyle(HairlineIconButtonStyle())
                         }
-                        .buttonStyle(HairlineIconButtonStyle())
 
-                        Button { state.media.playPause() } label: {
-                            Image(systemName: state.metadata.isPlaying ? "pause.fill" : "play.fill")
+                        Button { state.togglePrimaryPlayback() } label: {
+                            Image(systemName: state.isPrimaryPlaying ? "pause.fill" : "play.fill")
                                 .font(.system(size: 11))
                                 .frame(width: 28, height: 26)
                         }
                         .buttonStyle(HairlineIconButtonStyle(prominent: true))
 
-                        Button { state.media.nextTrack() } label: {
-                            Image(systemName: "forward.fill").font(.system(size: 10))
-                                .frame(width: 26, height: 26)
+                        if !state.isFocusPlaying {
+                            Button { state.media.nextTrack() } label: {
+                                Image(systemName: "forward.fill").font(.system(size: 10))
+                                    .frame(width: 26, height: 26)
+                            }
+                            .buttonStyle(HairlineIconButtonStyle())
                         }
-                        .buttonStyle(HairlineIconButtonStyle())
                     }
                 }
 
@@ -232,7 +236,7 @@ struct PopoverView: View {
                         .gesture(
                             DragGesture(minimumDistance: 0)
                                 .onEnded { val in
-                                    guard state.metadata.canSeek, geo.size.width > 1 else { return }
+                                    guard !state.isFocusPlaying, state.metadata.canSeek, geo.size.width > 1 else { return }
                                     state.media.seek(to: Double(val.location.x / geo.size.width))
                                 }
                         )
@@ -246,6 +250,50 @@ struct PopoverView: View {
                     }
                     .font(.system(size: 9.5, design: .monospaced))
                     .foregroundColor(inkDim)
+                }
+            }
+
+            // Generative Work Soundscape strip (Endel-style offline DSP synthesis)
+            HStack(spacing: 6) {
+                HStack(spacing: 2) {
+                    ForEach(FocusSoundscape.allCases) { mode in
+                        let active = state.isFocusPlaying && state.focusMode == mode
+                        Button {
+                            state.toggleFocusSound(mode)
+                        } label: {
+                            Text(mode.shortLabel)
+                                .font(.system(size: 9.5, weight: active ? .semibold : .regular, design: .monospaced))
+                                .foregroundColor(active ? Color(red: 0.03, green: 0.05, blue: 0.09) : inkDim)
+                                .padding(.horizontal, 8)
+                                .frame(height: 22)
+                                .background(active ? Color(red: 0.93, green: 0.96, blue: 1.0) : Color.clear)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Play \(mode.title) generative work soundscape")
+                    }
+                }
+                .padding(2)
+                .background(Color.white.opacity(0.025))
+                .overlay(Rectangle().stroke(hairSoft, lineWidth: 1))
+
+                if state.isFocusPlaying {
+                    Image(systemName: "speaker.wave.2")
+                        .font(.system(size: 9))
+                        .foregroundColor(inkDim)
+                    Slider(
+                        value: Binding(
+                            get: { Double(state.focusVolume) },
+                            set: { state.focusVolume = Float($0) }
+                        ),
+                        in: 0.05...1.0
+                    )
+                    .controlSize(.mini)
+                    .tint(.white)
+                } else {
+                    Spacer()
+                    Text("WORK SOUND")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(inkDim)
                 }
             }
 
@@ -296,19 +344,20 @@ struct PopoverView: View {
     }
 
     private var progressFraction: CGFloat {
-        if let el = state.metadata.elapsed, let dur = state.metadata.duration, dur > 0 {
+        if !state.isFocusPlaying, let el = state.metadata.elapsed, let dur = state.metadata.duration, dur > 0 {
             return CGFloat(max(0, min(1, el / dur)))
         }
         return CGFloat(max(0.02, min(1, state.displayEnergy * 1.15)))
     }
 
     private var elapsedLabel: String {
+        if state.isFocusPlaying { return "GENERATIVE" }
         if let el = state.metadata.elapsed { return formatClock(el) }
         return state.snapshot.isSilent ? "STANDBY" : "LIVE"
     }
 
     private var remainingLabel: String {
-        if let el = state.metadata.elapsed, let dur = state.metadata.duration {
+        if !state.isFocusPlaying, let el = state.metadata.elapsed, let dur = state.metadata.duration {
             return "-" + formatClock(max(0, dur - el))
         }
         return "\(state.displayFPS) FPS"

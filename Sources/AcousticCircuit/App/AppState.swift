@@ -42,12 +42,22 @@ final class AppState: ObservableObject {
     @Published var amberPhosphor: Bool {
         didSet { settings.amberPhosphor = amberPhosphor }
     }
-    @Published var showMenuBarKey: Bool {
-        didSet { settings.showMenuBarKey = showMenuBarKey }
-    }
     @Published var sensitivity: SensitivityMode {
         didSet { settings.sensitivity = sensitivity }
     }
+    @Published var focusMode: FocusSoundscape {
+        didSet {
+            settings.focusMode = focusMode
+            focusSound.setMode(focusMode)
+        }
+    }
+    @Published var focusVolume: Float {
+        didSet {
+            settings.focusVolume = focusVolume
+            focusSound.setVolume(focusVolume)
+        }
+    }
+    @Published var isFocusPlaying: Bool = false
     @Published var launchAtLogin: Bool = false
 
     @Published var tapTarget: TapTarget = .systemAll
@@ -61,13 +71,14 @@ final class AppState: ObservableObject {
 
     private(set) var snapshot: AcousticSnapshot = .empty
     @Published var displayKey: String = "STANDBY"
-    @Published var displayShortKey: String = "—"
     @Published var displayEnergy: Float = 0
     @Published var displayFlux: Float = 0
     @Published var displayPhase: Float = 1
     @Published var displayFPS: Int = 60
 
     let audioTap: ProcessAudioTap
+    let focusRingBuffer: StereoRingBuffer
+    let focusSound: FocusSoundEngine
     let dsp: AcousticDSP
     let media: MediaController
 
@@ -87,14 +98,35 @@ final class AppState: ObservableObject {
     private var fpsAccum: Double = 0
     private var lastRenderDrivenTime: CFTimeInterval = 0
 
+    var activeTitle: String {
+        isFocusPlaying ? focusMode.title : metadata.title
+    }
+
+    var activeSourceLabel: String {
+        isFocusPlaying ? "GENERATIVE" : metadata.sourceApp
+    }
+
+    var canTogglePrimaryPlayback: Bool {
+        isFocusPlaying || metadata.canControlPlayback
+    }
+
+    var isPrimaryPlaying: Bool {
+        isFocusPlaying ? true : metadata.isPlaying
+    }
+
     private init() {
         self.preset = VisualPreset(rawValue: settings.presetRaw) ?? .circuit
         self.amberPhosphor = settings.amberPhosphor
-        self.showMenuBarKey = settings.showMenuBarKey
         self.sensitivity = settings.sensitivity
+        self.focusMode = settings.focusMode
+        self.focusVolume = settings.focusVolume
         self.launchAtLogin = settings.launchAtLogin
 
         self.audioTap = ProcessAudioTap()
+        self.focusRingBuffer = StereoRingBuffer()
+        self.focusSound = FocusSoundEngine(ringBuffer: focusRingBuffer)
+        self.focusSound.setMode(settings.focusMode)
+        self.focusSound.setVolume(settings.focusVolume)
         self.dsp = AcousticDSP()
         self.media = MediaController()
 
@@ -129,7 +161,7 @@ final class AppState: ObservableObject {
                 self.refreshAudioProcesses()
             }
         }
-        Log.app.info("Acoustic Circuit booted (preset=\(self.preset.title, privacy: .public), sensitivity=\(self.sensitivity.rawValue, privacy: .public))")
+        Log.app.info("Acoustic Circuit booted (preset=\(self.preset.title, privacy: .public))")
     }
 
     func shutdown() {
@@ -139,9 +171,33 @@ final class AppState: ObservableObject {
         sleepObservers.removeAll()
         menuBarTimer?.invalidate()
         processRefreshTimer?.invalidate()
+        focusSound.stopImmediately()
         media.stop()
         audioTap.stop()
         Log.app.info("Acoustic Circuit shut down cleanly")
+    }
+
+    func toggleFocusSound(_ mode: FocusSoundscape) {
+        if isFocusPlaying && focusMode == mode {
+            stopFocusSound()
+        } else {
+            focusMode = mode
+            focusSound.start(mode: mode)
+            isFocusPlaying = true
+        }
+    }
+
+    func stopFocusSound() {
+        focusSound.stop()
+        isFocusPlaying = false
+    }
+
+    func togglePrimaryPlayback() {
+        if isFocusPlaying {
+            stopFocusSound()
+        } else if metadata.canControlPlayback {
+            media.playPause()
+        }
     }
 
     func toggleLaunchAtLogin() {
@@ -171,6 +227,9 @@ final class AppState: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self, !self.isSleeping else { return }
                 self.isSleeping = true
+                if self.isFocusPlaying {
+                    self.stopFocusSound()
+                }
                 self.menuBarTimer?.invalidate()
                 self.menuBarTimer = nil
                 self.media.stop()
@@ -226,9 +285,12 @@ final class AppState: ObservableObject {
         }
         lastFrameTime = now
 
+        let activeBuffer = isFocusPlaying ? focusRingBuffer : audioTap.ringBuffer
+        let activeSR = isFocusPlaying ? 48_000.0 : audioTap.sampleRate
+
         let snap = dsp.process(
-            ringBuffer: audioTap.ringBuffer,
-            sampleRate: audioTap.sampleRate,
+            ringBuffer: activeBuffer,
+            sampleRate: activeSR,
             dt: dt,
             demoMode: false,
             sensitivity: sensitivity
@@ -241,7 +303,7 @@ final class AppState: ObservableObject {
         if snap.isSilent {
             shouldRedrawMenuBar = !lastMenuBarWasSilent
         } else {
-            shouldRedrawMenuBar = (menuBarTickAccum >= 0.05) // 20 Hz max
+            shouldRedrawMenuBar = (menuBarTickAccum >= 0.05)
         }
         if shouldRedrawMenuBar {
             menuBarTickAccum = 0
@@ -260,13 +322,11 @@ final class AppState: ObservableObject {
             fpsAccum = 0
         }
 
-        // Only publish SwiftUI telemetry when a SwiftUI chrome surface is open AND formatted values actually changed
         if isPopoverOpen || isMiniHUDOpen || isStudioOpen {
             uiThrottleAccum += dt
             if uiThrottleAccum >= 0.25 {
                 uiThrottleAccum = 0
                 if displayKey != snap.detectedKey { displayKey = snap.detectedKey }
-                if displayShortKey != snap.shortKey { displayShortKey = snap.shortKey }
                 let qEnergy = (snap.energy * 100).rounded() / 100
                 let qFlux = (snap.flux * 100).rounded() / 100
                 let qPhase = (snap.stereoCorrelation * 100).rounded() / 100

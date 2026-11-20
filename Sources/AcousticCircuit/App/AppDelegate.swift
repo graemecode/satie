@@ -46,14 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         let state = AppState.shared
         state.onFrameTick = { [weak self] snap in
-            guard let self else { return }
-            let wantKey = state.showMenuBarKey && !snap.isSilent && snap.shortKey != "—"
-            let desiredWidth: CGFloat = wantKey ? 76.0 : 38.0
-            if abs(self.statusItem.length - desiredWidth) > 0.5 {
-                self.statusItem.length = desiredWidth
-                self.menuBarIconView.frame = NSRect(x: 0, y: 0, width: desiredWidth, height: 22)
-            }
-            self.menuBarIconView.update(snapshot: snap, showKey: state.showMenuBarKey)
+            self?.menuBarIconView.update(snapshot: snap)
         }
 
         state.boot()
@@ -124,10 +117,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     // MARK: - Status Bar & Popover
 
     private func setupMenuBar() {
-        statusItem = NSStatusBar.system.statusItem(withLength: 38)
+        statusItem = NSStatusBar.system.statusItem(withLength: 30)
         guard let button = statusItem.button else { return }
 
-        menuBarIconView = MenuBarIconView(frame: NSRect(x: 0, y: 0, width: 38, height: 22))
+        menuBarIconView = MenuBarIconView(frame: NSRect(x: 0, y: 0, width: 30, height: 22))
         menuBarIconView.autoresizingMask = [.width, .height]
         button.addSubview(menuBarIconView)
         button.target = self
@@ -235,6 +228,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         menu.addItem(.separator())
 
+        // Work Soundscape submenu
+        let soundItem = NSMenuItem(title: "Work Soundscape", action: nil, keyEquivalent: "")
+        let soundMenu = NSMenu()
+        for mode in FocusSoundscape.allCases {
+            let sItem = NSMenuItem(title: mode.title, action: #selector(menuToggleSoundscape(_:)), keyEquivalent: "")
+            sItem.target = self
+            sItem.representedObject = mode.rawValue
+            sItem.state = (state.isFocusPlaying && state.focusMode == mode) ? .on : .off
+            soundMenu.addItem(sItem)
+        }
+        if state.isFocusPlaying {
+            soundMenu.addItem(.separator())
+            let stopItem = NSMenuItem(title: "Stop Soundscape", action: #selector(menuStopSoundscape), keyEquivalent: "")
+            stopItem.target = self
+            soundMenu.addItem(stopItem)
+        }
+        soundItem.submenu = soundMenu
+        menu.addItem(soundItem)
+
         // Sensitivity submenu
         let sensItem = NSMenuItem(title: "Sensitivity", action: nil, keyEquivalent: "")
         let sensMenu = NSMenu()
@@ -247,11 +259,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         }
         sensItem.submenu = sensMenu
         menu.addItem(sensItem)
-
-        let keyToggle = NSMenuItem(title: "Show Musical Key in Menu Bar", action: #selector(menuToggleMenuBarKey), keyEquivalent: "")
-        keyToggle.target = self
-        keyToggle.state = state.showMenuBarKey ? .on : .off
-        menu.addItem(keyToggle)
 
         if !MediaController.hasMediaKeyPermission {
             let mediaKeyItem = NSMenuItem(title: "Enable Global Media Keys (Accessibility)…", action: #selector(menuRequestMediaKeys), keyEquivalent: "")
@@ -288,7 +295,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
             AppState.shared.sensitivity = mode
         }
     }
-    @objc private func menuToggleMenuBarKey() { AppState.shared.showMenuBarKey.toggle() }
+    @objc private func menuToggleSoundscape(_ sender: NSMenuItem) {
+        if let raw = sender.representedObject as? String, let mode = FocusSoundscape(rawValue: raw) {
+            AppState.shared.toggleFocusSound(mode)
+        }
+    }
+    @objc private func menuStopSoundscape() { AppState.shared.stopFocusSound() }
     @objc private func menuRequestMediaKeys() { MediaController.requestMediaKeyPermission() }
     @objc private func menuToggleLaunchAtLogin() { AppState.shared.toggleLaunchAtLogin() }
     @objc private func menuQuit() { NSApp.terminate(nil) }

@@ -31,11 +31,11 @@ struct MiniHUDContentView: View {
 
                 if isHovering {
                     HStack(spacing: 5) {
-                        if state.metadata.canControlPlayback {
+                        if state.canTogglePrimaryPlayback {
                             Button {
-                                state.media.playPause()
+                                state.togglePrimaryPlayback()
                             } label: {
-                                Image(systemName: state.metadata.isPlaying ? "pause.fill" : "play.fill")
+                                Image(systemName: state.isPrimaryPlaying ? "pause.fill" : "play.fill")
                                     .font(.system(size: 9.5))
                                     .frame(width: 24, height: 22)
                             }

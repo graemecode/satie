@@ -183,16 +183,18 @@ struct AcousticCoreTests {
         let store = SettingsStore(defaults: ud)
         store.presetRaw = 2
         store.amberPhosphor = true
-        store.showMenuBarKey = false
         store.sensitivity = .vivid
+        store.focusMode = .rain
+        store.focusVolume = 0.62
         store.miniHUDOrigin = NSPoint(x: 420, y: 180)
         store.studioFrame = NSRect(x: 100, y: 120, width: 1280, height: 820)
 
         let reloaded = SettingsStore(defaults: ud)
         #expect(reloaded.presetRaw == 2)
         #expect(reloaded.amberPhosphor == true)
-        #expect(reloaded.showMenuBarKey == false)
         #expect(reloaded.sensitivity == .vivid)
+        #expect(reloaded.focusMode == .rain)
+        #expect(abs(reloaded.focusVolume - 0.62) < 0.001)
         #expect(reloaded.miniHUDOrigin == NSPoint(x: 420, y: 180))
         #expect(reloaded.studioFrame == NSRect(x: 100, y: 120, width: 1280, height: 820))
     }

@@ -37,7 +37,8 @@ final class StudioStageNSView: NSView {
             guard now - self.lastOverlayUpdate >= (1.0 / 30.0) else { return }
             self.lastOverlayUpdate = now
             let state = AppState.shared
-            self.overlayView.update(snapshot: snap, preset: state.preset, sourceLabel: state.tapTarget.shortLabel)
+            let label = state.isFocusPlaying ? "GENERATIVE · \(state.focusMode.shortLabel)" : state.tapTarget.shortLabel
+            self.overlayView.update(snapshot: snap, preset: state.preset, sourceLabel: label)
         }
     }
 
@@ -157,6 +158,41 @@ struct StudioContentView: View {
 
             Spacer()
 
+            // Work Soundscape quick menu
+            Menu {
+                ForEach(FocusSoundscape.allCases) { mode in
+                    Button {
+                        state.toggleFocusSound(mode)
+                    } label: {
+                        if state.isFocusPlaying && state.focusMode == mode {
+                            Label(mode.title, systemImage: "checkmark")
+                        } else {
+                            Text(mode.title)
+                        }
+                    }
+                }
+                if state.isFocusPlaying {
+                    Divider()
+                    Button("Stop Soundscape") {
+                        state.stopFocusSound()
+                    }
+                }
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: state.isFocusPlaying ? "waveform" : "sparkles")
+                        .font(.system(size: 9.5))
+                    Text(state.isFocusPlaying ? state.focusMode.shortLabel : "SOUND")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                }
+                .foregroundColor(state.isFocusPlaying ? Color(red: 0.03, green: 0.05, blue: 0.09) : inkSoft)
+                .padding(.horizontal, 9)
+                .frame(height: 25)
+                .background(state.isFocusPlaying ? Color(red: 0.93, green: 0.96, blue: 1.0) : Color.white.opacity(0.04))
+                .overlay(Rectangle().stroke(hairSoft, lineWidth: 1))
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+
             // Core Audio Process Tap Source Picker
             Menu {
                 Button {
@@ -239,18 +275,18 @@ struct StudioContentView: View {
     private var statusBar: some View {
         HStack(spacing: 14) {
             HStack(spacing: 8) {
-                if state.metadata.canControlPlayback {
+                if state.canTogglePrimaryPlayback {
                     Button {
-                        state.media.playPause()
+                        state.togglePrimaryPlayback()
                     } label: {
-                        Image(systemName: state.metadata.isPlaying ? "pause.fill" : "play.fill")
+                        Image(systemName: state.isPrimaryPlaying ? "pause.fill" : "play.fill")
                             .font(.system(size: 9.5))
                             .frame(width: 22, height: 22)
                     }
                     .buttonStyle(HairlineIconButtonStyle(prominent: true))
                 }
 
-                Text(state.metadata.title)
+                Text(state.activeTitle)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white)
                     .lineLimit(1)
@@ -321,7 +357,7 @@ final class StudioNSWindow: NSWindow {
         case "2": AppState.shared.preset = .ecology; return
         case "3": AppState.shared.preset = .phosphor; return
         case "4": AppState.shared.preset = .liquid; return
-        case " ": AppState.shared.media.playPause(); return
+        case " ": AppState.shared.togglePrimaryPlayback(); return
         default: break
         }
         if event.keyCode == 53, styleMask.contains(.fullScreen) { // Esc
