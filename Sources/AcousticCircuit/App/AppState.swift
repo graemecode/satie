@@ -168,6 +168,10 @@ final class AppState: ObservableObject {
     private var housekeepingTimer: Timer?
     private var duckMonitorTimer: Timer?
     private var autoDuckGate = AutoDuckGate()
+    /// When the user explicitly clicks Play while external Mac audio is already playing,
+    /// honor their intent (blend without immediately auto-ducking) until external audio stops once,
+    /// then automatically re-arm Auto-Duck for future calls/videos.
+    private var suppressAutoDuckUntilSilence: Bool = false
     private var isSleeping: Bool = false
     private var sleepObservers: [NSObjectProtocol] = []
 
@@ -343,6 +347,9 @@ final class AppState: ObservableObject {
             circadianPhase = phase
             focusSound.setCircadianPhase(phase)
             autoDuckGate.reset()
+            // If external Mac audio is already audible when user explicitly clicks Play,
+            // honor their click instead of letting Auto-Duck immediately silence Satie 1.5s later.
+            suppressAutoDuckUntilSilence = !snapshot.isSilent
             isAutoDucked = false
             duckedByAppName = nil
             focusSound.start(mode: mode)
@@ -363,6 +370,7 @@ final class AppState: ObservableObject {
         focusSound.stop()
         focusSound.setSessionProgress(nil)
         autoDuckGate.reset()
+        suppressAutoDuckUntilSilence = false
         isFocusPlaying = false
         isAutoDucked = false
         duckedByAppName = nil
@@ -562,6 +570,16 @@ final class AppState: ObservableObject {
         let isTapActive: Bool
         if case .active = tapStatus { isTapActive = true } else { isTapActive = false }
         let externalRMS: Float? = isTapActive ? audioTap.ringBuffer.recentRMS(frameCount: 2048) : nil
+
+        if suppressAutoDuckUntilSilence {
+            // Re-arm Auto-Duck cleanly once the pre-existing external audio finishes
+            if (externalRMS ?? 0) < 0.002 {
+                suppressAutoDuckUntilSilence = false
+                autoDuckGate.reset()
+            }
+            return
+        }
+
         let decision = autoDuckGate.evaluate(now: CACurrentMediaTime(), activeProcesses: procs, externalRMS: externalRMS)
         if decision.isDucked != isAutoDucked || decision.duckedByAppName != duckedByAppName {
             isAutoDucked = decision.isDucked

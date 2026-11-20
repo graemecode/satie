@@ -246,8 +246,8 @@ struct PopoverView: View {
             // 2. Five Iconic Circular Geometric Soundscape Glyphs (Focus · Pulse · Rain · Drift · Still)
             HStack(spacing: 0) {
                 ForEach(FocusSoundscape.allCases) { mode in
-                    let isSelected = (state.focusMode == mode)
-                    let isActive = state.isFocusPlaying && isSelected
+                    let isSelected = (state.focusMode == mode) && !isExternalAudioVisualizing
+                    let isActive = state.isFocusPlaying && (state.focusMode == mode)
                     Button {
                         if isActive {
                             state.stopFocusSound()
@@ -532,9 +532,16 @@ struct PopoverView: View {
         !state.isFocusPlaying && state.metadata.canControlPlayback && state.metadata.isPlaying
     }
 
+    private var isExternalAudioVisualizing: Bool {
+        !state.isFocusPlaying && !state.snapshot.isSilent && !isShowingVerifiedExternalTrack
+    }
+
     private var heroTitle: String {
         if isShowingVerifiedExternalTrack {
             return state.metadata.title
+        }
+        if isExternalAudioVisualizing {
+            return "Listening"
         }
         return state.focusMode.title
     }
@@ -544,8 +551,11 @@ struct PopoverView: View {
             let artist = state.metadata.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
             return artist.isEmpty ? state.metadata.sourceApp : "\(state.metadata.sourceApp) · \(artist.uppercased())"
         }
+        if isExternalAudioVisualizing {
+            return "MAC AUDIO ACTIVE"
+        }
         if state.isFocusPlaying && state.isAutoDucked {
-            return "AUTO-DUCKED"
+            return "STEPPED ASIDE · MAC AUDIO"
         }
         let phase = state.effectiveCircadianPhase.detailedLabel
         if state.isFocusPlaying {
@@ -557,7 +567,7 @@ struct PopoverView: View {
             }
             return phase
         }
-        return "PAUSED · \(phase)"
+        return "READY · \(phase)"
     }
 
     private var heroPlayIcon: String {
