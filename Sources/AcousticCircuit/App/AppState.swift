@@ -121,17 +121,44 @@ final class AppState: ObservableObject {
     @Published var circadianPhase: CircadianPhase = .current()
     @Published var flowDuration: FlowDuration = .infinite
     @Published var flowMinutes: Int = 0
+    /// Seconds left in the current segment (focus round or break) while a timed session runs.
     @Published var flowRemainingSeconds: Double? = nil
+    @Published var breakMinutes: Int = 5
+    @Published var sessionRounds: Int = 1
+    @Published var sessionIntention: String = "" {
+        didSet { settings.sessionIntention = sessionIntention }
+    }
+    @Published private(set) var sessionClock: FocusSessionClock? = nil
+    @Published private(set) var listeningStats = ListeningStats()
 
     var effectiveCircadianPhase: CircadianPhase {
         circadianOverride.resolvedPhase()
     }
 
+    var sessionPlan: FocusSessionPlan {
+        FocusSessionPlan(focusMinutes: flowMinutes, breakMinutes: breakMinutes, rounds: sessionRounds)
+    }
+
+    var isOnBreak: Bool {
+        isFocusPlaying && (sessionClock?.isOnBreak ?? false)
+    }
+
+    /// Drives the Arrival / Deep Lock / Soft Landing sound arc. Nil while open-ended or on a break.
     var sessionProgress: Float? {
-        guard flowMinutes > 0, let rem = flowRemainingSeconds else { return nil }
-        let total = Double(flowMinutes * 60)
-        guard total > 1 else { return nil }
-        return Float(max(0.0, min(1.0, (total - rem) / total)))
+        guard let clock = sessionClock, let seg = clock.current, seg.kind == .focus else { return nil }
+        return Float(clock.segmentProgress)
+    }
+
+    /// Fraction of the current segment still to run (1 at its start, 0 at its end).
+    var segmentRemainingFraction: Double? {
+        guard let clock = sessionClock, clock.current != nil else { return nil }
+        return 1.0 - clock.segmentProgress
+    }
+
+    /// "ROUND 2/3", or nil for a single-round or open-ended session.
+    var roundLabel: String? {
+        guard let clock = sessionClock, let seg = clock.current, clock.plan.rounds > 1 else { return nil }
+        return "ROUND \(seg.round)/\(clock.plan.rounds)"
     }
 
     @Published var launchAtLogin: Bool = false
@@ -239,6 +266,10 @@ final class AppState: ObservableObject {
         self.maskingBed = settings.maskingBed
         self.circadianOverride = settings.circadianOverride
         self.flowMinutes = settings.flowMinutes
+        self.breakMinutes = settings.breakMinutes
+        self.sessionRounds = settings.sessionRounds
+        self.sessionIntention = settings.sessionIntention
+        self.listeningStats = settings.listeningStats
         self.autoDuckEnabled = settings.autoDuck
         self.launchAtLogin = settings.launchAtLogin
 
@@ -315,7 +346,7 @@ final class AppState: ObservableObject {
                 self.tickHousekeeping()
             }
         }
-        Log.app.info("Satie 2.1 booted (preset=\(self.preset.title, privacy: .public), autoDuck=\(self.autoDuckEnabled))")
+        Log.app.info("Satie booted (preset=\(self.preset.title, privacy: .public), autoDuck=\(self.autoDuckEnabled))")
     }
 
     func shutdown() {
@@ -326,6 +357,7 @@ final class AppState: ObservableObject {
         menuBarTimer?.invalidate()
         housekeepingTimer?.invalidate()
         duckMonitorTimer?.invalidate()
+        flushListening()
         focusSound.stopImmediately()
         nowPlaying.clear()
         media.stop()
@@ -354,27 +386,24 @@ final class AppState: ObservableObject {
             duckedByAppName = nil
             focusSound.start(mode: mode)
             isFocusPlaying = true
-            if flowMinutes > 0 {
-                if flowRemainingSeconds == nil {
-                    flowRemainingSeconds = Double(flowMinutes * 60)
-                }
-                focusSound.setSessionProgress(sessionProgress)
+            if sessionClock == nil {
+                beginSession()
             } else {
-                focusSound.setSessionProgress(nil)
+                focusSound.setSessionProgress(sessionProgress)
             }
             syncNowPlaying()
         }
     }
 
     func stopFocusSound() {
+        flushListening()
         focusSound.stop()
-        focusSound.setSessionProgress(nil)
+        endSession()
         autoDuckGate.reset()
         suppressAutoDuckUntilSilence = false
         isFocusPlaying = false
         isAutoDucked = false
         duckedByAppName = nil
-        flowRemainingSeconds = nil
         syncNowPlaying()
     }
 
@@ -391,17 +420,108 @@ final class AppState: ObservableObject {
         let clamped = max(0, min(120, minutes))
         flowMinutes = clamped
         settings.flowMinutes = clamped
-        if clamped == 0 {
-            flowDuration = .infinite
-            flowRemainingSeconds = nil
-            focusSound.setSessionProgress(nil)
+        flowDuration = clamped == 0 ? .infinite : (clamped == 50 ? .min50 : .min25)
+        restartSessionIfPlaying()
+    }
+
+    func setBreakMinutes(_ minutes: Int) {
+        let clamped = max(0, min(30, minutes))
+        breakMinutes = clamped
+        settings.breakMinutes = clamped
+        restartSessionIfPlaying()
+    }
+
+    func setSessionRounds(_ rounds: Int) {
+        let clamped = max(1, min(FocusSessionPlan.maxRounds, rounds))
+        sessionRounds = clamped
+        settings.sessionRounds = clamped
+        restartSessionIfPlaying()
+    }
+
+    // MARK: - Session rounds & breaks
+
+    /// Starts the plan from round 1. Open-ended plans have no clock.
+    private func beginSession() {
+        leaveBreakSound()
+        sessionClock = FocusSessionClock(plan: sessionPlan)
+        flowRemainingSeconds = sessionClock?.remaining
+        focusSound.setSessionProgress(sessionProgress)
+    }
+
+    private func endSession() {
+        leaveBreakSound()
+        sessionClock = nil
+        flowRemainingSeconds = nil
+        focusSound.setSessionProgress(nil)
+    }
+
+    /// Changing the plan mid-session restarts it, so the dial always matches what is counting down.
+    private func restartSessionIfPlaying() {
+        if isFocusPlaying {
+            beginSession()
         } else {
-            flowDuration = clamped == 25 ? .min25 : (clamped == 50 ? .min50 : .min25)
-            flowRemainingSeconds = Double(clamped * 60)
-            if isFocusPlaying {
-                focusSound.setSessionProgress(0.0)
-            }
+            endSession()
         }
+    }
+
+    /// Breaks drop to the quietest depth so the room audibly relaxes; the user's setting is untouched.
+    private func enterBreakSound() {
+        focusSound.setSessionProgress(nil)
+        focusSound.setIntensity(.still)
+    }
+
+    private func leaveBreakSound() {
+        focusSound.setIntensity(soundIntensity)
+    }
+
+    private func completeSession() {
+        sessionClock = nil
+        flowRemainingSeconds = nil
+        flowDuration = .infinite
+        focusSound.setSessionProgress(1.0)
+        focusSound.triggerSessionChime()
+        settings.completedFocusSessions += 1
+        flushListening()
+        Log.app.info("Flow session completed (#\(self.settings.completedFocusSessions)) — playing resolving fifth chime")
+        #if APP_STORE
+        let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+        if settings.completedFocusSessions >= 5 && settings.lastReviewPromptVersion != ver {
+            settings.lastReviewPromptVersion = ver
+            SKStoreReviewController.requestReview()
+        }
+        #endif
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(4.0))
+            guard let self, self.isFocusPlaying, self.sessionClock == nil, self.flowMinutes > 0 else { return }
+            self.stopFocusSound()
+        }
+    }
+
+    // MARK: - Listening stats (local only)
+
+    private var pendingListenSeconds: Double = 0
+    private var pendingListenMode: FocusSoundscape = .focus
+
+    var completedSessions: Int { settings.completedFocusSessions }
+
+    private func accrueListening(seconds: Double) {
+        if pendingListenMode != focusMode {
+            flushListening()
+            pendingListenMode = focusMode
+        }
+        pendingListenSeconds += seconds
+        if pendingListenSeconds >= 30 {
+            flushListening()
+        }
+    }
+
+    private func flushListening() {
+        guard pendingListenSeconds > 0 else { return }
+        var stats = settings.listeningStats
+        stats.record(seconds: pendingListenSeconds, mode: pendingListenMode)
+        settings.listeningStats = stats
+        listeningStats = stats
+        pendingListenSeconds = 0
     }
 
     func cycleFocusMode(forward: Bool = true) {
@@ -534,32 +654,36 @@ final class AppState: ObservableObject {
             focusSound.setCircadianPhase(nowPhase)
         }
 
-        // Flow Session Timer countdown + Session-Arc audio choreography (pauses while auto-ducked on a call)
-        if isFocusPlaying && !isAutoDucked, let rem = flowRemainingSeconds {
-            let next = rem - 1.0
-            if next <= 0 {
-                flowRemainingSeconds = nil
-                flowDuration = .infinite
-                focusSound.setSessionProgress(1.0)
-                focusSound.triggerSessionChime()
-                settings.completedFocusSessions += 1
-                Log.app.info("Flow session completed (#\(self.settings.completedFocusSessions)) — playing resolving fifth chime")
-                #if APP_STORE
-                let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-                if settings.completedFocusSessions >= 5 && settings.lastReviewPromptVersion != ver {
-                    settings.lastReviewPromptVersion = ver
-                    SKStoreReviewController.requestReview()
-                }
-                #endif
-                Task { @MainActor [weak self] in
-                    try? await Task.sleep(for: .seconds(4.0))
-                    guard let self, self.isFocusPlaying, self.flowRemainingSeconds == nil else { return }
-                    self.stopFocusSound()
-                }
+        // Everything below pauses while auto-ducked on a call: Satie is silent then.
+        guard isFocusPlaying && !isAutoDucked else { return }
+
+        // Breaks are not listening time worth counting toward focus stats.
+        if !isOnBreak {
+            accrueListening(seconds: 1.0)
+        }
+
+        // Session clock: focus rounds, breaks between them, and the Session-Arc audio choreography
+        guard var clock = sessionClock else { return }
+        let event = clock.tick(1.0)
+        switch event {
+        case .running:
+            sessionClock = clock
+            flowRemainingSeconds = clock.remaining
+            focusSound.setSessionProgress(sessionProgress)
+        case .segmentEnded(let next):
+            sessionClock = clock
+            flowRemainingSeconds = clock.remaining
+            focusSound.triggerSessionChime()
+            if next.kind == .rest {
+                enterBreakSound()
+                Log.app.info("Focus round \(next.round) done — \(Int(next.seconds / 60))m break")
             } else {
-                flowRemainingSeconds = next
-                focusSound.setSessionProgress(sessionProgress)
+                leaveBreakSound()
+                focusSound.setSessionProgress(0.0)
+                Log.app.info("Break over — starting focus round \(next.round)")
             }
+        case .finished:
+            completeSession()
         }
     }
 

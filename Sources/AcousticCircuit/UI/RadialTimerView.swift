@@ -7,8 +7,10 @@ import SwiftUI
 struct RadialTimerView: View {
     @ObservedObject var state: AppState
     let onClose: () -> Void
+    var onRequestResize: (() -> Void)? = nil
 
     @State private var lastSnappedMinutes: Int = 0
+    @FocusState private var intentionFocused: Bool
     private let presets: [Int] = [0, 15, 25, 45, 60, 90]
 
     var body: some View {
@@ -34,12 +36,7 @@ struct RadialTimerView: View {
             ZStack {
                 let dialSize: CGFloat = 132
                 let frac: Double = state.flowMinutes > 0 ? min(1.0, Double(state.flowMinutes) / 120.0) : 0.0
-                let liveFrac: Double = {
-                    if let rem = state.flowRemainingSeconds, state.flowMinutes > 0 {
-                        return max(0.0, min(1.0, rem / Double(state.flowMinutes * 60)))
-                    }
-                    return frac
-                }()
+                let liveFrac: Double = state.segmentRemainingFraction ?? frac
 
                 Canvas { ctx, sz in
                     let c = CGPoint(x: sz.width * 0.5, y: sz.height * 0.5)
@@ -102,9 +99,13 @@ struct RadialTimerView: View {
                             let rawMin = Int(round((ang / (2.0 * Double.pi)) * 120.0 / 5.0)) * 5
                             let snapped = (rawMin >= 120) ? 120 : max(0, rawMin)
                             if snapped != lastSnappedMinutes {
+                                let crossedTimedBoundary = (lastSnappedMinutes == 0) != (snapped == 0)
                                 lastSnappedMinutes = snapped
                                 state.setFlowMinutes(snapped)
                                 NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+                                if crossedTimedBoundary {
+                                    DispatchQueue.main.async { onRequestResize?() }
+                                }
                             }
                         }
                 )
@@ -114,7 +115,7 @@ struct RadialTimerView: View {
                     Text(centerTimeText)
                         .font(.system(size: state.flowMinutes == 0 ? 24 : 18, weight: .medium, design: .monospaced))
                         .foregroundColor(.white)
-                    Text(state.flowMinutes == 0 ? "OPEN" : (state.isFocusPlaying ? "REMAINING" : "MINUTES"))
+                    Text(centerCaption)
                         .font(.system(size: 8.5, weight: .regular, design: .monospaced))
                         .foregroundColor(Color.white.opacity(0.45))
                         .tracking(0.8)
@@ -130,6 +131,7 @@ struct RadialTimerView: View {
                         lastSnappedMinutes = mins
                         state.setFlowMinutes(mins)
                         state.performHaptic()
+                        DispatchQueue.main.async { onRequestResize?() }
                     } label: {
                         Text(mins == 0 ? "∞" : "\(mins)M")
                             .font(.system(size: 9.5, weight: selected ? .semibold : .regular, design: .monospaced))
@@ -141,6 +143,85 @@ struct RadialTimerView: View {
                     }
                     .buttonStyle(.plain)
                 }
+            }
+
+            // Rounds & breaks (Pomodoro-style structure around the sound arc)
+            if state.flowMinutes > 0 {
+                VStack(spacing: 7) {
+                    HStack(spacing: 10) {
+                        Text("ROUNDS")
+                            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                            .foregroundColor(Color.white.opacity(0.42))
+                            .frame(width: 54, alignment: .leading)
+                        HStack(spacing: 3) {
+                            stepButton("minus", enabled: state.sessionRounds > 1) {
+                                state.setSessionRounds(state.sessionRounds - 1)
+                                DispatchQueue.main.async { onRequestResize?() }
+                            }
+                            Text("\(state.sessionRounds)")
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .accessibilityLabel("\(state.sessionRounds) focus rounds")
+                            stepButton("plus", enabled: state.sessionRounds < FocusSessionPlan.maxRounds) {
+                                state.setSessionRounds(state.sessionRounds + 1)
+                                DispatchQueue.main.async { onRequestResize?() }
+                            }
+                        }
+                    }
+
+                    if state.sessionRounds > 1 {
+                        HStack(spacing: 10) {
+                            Text("BREAK")
+                                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                                .foregroundColor(Color.white.opacity(0.42))
+                                .frame(width: 54, alignment: .leading)
+                            HStack(spacing: 3) {
+                                ForEach(FocusSessionPlan.breakChoices, id: \.self) { mins in
+                                    let on = state.breakMinutes == mins
+                                    Button {
+                                        state.setBreakMinutes(mins)
+                                        state.performHaptic()
+                                    } label: {
+                                        Text(mins == 0 ? "OFF" : "\(mins)M")
+                                            .font(.system(size: 9, weight: on ? .semibold : .regular, design: .monospaced))
+                                            .foregroundColor(on ? .black : Color.white.opacity(0.62))
+                                            .frame(maxWidth: .infinity)
+                                            .frame(height: 23)
+                                            .background(on ? Color.white : Color.white.opacity(0.05))
+                                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .accessibilityLabel(mins == 0 ? "No breaks" : "\(mins) minute breaks")
+                                }
+                            }
+                        }
+
+                        Text(state.sessionPlan.summary)
+                            .font(.system(size: 8.5, weight: .medium, design: .monospaced))
+                            .foregroundColor(Color.white.opacity(0.48))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .lineLimit(1)
+                    }
+                }
+            }
+
+            // Session intention — a one-line commitment shown in the header while a timed session runs
+            if state.flowMinutes > 0 {
+                TextField("What's getting done?", text: $state.sessionIntention)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11))
+                    .foregroundColor(.white)
+                    .focused($intentionFocused)
+                    .onSubmit { intentionFocused = false }
+                    .padding(.horizontal, 9)
+                    .frame(height: 26)
+                    .background(Color.white.opacity(0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .stroke(Color.white.opacity(intentionFocused ? 0.34 : 0.10), lineWidth: 1)
+                    )
             }
 
             // Minimal 24-hour Circadian Energy Curve
@@ -177,6 +258,19 @@ struct RadialTimerView: View {
                     .frame(height: 24)
             }
             .padding(.top, 2)
+
+            // Listening history (kept locally on this Mac only; appears once you've listened >= 1 min)
+            if state.listeningStats.totalSeconds >= 60 || state.completedSessions > 0 {
+                HStack(spacing: 0) {
+                    statCell(ListeningStats.formatDuration(state.listeningStats.lastSevenDaysSeconds()), "7 DAYS")
+                    statCell(ListeningStats.formatDuration(state.listeningStats.totalSeconds), "TOTAL")
+                    statCell("\(state.completedSessions)", "SESSIONS")
+                    if let fav = state.listeningStats.favorite {
+                        statCell(fav.shortLabel, "FAVORITE")
+                    }
+                }
+                .padding(.top, 2)
+            }
         }
         .padding(12)
         .background(Color.white.opacity(0.035))
@@ -199,13 +293,53 @@ struct RadialTimerView: View {
         return "\(state.flowMinutes):00"
     }
 
+    private var centerCaption: String {
+        if state.flowMinutes == 0 { return "OPEN" }
+        if state.isOnBreak { return "BREAK" }
+        return state.isFocusPlaying ? "REMAINING" : "MINUTES"
+    }
+
     private var sessionPhaseTag: String {
-        guard state.isFocusPlaying, let p = state.sessionProgress else {
-            return "ARC READY"
+        guard state.isFocusPlaying else { return "ARC READY" }
+        let round = state.roundLabel.map { "\($0) · " } ?? ""
+        if state.isOnBreak { return "\(round)BREAK" }
+        guard let p = state.sessionProgress else { return "ARC READY" }
+        if p < 0.12 { return "\(round)ARRIVAL" }
+        if p > 0.88 { return "\(round)SOFT LANDING" }
+        return "\(round)DEEP LOCK"
+    }
+
+    private func stepButton(_ symbol: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+            state.performHaptic()
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 9.5, weight: .semibold))
+                .foregroundColor(Color.white.opacity(enabled ? 0.76 : 0.24))
+                .frame(width: 44, height: 23)
+                .background(Color.white.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
-        if p < 0.12 { return "ARRIVAL" }
-        if p > 0.88 { return "SOFT LANDING" }
-        return "DEEP LOCK"
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .accessibilityLabel(symbol == "plus" ? "More rounds" : "Fewer rounds")
+    }
+
+    private func statCell(_ value: String, _ label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value)
+                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                .foregroundColor(Color.white.opacity(0.86))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(label)
+                .font(.system(size: 7.5, design: .monospaced))
+                .foregroundColor(Color.white.opacity(0.40))
+                .tracking(0.6)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
     }
 }
 

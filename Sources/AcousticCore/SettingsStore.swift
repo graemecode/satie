@@ -55,6 +55,11 @@ public final class SettingsStore: @unchecked Sendable {
         static let studioFrame = "ac.studioFrame"
         static let completedFocusSessions = "ac.completedFocusSessions"
         static let lastReviewPromptVersion = "ac.lastReviewPromptVersion"
+        static let breakMinutes = "ac.breakMinutes"
+        static let sessionRounds = "ac.sessionRounds"
+        static let sessionIntention = "ac.sessionIntention"
+        static let listenSecondsByDay = "ac.listenSecondsByDay"
+        static let listenSecondsByMode = "ac.listenSecondsByMode"
     }
 
     public init(defaults: UserDefaults = .standard) {
@@ -171,6 +176,41 @@ public final class SettingsStore: @unchecked Sendable {
     public var lastReviewPromptVersion: String? {
         get { defaults.string(forKey: Keys.lastReviewPromptVersion) }
         set { defaults.set(newValue, forKey: Keys.lastReviewPromptVersion) }
+    }
+
+    // MARK: - Session rounds, intention & listening stats (all local)
+
+    /// Break length between focus rounds, in minutes. 0 = no breaks.
+    public var breakMinutes: Int {
+        get {
+            if defaults.object(forKey: Keys.breakMinutes) == nil { return 5 }
+            return max(0, min(30, defaults.integer(forKey: Keys.breakMinutes)))
+        }
+        set { defaults.set(max(0, min(30, newValue)), forKey: Keys.breakMinutes) }
+    }
+
+    public var sessionRounds: Int {
+        get { max(1, min(FocusSessionPlan.maxRounds, defaults.integer(forKey: Keys.sessionRounds))) }
+        set { defaults.set(max(1, min(FocusSessionPlan.maxRounds, newValue)), forKey: Keys.sessionRounds) }
+    }
+
+    /// Free-text "what's getting done?" note for the current session.
+    public var sessionIntention: String {
+        get { defaults.string(forKey: Keys.sessionIntention) ?? "" }
+        set { defaults.set(String(newValue.prefix(80)), forKey: Keys.sessionIntention) }
+    }
+
+    public var listeningStats: ListeningStats {
+        get {
+            ListeningStats(
+                secondsByDay: defaults.dictionary(forKey: Keys.listenSecondsByDay) as? [String: Double] ?? [:],
+                secondsByMode: defaults.dictionary(forKey: Keys.listenSecondsByMode) as? [String: Double] ?? [:]
+            )
+        }
+        set {
+            defaults.set(newValue.secondsByDay, forKey: Keys.listenSecondsByDay)
+            defaults.set(newValue.secondsByMode, forKey: Keys.listenSecondsByMode)
+        }
     }
 
     // MARK: - Native macOS Login Item (SMAppService)
