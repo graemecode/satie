@@ -532,22 +532,27 @@ struct PopoverView: View {
         }
     }
 
+    private var isShowingVerifiedExternalTrack: Bool {
+        !state.isFocusPlaying && state.metadata.canControlPlayback && state.metadata.isPlaying
+    }
+
     private var heroTitle: String {
-        if state.isFocusPlaying && !state.isAutoDucked {
-            return state.focusMode.title
+        if isShowingVerifiedExternalTrack {
+            return state.metadata.title
         }
-        if !state.isFocusPlaying && state.snapshot.isSilent {
-            return state.focusMode.title
-        }
-        return state.activeTitle
+        return state.focusMode.title
     }
 
     private var heroSubtitle: String {
-        if state.isFocusPlaying && state.isAutoDucked, let app = state.duckedByAppName {
-            return "AUTO-DUCKED · \(app.uppercased())"
+        if isShowingVerifiedExternalTrack {
+            let artist = state.metadata.subtitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            return artist.isEmpty ? state.metadata.sourceApp : "\(state.metadata.sourceApp) · \(artist.uppercased())"
         }
+        if state.isFocusPlaying && state.isAutoDucked {
+            return "AUTO-DUCKED"
+        }
+        let phase = state.effectiveCircadianPhase.detailedLabel
         if state.isFocusPlaying {
-            let phase = state.effectiveCircadianPhase.detailedLabel
             if state.maskingBed != .off {
                 return "\(phase) · \(state.maskingBed.label)"
             }
@@ -556,10 +561,7 @@ struct PopoverView: View {
             }
             return phase
         }
-        if state.snapshot.isSilent {
-            return state.effectiveCircadianPhase.detailedLabel
-        }
-        return state.metadata.sourceApp
+        return "PAUSED · \(phase)"
     }
 
     private var heroPlayIcon: String {
