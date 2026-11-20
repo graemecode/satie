@@ -11,7 +11,10 @@ struct PopoverView: View {
     var onRequestResize: (() -> Void)? = nil
 
     @State private var showOptions: Bool = false
-    @State private var presetWhisper: String? = nil
+    @State private var isHoveringStage: Bool = false
+    @State private var peekVisualSwitcher: Bool = false
+    @State private var peekHideTask: Task<Void, Never>? = nil
+    @Namespace private var visualPillNS
 
     private let timerPresets: [Int] = [0, 15, 25, 45, 60, 90]
 
@@ -56,24 +59,15 @@ struct PopoverView: View {
                     .onTapGesture {
                         let all = VisualPreset.allCases
                         let next = all[(state.preset.rawValue + 1) % all.count]
-                        state.preset = next
+                        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                            state.preset = next
+                        }
                         state.performHaptic()
-                        withAnimation(.easeOut(duration: 0.16)) {
-                            presetWhisper = next.shortTitle.uppercased()
-                        }
-                        let currentLabel = next.shortTitle.uppercased()
-                        Task { @MainActor in
-                            try? await Task.sleep(for: .milliseconds(1100))
-                            if presetWhisper == currentLabel {
-                                withAnimation(.easeOut(duration: 0.35)) {
-                                    presetWhisper = nil
-                                }
-                            }
-                        }
+                        revealVisualSwitcherBriefly()
                     }
 
                 VStack(spacing: 0) {
-                    // Floating Header: Title + Biological Phase on left, ONE quiet Studio expand button on right
+                    // Floating Header: Soundscape Title + Instruments on left, ONE quiet Studio expand button on right
                     HStack(alignment: .top, spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(heroTitle)
@@ -102,18 +96,44 @@ struct PopoverView: View {
 
                     Spacer()
 
-                    if let whisper = presetWhisper {
-                        Text(whisper)
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundColor(Color.white.opacity(0.78))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 3)
-                            .background(Color.black.opacity(0.55))
-                            .clipShape(Capsule())
-                            .padding(.bottom, 10)
-                            .transition(.opacity)
-                            .allowsHitTesting(false)
+                    // Hover-revealed frosted glass visual switcher (0% clutter at rest, instant clarity on hover or 1–4)
+                    HStack(spacing: 2) {
+                        ForEach(VisualPreset.allCases) { p in
+                            let selected = (state.preset == p)
+                            Button {
+                                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                                    state.preset = p
+                                }
+                                state.performHaptic()
+                            } label: {
+                                Text(p.cleanName)
+                                    .font(.system(size: 9.5, weight: selected ? .semibold : .medium))
+                                    .foregroundColor(selected ? .black : Color.white.opacity(0.72))
+                                    .padding(.horizontal, 9)
+                                    .frame(height: 21)
+                                    .background {
+                                        if selected {
+                                            Capsule()
+                                                .fill(Color.white)
+                                                .matchedGeometryEffect(id: "activeVisualPill", in: visualPillNS)
+                                        }
+                                    }
+                                    .contentShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
+                    .padding(3)
+                    .background(Color.black.opacity(0.58))
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color.white.opacity(0.14), lineWidth: 0.75))
+                    .padding(.bottom, 10)
+                    .opacity((isHoveringStage || peekVisualSwitcher) ? 1.0 : 0.0)
+                    .offset(y: (isHoveringStage || peekVisualSwitcher) ? 0 : 4)
+                    .animation(.easeInOut(duration: 0.2), value: isHoveringStage)
+                    .animation(.easeInOut(duration: 0.2), value: peekVisualSwitcher)
+                    .allowsHitTesting(isHoveringStage || peekVisualSwitcher)
                 }
             }
             .frame(height: 192)
@@ -122,6 +142,14 @@ struct PopoverView: View {
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
                     .stroke(hairSoft, lineWidth: 1)
             )
+            .onHover { hovering in
+                isHoveringStage = hovering
+            }
+            .onChange(of: state.preset) { _, _ in
+                if !isHoveringStage {
+                    revealVisualSwitcherBriefly()
+                }
+            }
 
             // 2. Five Iconic Circular Geometric Soundscape Glyphs (Focus · Pulse · Rain · Drift · Still)
             HStack(spacing: 0) {
@@ -376,6 +404,16 @@ struct PopoverView: View {
         showOptions.toggle()
         DispatchQueue.main.async {
             onRequestResize?()
+        }
+    }
+
+    private func revealVisualSwitcherBriefly() {
+        peekHideTask?.cancel()
+        peekVisualSwitcher = true
+        peekHideTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1300))
+            guard !Task.isCancelled else { return }
+            peekVisualSwitcher = false
         }
     }
 

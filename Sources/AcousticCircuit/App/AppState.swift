@@ -31,6 +31,15 @@ enum VisualPreset: Int, CaseIterable, Identifiable, Sendable {
         case .liquid: return "04 Liquid"
         }
     }
+
+    var cleanName: String {
+        switch self {
+        case .circuit: return "Circuit"
+        case .ecology: return "Ecology"
+        case .phosphor: return "Scope"
+        case .liquid: return "Liquid"
+        }
+    }
 }
 
 enum FlowDuration: Int, CaseIterable, Sendable {
