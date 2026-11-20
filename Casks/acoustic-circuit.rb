@@ -4,8 +4,8 @@ cask "acoustic-circuit" do
 
   url "https://github.com/graemecode/acoustic-circuit/releases/download/v#{version}/AcousticCircuit-#{version}.dmg"
   name "Acoustic Circuit"
-  desc "Native 120Hz Metal macOS menu bar audio visualizer and harmonic instrument"
-  homepage "https://graemecode.github.io/acoustic-circuit/"
+  desc "Native macOS focus soundscape engine and 120Hz Metal audio visualizer"
+  homepage "https://strangechances.com/acoustic-circuit/"
 
   depends_on macos: ">= :sequoia"
 

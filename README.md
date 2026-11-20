@@ -2,7 +2,9 @@
 
 A native macOS **generative focus soundscape** & **120Hz Metal harmonic instrument** living quietly in your menu bar.
 
-Zero subscriptions, zero virtual audio drivers, zero Electron bloat — **2.3 MB native Apple Silicon app**, **Apple Developer ID signed & notarized**.
+**Website & live preview:** [strangechances.com/acoustic-circuit](https://strangechances.com/acoustic-circuit/)
+
+Zero subscriptions, zero virtual audio drivers, zero Electron bloat — **2.4 MB native Apple Silicon app**, **Apple Developer ID signed & notarized**.
 
 ## Install
 
