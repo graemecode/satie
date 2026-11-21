@@ -113,6 +113,9 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
     private var pingIndex = 0
     private var pingPongSize: CGSize = .zero
     private var lastPreset: VisualPreset = .circuit
+    private var desiredActive: Bool = true
+    private var pendingFPSUpdate: Int? = nil
+    nonisolated(unsafe) private var windowObservers: [NSObjectProtocol] = []
 
     init(frame: CGRect, compactMode: Bool) {
         self.compactMode = compactMode
@@ -141,15 +144,85 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
         fatalError("init(coder:) has not been implemented")
     }
 
+    deinit {
+        for obs in windowObservers {
+            NotificationCenter.default.removeObserver(obs)
+        }
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        self.isPaused = (window == nil)
+        installWindowObservers()
+        syncPauseState(forceRestart: true)
     }
 
     func setActive(_ active: Bool) {
-        let shouldPause = !active || (window == nil)
-        if isPaused != shouldPause {
-            isPaused = shouldPause
+        desiredActive = active
+        syncPauseState(forceRestart: active)
+    }
+
+    /// Ensures the MTKView display link is alive after preset switches, resizes, or fullscreen transitions.
+    func ensureRunning() {
+        syncPauseState(forceRestart: false)
+        if !isPaused, window?.isVisible == true {
+            draw()
+        }
+    }
+
+    private func installWindowObservers() {
+        for obs in windowObservers {
+            NotificationCenter.default.removeObserver(obs)
+        }
+        windowObservers.removeAll()
+        guard let win = window else { return }
+
+        let nc = NotificationCenter.default
+        let names: [NSNotification.Name] = [
+            NSWindow.didBecomeKeyNotification,
+            NSWindow.didChangeOcclusionStateNotification,
+            NSWindow.didEnterFullScreenNotification,
+            NSWindow.didExitFullScreenNotification,
+            NSWindow.didChangeScreenNotification
+        ]
+        for name in names {
+            let obs = nc.addObserver(forName: name, object: win, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.syncPauseState(forceRestart: true)
+                }
+            }
+            windowObservers.append(obs)
+        }
+    }
+
+    private func syncPauseState(forceRestart: Bool) {
+        guard let win = window else {
+            if !isPaused { isPaused = true }
+            return
+        }
+        let shouldRun = desiredActive && !isHidden
+        if !shouldRun {
+            if !isPaused { isPaused = true }
+            return
+        }
+        // On macOS 15+, toggling isPaused after fullscreen / occlusion transitions recovers any stalled CVDisplayLink.
+        if isPaused {
+            isPaused = false
+        } else if forceRestart && win.isVisible {
+            isPaused = true
+            isPaused = false
+        }
+    }
+
+    private func scheduleFPSChange(_ desiredFPS: Int) {
+        guard preferredFramesPerSecond != desiredFPS, pendingFPSUpdate != desiredFPS else { return }
+        pendingFPSUpdate = desiredFPS
+        // Never mutate preferredFramesPerSecond synchronously inside draw(in:), which can stall MTKView's display link on macOS 15+.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.pendingFPSUpdate == desiredFPS else { return }
+            self.pendingFPSUpdate = nil
+            if self.preferredFramesPerSecond != desiredFPS {
+                self.preferredFramesPerSecond = desiredFPS
+            }
         }
     }
 
@@ -202,13 +275,11 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
         let state = AppState.shared
         let snap = state.stepDSP(drivenByMetal: true)
 
-        // Match display refresh rate cleanly (60Hz cap in compact popover, up to 120Hz ProMotion in Studio/Fullscreen, 15Hz quiet standby)
+        // Match display refresh rate cleanly (deferred asynchronously so we never restart CVDisplayLink re-entrantly inside draw(in:))
         let screenMax = win.screen?.maximumFramesPerSecond ?? 60
         let activeCap = compactMode ? min(60, screenMax) : min(120, screenMax)
         let desiredFPS = snap.isSilent ? 15 : activeCap
-        if preferredFramesPerSecond != desiredFPS {
-            preferredFramesPerSecond = desiredFPS
-        }
+        scheduleFPSChange(desiredFPS)
 
         guard let drawable = currentDrawable,
               let renderPassDesc = currentRenderPassDescriptor else { return }

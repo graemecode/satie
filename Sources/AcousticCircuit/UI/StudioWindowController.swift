@@ -50,6 +50,7 @@ final class StudioStageNSView: NSView {
 
 struct StudioStageRepresentable: NSViewRepresentable {
     var isActive: Bool
+    var preset: VisualPreset
 
     func makeNSView(context: Context) -> StudioStageNSView {
         let view = StudioStageNSView(frame: .zero)
@@ -59,6 +60,9 @@ struct StudioStageRepresentable: NSViewRepresentable {
 
     func updateNSView(_ nsView: StudioStageNSView, context: Context) {
         nsView.metalView.setActive(isActive)
+        if isActive {
+            nsView.metalView.ensureRunning()
+        }
     }
 }
 
@@ -85,7 +89,7 @@ struct StudioContentView: View {
                 }
 
                 // Main Metal + Retina Schematic Stage
-                StudioStageRepresentable(isActive: state.isStudioOpen)
+                StudioStageRepresentable(isActive: state.isStudioOpen, preset: state.preset)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 // Bottom Status Bar (collapses smoothly in fullscreen idle)
@@ -372,6 +376,7 @@ final class StudioWindowController: NSObject, NSWindowDelegate {
             self?.close()
             onSwitchToMiniHUD()
         }
+        AppState.shared.isStudioOpen = true
         win.contentView = NSHostingView(rootView: content)
         if let saved = AppState.shared.settings.studioFrame,
            NSScreen.screens.contains(where: { $0.visibleFrame.intersects(saved) }) {
@@ -381,7 +386,6 @@ final class StudioWindowController: NSObject, NSWindowDelegate {
         }
 
         self.window = win
-        AppState.shared.isStudioOpen = true
         NSApp.activate(ignoringOtherApps: true)
         win.makeKeyAndOrderFront(nil)
 

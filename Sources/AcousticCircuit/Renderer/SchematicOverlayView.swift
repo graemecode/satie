@@ -76,7 +76,7 @@ final class SchematicOverlayView: NSView {
         drawText("24 BANDS INTO THE CIRCUIT", at: CGPoint(x: padX, y: h * 0.038), font: titleFont, color: white)
         let rateKhz = Int(round(a.sampleRate / 1000.0))
         drawText(
-            "CORE AUDIO PROCESS TAP · \(rateKhz) KHZ · 35 HZ → 14 KHZ · LIVE IMPULSE ROUTING",
+            "GENERATIVE ENGINE · \(rateKhz) KHZ · 35 HZ → 14 KHZ · LIVE IMPULSE ROUTING",
             at: CGPoint(x: padX, y: h * 0.038 + 18),
             font: subFont,
             color: soft
@@ -404,7 +404,7 @@ final class SchematicOverlayView: NSView {
             String(format: "[BASS] 35-180HZ @ %.0f%%", a.bass * 100),
             String(format: "[MIDS] DENSITY %.0f%%", a.mid * 100),
             String(format: "[FLUX] TRANSIENT %.2f", a.flux),
-            "[TAP]  \(sourceLabel)",
+            "[MODE] \(sourceLabel)",
             "[DSP]  vDSP 4096-FFT",
             "[GPU]  METAL 120HZ"
         ]
