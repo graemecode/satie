@@ -32,7 +32,6 @@
 		37877166FFA2E3CD064AAF2D /* DSPPrimitives.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97835604CF2371330F57FCF8 /* DSPPrimitives.swift */; };
 		39D848C2D3F191D1B2107DF0 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A33A2C51CABCFB6BEF4E27F /* Metal.framework */; };
 		3AA0571285D968694038B28B /* SoundscapeGlyphs.swift in Sources */ = {isa = PBXBuildFile; fileRef = C59C66190E52376DA2CF8F48 /* SoundscapeGlyphs.swift */; };
-		3ADC2E49C6BFEFDABC5A869F /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B088A28104E37FB1C43B26EA /* StoreKit.framework */; };
 		3CAFABF49209E48E533B910D /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C09B2662313A4B98C2FDB60B /* AudioToolbox.framework */; };
 		3D5920898AAF0757A9524D87 /* SoundscapeGlyphs.swift in Sources */ = {isa = PBXBuildFile; fileRef = C59C66190E52376DA2CF8F48 /* SoundscapeGlyphs.swift */; };
 		414D266FE2F48BDC9A5138A9 /* PopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3DA4821A4C1D37DA91900FD /* PopoverView.swift */; };
@@ -208,7 +207,6 @@
 				EE854EEDE342CE8E4275937A /* AudioToolbox.framework in Frameworks */,
 				66D65DEE1ADE32533C3685B8 /* Accelerate.framework in Frameworks */,
 				12AE3FF2CA8CA5FE04970097 /* MediaPlayer.framework in Frameworks */,
-				3ADC2E49C6BFEFDABC5A869F /* StoreKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -399,7 +397,7 @@
 			path = Renderer;
 			sourceTree = "<group>";
 		};
-		"TEMP_755DE8D8-A861-449D-98A8-47481F874A68" /* Resources */ = {
+		"TEMP_D926AA3C-E591-43E7-B2FE-DDB42ED4D7D7" /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 			);

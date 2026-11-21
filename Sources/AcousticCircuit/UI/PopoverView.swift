@@ -4,6 +4,7 @@ import SwiftUI
 
 struct PopoverView: View {
     @ObservedObject var state: AppState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let onOpenMiniHUD: () -> Void
     let onOpenStudio: () -> Void
     let onOpenFullscreen: () -> Void
@@ -59,7 +60,7 @@ struct PopoverView: View {
                     .onTapGesture {
                         let all = VisualPreset.allCases
                         let next = all[(state.preset.rawValue + 1) % all.count]
-                        withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                        withAnimation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82)) {
                             state.preset = next
                         }
                         state.performHaptic()
@@ -101,7 +102,7 @@ struct PopoverView: View {
                         ForEach(VisualPreset.allCases) { p in
                             let selected = (state.preset == p)
                             Button {
-                                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                                withAnimation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82)) {
                                     state.preset = p
                                 }
                                 state.performHaptic()
@@ -350,6 +351,12 @@ struct PopoverView: View {
                     .buttonStyle(QuietTextLinkStyle())
                 Button("FULLSCREEN") { onOpenFullscreen() }
                     .buttonStyle(QuietTextLinkStyle())
+                Button("PRIVACY") {
+                    if let url = URL(string: "https://strangechances.com/satie/privacy/") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                .buttonStyle(QuietTextLinkStyle())
                 Spacer()
                 Button("QUIT") { onQuit() }
                     .buttonStyle(QuietTextLinkStyle())

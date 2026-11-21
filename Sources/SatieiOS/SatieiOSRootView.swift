@@ -4,12 +4,13 @@ import SwiftUI
 
 private struct BraunPressButtonStyle: ButtonStyle {
     var pressedScale: CGFloat = 0.93
+    var reduceMotion: Bool = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? pressedScale : 1.0)
+            .scaleEffect((configuration.isPressed && !reduceMotion) ? pressedScale : 1.0)
             .opacity(configuration.isPressed ? 0.84 : 1.0)
-            .animation(.spring(response: 0.22, dampingFraction: 0.72), value: configuration.isPressed)
+            .animation(reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 0.72), value: configuration.isPressed)
     }
 }
 
@@ -17,6 +18,7 @@ struct SatieiOSRootView: View {
     @ObservedObject var state: SatieiOSState
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.verticalSizeClass) private var verticalSizeClass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var showOptions: Bool = false
     @State private var immersionMode: Bool = false
@@ -189,6 +191,7 @@ struct SatieiOSRootView: View {
         }
         .statusBarHidden(immersionMode)
         .onChange(of: state.preset) { _, _ in
+            guard !reduceMotion else { return }
             presetTransitionVeil = 0.55
             withAnimation(.easeOut(duration: 0.28)) {
                 presetTransitionVeil = 0.0
@@ -197,7 +200,7 @@ struct SatieiOSRootView: View {
         .sheet(isPresented: $showOptions) {
             optionsSheet
                 .presentationDetents([
-                    .height(state.preset == .phosphor ? 520 : 475),
+                    .height(state.preset == .phosphor ? 560 : 515),
                     .large
                 ])
                 .presentationDragIndicator(.visible)
@@ -306,7 +309,7 @@ struct SatieiOSRootView: View {
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }
-        .buttonStyle(BraunPressButtonStyle(pressedScale: 0.92))
+        .buttonStyle(BraunPressButtonStyle(pressedScale: 0.92, reduceMotion: reduceMotion))
         .accessibilityLabel("\(mode.title), \(mode.subtitle)")
         .accessibilityHint(isActive ? "Double tap to pause" : "Double tap to play")
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
@@ -325,7 +328,7 @@ struct SatieiOSRootView: View {
                 .clipShape(Circle())
                 .shadow(color: Color.white.opacity(state.isFocusPlaying ? 0.24 : 0.08), radius: 18)
         }
-        .buttonStyle(BraunPressButtonStyle(pressedScale: 0.91))
+        .buttonStyle(BraunPressButtonStyle(pressedScale: 0.91, reduceMotion: reduceMotion))
         .accessibilityLabel(state.isFocusPlaying ? "Pause \(state.focusMode.title)" : "Play \(state.focusMode.title)")
     }
 
@@ -351,7 +354,7 @@ struct SatieiOSRootView: View {
                 }
             }
         }
-        .buttonStyle(BraunPressButtonStyle(pressedScale: 0.92))
+        .buttonStyle(BraunPressButtonStyle(pressedScale: 0.92, reduceMotion: reduceMotion))
         .accessibilityLabel("Options")
     }
 
@@ -373,7 +376,7 @@ struct SatieiOSRootView: View {
             .clipShape(Capsule())
             .overlay(Capsule().stroke(hairSoft, lineWidth: 1))
         }
-        .buttonStyle(BraunPressButtonStyle(pressedScale: 0.94))
+        .buttonStyle(BraunPressButtonStyle(pressedScale: 0.94, reduceMotion: reduceMotion))
         .accessibilityLabel("Sleep timer, \(countdown) remaining")
     }
 
@@ -389,13 +392,13 @@ struct SatieiOSRootView: View {
 
     private func flashVisualToast(_ text: String) {
         visualToastTask?.cancel()
-        withAnimation(.easeOut(duration: 0.18)) {
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
             visualToastLabel = text
         }
         visualToastTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(1.3))
             guard !Task.isCancelled else { return }
-            withAnimation(.easeOut(duration: 0.35)) {
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.35)) {
                 visualToastLabel = nil
             }
         }
@@ -404,7 +407,7 @@ struct SatieiOSRootView: View {
     private func toggleImmersion(_ enter: Bool) {
         state.performHaptic()
         immersionHintTask?.cancel()
-        withAnimation(.easeInOut(duration: 0.28)) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.28)) {
             immersionMode = enter
             showImmersionHint = enter
         }
@@ -412,7 +415,7 @@ struct SatieiOSRootView: View {
             immersionHintTask = Task { @MainActor in
                 try? await Task.sleep(for: .seconds(1.8))
                 guard !Task.isCancelled else { return }
-                withAnimation(.easeOut(duration: 0.45)) {
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.45)) {
                     showImmersionHint = false
                 }
             }
@@ -428,12 +431,12 @@ struct SatieiOSRootView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("TIMER")
-                            .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                            .font(.caption2.monospaced().weight(.semibold))
                             .foregroundColor(inkSoft)
                             .tracking(0.8)
                         Spacer()
                         Text(timerStatusLabel)
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(.caption2.monospaced().weight(.medium))
                             .foregroundColor(state.flowMinutes > 0 ? .white : inkDim)
                     }
 
@@ -445,14 +448,14 @@ struct SatieiOSRootView: View {
                                 state.performHaptic()
                             } label: {
                                 Text(mins == 0 ? "∞" : "\(mins)m")
-                                    .font(.system(size: 12, weight: on ? .semibold : .regular, design: .monospaced))
+                                    .font(.caption.monospaced().weight(on ? .semibold : .regular))
                                     .foregroundColor(on ? .black : inkSoft)
                                     .frame(maxWidth: .infinity)
-                                    .frame(height: 36)
+                                    .frame(minHeight: 36)
                                     .background(on ? Color.white : Color.white.opacity(0.07))
                                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                             }
-                            .buttonStyle(BraunPressButtonStyle(pressedScale: 0.95))
+                            .buttonStyle(BraunPressButtonStyle(pressedScale: 0.95, reduceMotion: reduceMotion))
                             .accessibilityLabel(mins == 0 ? "No timer limit" : "\(mins) minute timer")
                             .accessibilityAddTraits(on ? [.isSelected] : [])
                         }
@@ -463,11 +466,11 @@ struct SatieiOSRootView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("BACKGROUND NOISE")
-                            .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                            .font(.caption2.monospaced().weight(.semibold))
                             .foregroundColor(inkSoft)
                             .tracking(0.8)
                         Text("Layer gentle rain or brown noise under any mode")
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(inkDim)
                     }
 
@@ -479,14 +482,14 @@ struct SatieiOSRootView: View {
                                 state.performHaptic()
                             } label: {
                                 Text(bed.label)
-                                    .font(.system(size: 12.5, weight: on ? .semibold : .regular))
+                                    .font(.footnote.weight(on ? .semibold : .regular))
                                     .foregroundColor(on ? .black : inkSoft)
                                     .frame(maxWidth: .infinity)
-                                    .frame(height: 36)
+                                    .frame(minHeight: 36)
                                     .background(on ? Color.white : Color.white.opacity(0.07))
                                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                             }
-                            .buttonStyle(BraunPressButtonStyle(pressedScale: 0.95))
+                            .buttonStyle(BraunPressButtonStyle(pressedScale: 0.95, reduceMotion: reduceMotion))
                             .accessibilityAddTraits(on ? [.isSelected] : [])
                         }
                     }
@@ -496,12 +499,12 @@ struct SatieiOSRootView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("VISUAL")
-                            .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                            .font(.caption2.monospaced().weight(.semibold))
                             .foregroundColor(inkSoft)
                             .tracking(0.8)
                         Spacer()
                         Text(state.visualFollowsSoundscape ? "PAIRED · \(state.preset.cleanName.uppercased())" : "PINNED · \(state.preset.cleanName.uppercased())")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(.caption2.monospaced().weight(.medium))
                             .foregroundColor(inkDim)
                     }
 
@@ -524,7 +527,7 @@ struct SatieiOSRootView: View {
                 if state.preset == .phosphor {
                     HStack {
                         Text("CRT PHOSPHOR")
-                            .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                            .font(.caption2.monospaced().weight(.semibold))
                             .foregroundColor(inkSoft)
                             .tracking(0.8)
                         Spacer()
@@ -536,14 +539,14 @@ struct SatieiOSRootView: View {
                                     state.performHaptic()
                                 } label: {
                                     Text(label)
-                                        .font(.system(size: 11, weight: on ? .semibold : .regular, design: .monospaced))
+                                        .font(.caption2.monospaced().weight(on ? .semibold : .regular))
                                         .foregroundColor(on ? .black : inkSoft)
                                         .padding(.horizontal, 10)
-                                        .frame(height: 28)
+                                        .frame(minHeight: 28)
                                         .background(on ? Color.white : Color.white.opacity(0.07))
                                         .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                                 }
-                                .buttonStyle(BraunPressButtonStyle(pressedScale: 0.95))
+                                .buttonStyle(BraunPressButtonStyle(pressedScale: 0.95, reduceMotion: reduceMotion))
                                 .accessibilityAddTraits(on ? [.isSelected] : [])
                             }
                         }
@@ -555,11 +558,11 @@ struct SatieiOSRootView: View {
                 Toggle(isOn: $state.mixWithOthers) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("MIX WITH OTHER AUDIO")
-                            .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                            .font(.caption2.monospaced().weight(.semibold))
                             .foregroundColor(inkSoft)
                             .tracking(0.8)
                         Text("Play Satie underneath podcasts, videos, or other music")
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(inkDim)
                     }
                 }
@@ -568,15 +571,30 @@ struct SatieiOSRootView: View {
                 Toggle(isOn: $state.keepScreenAwake) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("KEEP SCREEN AWAKE")
-                            .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                            .font(.caption2.monospaced().weight(.semibold))
                             .foregroundColor(inkSoft)
                             .tracking(0.8)
                         Text("Keep the visual display glowing on a desk or stand")
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(inkDim)
                     }
                 }
                 .tint(.white)
+
+                Divider().overlay(hairSoft)
+
+                HStack {
+                    Text("100% OFFLINE · ZERO TRACKING")
+                        .font(.caption2.monospaced())
+                        .foregroundColor(inkDim)
+                    Spacer()
+                    if let privacyPolicyURL = URL(string: "https://strangechances.com/satie/privacy/") {
+                        Link("Privacy Policy", destination: privacyPolicyURL)
+                            .font(.caption.weight(.medium))
+                            .foregroundColor(inkSoft)
+                    }
+                }
+                .padding(.top, 2)
             }
             .padding(.horizontal, 22)
             .padding(.top, 24)
@@ -587,14 +605,14 @@ struct SatieiOSRootView: View {
     private func visualOptionChip(label: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(label)
-                .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                .font(.footnote.weight(selected ? .semibold : .regular))
                 .foregroundColor(selected ? .black : inkSoft)
                 .frame(maxWidth: .infinity)
-                .frame(height: 34)
+                .frame(minHeight: 34)
                 .background(selected ? Color.white : Color.white.opacity(0.07))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
-        .buttonStyle(BraunPressButtonStyle(pressedScale: 0.95))
+        .buttonStyle(BraunPressButtonStyle(pressedScale: 0.95, reduceMotion: reduceMotion))
         .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 

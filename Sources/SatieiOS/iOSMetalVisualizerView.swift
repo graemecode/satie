@@ -217,7 +217,9 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
         let proc = ProcessInfo.processInfo
         let isPingPong = (preset == .phosphor || preset == .liquid)
         let activeCap: Int
-        if proc.isLowPowerModeEnabled || proc.thermalState == .serious || proc.thermalState == .critical {
+        if UIAccessibility.isReduceMotionEnabled {
+            activeCap = 15
+        } else if proc.isLowPowerModeEnabled || proc.thermalState == .serious || proc.thermalState == .critical {
             activeCap = 30
         } else if proc.thermalState == .fair || isPingPong {
             activeCap = min(60, maxFPS)

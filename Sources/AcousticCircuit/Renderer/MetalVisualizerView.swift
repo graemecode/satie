@@ -288,7 +288,8 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
 
         // Match display refresh rate cleanly (deferred asynchronously so we never restart CVDisplayLink re-entrantly inside draw(in:))
         let screenMax = win.screen?.maximumFramesPerSecond ?? 60
-        let activeCap = compactMode ? min(60, screenMax) : min(120, screenMax)
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let activeCap = reduceMotion ? 15 : (compactMode ? min(60, screenMax) : min(120, screenMax))
         let desiredFPS = snap.isSilent ? 15 : activeCap
         scheduleFPSChange(desiredFPS)
 

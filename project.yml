@@ -146,7 +146,6 @@ targets:
       - sdk: AudioToolbox.framework
       - sdk: Accelerate.framework
       - sdk: MediaPlayer.framework
-      - sdk: StoreKit.framework
     info:
       path: AppStore/Info-iOS.plist
       properties:
