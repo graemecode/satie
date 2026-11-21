@@ -49,6 +49,7 @@ final class SharedMetalPipelines {
     let phosphorDisplayPipeline: MTLRenderPipelineState
     let liquidUpdatePipeline: MTLRenderPipelineState
     let liquidDisplayPipeline: MTLRenderPipelineState
+    let horizonPipeline: MTLRenderPipelineState
 
     private init() {
         guard let dev = MTLCreateSystemDefaultDevice(),
@@ -95,6 +96,7 @@ final class SharedMetalPipelines {
         self.phosphorDisplayPipeline = makePipeline(vertex: "fullscreenVertex", fragment: "phosphorDisplayFragment")
         self.liquidUpdatePipeline = makePipeline(vertex: "fullscreenVertex", fragment: "liquidUpdateFragment", pixelFormat: .rgba16Float)
         self.liquidDisplayPipeline = makePipeline(vertex: "fullscreenVertex", fragment: "liquidDisplayFragment")
+        self.horizonPipeline = makePipeline(vertex: "fullscreenVertex", fragment: "horizonFragment")
     }
 }
 
@@ -405,6 +407,14 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
                     enc.endEncoding()
                 }
                 pingIndex = nextIndex
+            }
+
+        case .horizon:
+            if let enc = cmd.makeRenderCommandEncoder(descriptor: renderPassDesc) {
+                enc.setRenderPipelineState(pipelines.horizonPipeline)
+                enc.setFragmentBuffer(uBuf, offset: 0, index: 0)
+                enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+                enc.endEncoding()
             }
         }
 

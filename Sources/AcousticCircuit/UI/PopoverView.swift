@@ -96,8 +96,8 @@ struct PopoverView: View {
 
                     Spacer()
 
-                    // Hover-revealed frosted glass visual switcher (0% clutter at rest, instant clarity on hover or 1–4)
-                    HStack(spacing: 2) {
+                    // Hover-revealed frosted glass visual switcher (0% clutter at rest, instant override on hover or 1–5)
+                    HStack(spacing: 1.5) {
                         ForEach(VisualPreset.allCases) { p in
                             let selected = (state.preset == p)
                             Button {
@@ -107,10 +107,10 @@ struct PopoverView: View {
                                 state.performHaptic()
                             } label: {
                                 Text(p.cleanName)
-                                    .font(.system(size: 9.5, weight: selected ? .semibold : .medium))
+                                    .font(.system(size: 9.0, weight: selected ? .semibold : .medium))
                                     .foregroundColor(selected ? .black : Color.white.opacity(0.72))
-                                    .padding(.horizontal, 9)
-                                    .frame(height: 21)
+                                    .padding(.horizontal, 7.5)
+                                    .frame(height: 20)
                                     .background {
                                         if selected {
                                             Capsule()
@@ -144,11 +144,6 @@ struct PopoverView: View {
             )
             .onHover { hovering in
                 isHoveringStage = hovering
-            }
-            .onChange(of: state.preset) { _, _ in
-                if !isHoveringStage {
-                    revealVisualSwitcherBriefly()
-                }
             }
 
             // 2. Five Iconic Circular Geometric Soundscape Glyphs (Focus · Pulse · Rain · Drift · Still)

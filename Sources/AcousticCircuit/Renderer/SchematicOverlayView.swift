@@ -43,7 +43,7 @@ final class SchematicOverlayView: NSView {
             drawCircuitSchematic(ctx: ctx, size: bounds.size)
         case .ecology:
             drawEcologyFrames(ctx: ctx, size: bounds.size)
-        case .phosphor, .liquid:
+        case .phosphor, .liquid, .horizon:
             // Pure unobstructed GPU canvas
             break
         }

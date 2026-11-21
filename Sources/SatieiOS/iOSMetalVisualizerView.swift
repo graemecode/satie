@@ -48,6 +48,7 @@ final class SharediOSMetalPipelines {
     let phosphorDisplayPipeline: MTLRenderPipelineState
     let liquidUpdatePipeline: MTLRenderPipelineState
     let liquidDisplayPipeline: MTLRenderPipelineState
+    let horizonPipeline: MTLRenderPipelineState
 
     private init() {
         guard let dev = MTLCreateSystemDefaultDevice(),
@@ -88,6 +89,7 @@ final class SharediOSMetalPipelines {
         self.phosphorDisplayPipeline = makePipeline(vertex: "fullscreenVertex", fragment: "phosphorDisplayFragment")
         self.liquidUpdatePipeline = makePipeline(vertex: "fullscreenVertex", fragment: "liquidUpdateFragment", pixelFormat: .rgba16Float)
         self.liquidDisplayPipeline = makePipeline(vertex: "fullscreenVertex", fragment: "liquidDisplayFragment")
+        self.horizonPipeline = makePipeline(vertex: "fullscreenVertex", fragment: "horizonFragment")
     }
 }
 
@@ -102,7 +104,7 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
     private var pingPongTextures: [MTLTexture?] = [nil, nil]
     private var pingIndex = 0
     private var pingPongSize: CGSize = .zero
-    private var lastPreset: iOSVisualPreset = .circuit
+    private var lastPreset: VisualPreset = .circuit
     private var pendingFPS: Int? = nil
 
     init(frame: CGRect) {
@@ -240,14 +242,14 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
         uniforms.resolution = SIMD2<Float>(Float(size.width), Float(size.height))
         // Frame the luminous core gracefully in the open stage across iPhone Portrait, iPhone Landscape desk-stand, and iPad
         if isPortrait {
-            uniforms.coreCenter = SIMD2<Float>(0.5, 0.42)
-            uniforms.coreScale = 0.56
-        } else if isCompactLandscape {
             uniforms.coreCenter = SIMD2<Float>(0.5, 0.44)
-            uniforms.coreScale = 0.72
+            uniforms.coreScale = 0.58
+        } else if isCompactLandscape {
+            uniforms.coreCenter = SIMD2<Float>(0.5, 0.46)
+            uniforms.coreScale = 0.74
         } else {
-            uniforms.coreCenter = SIMD2<Float>(0.5, 0.45)
-            uniforms.coreScale = 0.72
+            uniforms.coreCenter = SIMD2<Float>(0.5, 0.46)
+            uniforms.coreScale = 0.74
         }
         uniforms.time = Float(snap.time)
         uniforms.dt = frameDt
@@ -341,6 +343,14 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
                 }
                 pingIndex = nextIndex
             }
+
+        case .horizon:
+            if let enc = cmd.makeRenderCommandEncoder(descriptor: renderPassDesc) {
+                enc.setRenderPipelineState(pipelines.horizonPipeline)
+                enc.setFragmentBuffer(uBuf, offset: 0, index: 0)
+                enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+                enc.endEncoding()
+            }
         }
 
         cmd.present(drawable)
@@ -350,7 +360,7 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
 
 struct iOSMetalVisualizerRepresentable: UIViewRepresentable {
     var isActive: Bool
-    var preset: iOSVisualPreset
+    var preset: VisualPreset
 
     func makeUIView(context: Context) -> iOSAcousticMetalView {
         let v = iOSAcousticMetalView(frame: .zero)

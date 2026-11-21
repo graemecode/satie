@@ -22,8 +22,9 @@ struct SatieiOSRootView: View {
     @State private var immersionMode: Bool = false
     @State private var showImmersionHint: Bool = false
     @State private var immersionHintTask: Task<Void, Never>? = nil
+    @State private var visualToastLabel: String? = nil
+    @State private var visualToastTask: Task<Void, Never>? = nil
     @State private var presetTransitionVeil: Double = 0.0
-    @Namespace private var visualPillNS
 
     private let timerPresets: [Int] = [0, 15, 25, 45, 60, 90]
     private let hair = Color.white.opacity(0.14)
@@ -60,7 +61,7 @@ struct SatieiOSRootView: View {
             // Soundscape-matched whisper-subtle atmospheric light aura
             RadialGradient(
                 colors: [soundscapeAuraColor.opacity(0.20), Color.clear],
-                center: UnitPoint(x: 0.5, y: isCompactLandscape ? 0.44 : 0.40),
+                center: UnitPoint(x: 0.5, y: 0.44),
                 startRadius: 24,
                 endRadius: isRegularCanvas ? 440 : 340
             )
@@ -83,7 +84,7 @@ struct SatieiOSRootView: View {
                     colors: [Color.black.opacity(0.0), Color.black.opacity(0.84)],
                     startPoint: .top, endPoint: .bottom
                 )
-                .frame(height: isCompactLandscape ? 128 : 310)
+                .frame(height: isCompactLandscape ? 112 : 270)
             }
             .ignoresSafeArea()
             .opacity(immersionMode ? 0.12 : 1.0)
@@ -98,7 +99,7 @@ struct SatieiOSRootView: View {
                     .padding(.horizontal, 22)
                     .padding(.top, isCompactLandscape ? 10 : (isRegularCanvas ? 22 : 14))
 
-                // Interactive open stage surface: tap for Immersion Mode, swipe left/right to switch visualizations.
+                // Interactive open stage surface: tap for Immersion Mode, swipe left/right to explore visuals.
                 // Scoped to the open canvas (not behind dock buttons) so a 2px mis-tap near a glyph never hides the HUD.
                 Color.clear
                     .contentShape(Rectangle())
@@ -106,9 +107,26 @@ struct SatieiOSRootView: View {
                         toggleImmersion(true)
                     }
                     .gesture(stageSwipeGesture)
+                    .overlay(alignment: .bottom) {
+                        if let label = visualToastLabel {
+                            Text(label)
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .tracking(1.0)
+                                .foregroundColor(Color.white.opacity(0.86))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 7)
+                                .background(Color.black.opacity(0.56))
+                                .background(.ultraThinMaterial)
+                                .clipShape(Capsule())
+                                .overlay(Capsule().stroke(hair, lineWidth: 0.8))
+                                .padding(.bottom, 16)
+                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                                .allowsHitTesting(false)
+                        }
+                    }
                     .accessibilityHidden(true)
 
-                // Bottom Tactile Control Dock (adapts cleanly across iPhone Portrait, iPhone Landscape Desk Stand, and iPad)
+                // Bottom Tactile Control Dock: pure Braun minimalism (5 soundscape worlds + Play/Pause + Options)
                 if isCompactLandscape {
                     compactLandscapeDock
                         .frame(maxWidth: contentMaxWidth)
@@ -118,7 +136,7 @@ struct SatieiOSRootView: View {
                     portraitOrTabletDock
                         .frame(maxWidth: contentMaxWidth)
                         .padding(.horizontal, 20)
-                        .padding(.bottom, isRegularCanvas ? 30 : 22)
+                        .padding(.bottom, isRegularCanvas ? 30 : 24)
                 }
             }
             .opacity(immersionMode ? 0.0 : 1.0)
@@ -135,7 +153,21 @@ struct SatieiOSRootView: View {
                     }
                     .gesture(stageSwipeGesture)
                     .overlay(alignment: .bottom) {
-                        if showImmersionHint {
+                        if let label = visualToastLabel {
+                            Text(label)
+                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .tracking(1.0)
+                                .foregroundColor(Color.white.opacity(0.86))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 7)
+                                .background(Color.black.opacity(0.56))
+                                .background(.ultraThinMaterial)
+                                .clipShape(Capsule())
+                                .overlay(Capsule().stroke(hair, lineWidth: 0.8))
+                                .padding(.bottom, 36)
+                                .transition(.opacity)
+                                .allowsHitTesting(false)
+                        } else if showImmersionHint {
                             Text("TAP ANYWHERE TO SHOW CONTROLS")
                                 .font(.system(size: 10, weight: .medium, design: .monospaced))
                                 .tracking(0.8)
@@ -165,8 +197,8 @@ struct SatieiOSRootView: View {
         .sheet(isPresented: $showOptions) {
             optionsSheet
                 .presentationDetents([
-                    .height(state.preset == .phosphor ? 415 : 365),
-                    .medium
+                    .height(state.preset == .phosphor ? 520 : 475),
+                    .large
                 ])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(Color(red: 0.055, green: 0.062, blue: 0.078))
@@ -204,13 +236,11 @@ struct SatieiOSRootView: View {
     }
 
     private var portraitOrTabletDock: some View {
-        VStack(spacing: isRegularCanvas ? 22 : 20) {
-            visualSwitcherPill
-
-            // Five Iconic Circular Geometric Soundscape Glyphs (FOCUS · PULSE · RAIN · STILL · NIGHT)
+        VStack(spacing: isRegularCanvas ? 24 : 22) {
+            // Five Iconic Circular Geometric Soundscape Worlds (FOCUS · PULSE · RAIN · STILL · NIGHT)
             HStack(spacing: 0) {
                 ForEach(FocusSoundscape.allCases) { mode in
-                    soundscapeButton(mode: mode, glyphSize: isRegularCanvas ? 52 : 46)
+                    soundscapeButton(mode: mode, glyphSize: isRegularCanvas ? 52 : 48)
                 }
             }
 
@@ -236,65 +266,25 @@ struct SatieiOSRootView: View {
 
     /// Single-row Braun desktop-instrument bar for iPhone landscape MagSafe desk-stand orientation.
     private var compactLandscapeDock: some View {
-        VStack(spacing: 10) {
-            visualSwitcherPill
-
-            HStack(spacing: 14) {
-                HStack(spacing: 6) {
-                    ForEach(FocusSoundscape.allCases) { mode in
-                        soundscapeButton(mode: mode, glyphSize: 38)
-                    }
+        HStack(spacing: 16) {
+            HStack(spacing: 6) {
+                ForEach(FocusSoundscape.allCases) { mode in
+                    soundscapeButton(mode: mode, glyphSize: 40)
                 }
-                .frame(maxWidth: .infinity)
+            }
+            .frame(maxWidth: .infinity)
 
-                HStack(spacing: 12) {
-                    if let countdown = compactCountdown {
-                        countdownPill(countdown)
-                    }
-                    playPauseButton(diameter: 50, iconSize: 18)
-                    optionsButton(diameter: 38, iconSize: 14)
+            HStack(spacing: 12) {
+                if let countdown = compactCountdown {
+                    countdownPill(countdown)
                 }
+                playPauseButton(diameter: 52, iconSize: 18)
+                optionsButton(diameter: 40, iconSize: 15)
             }
         }
     }
 
     // MARK: - Controls
-
-    private var visualSwitcherPill: some View {
-        HStack(spacing: 2) {
-            ForEach(iOSVisualPreset.allCases) { p in
-                let selected = (state.preset == p)
-                Button {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                        state.preset = p
-                    }
-                    state.performHaptic()
-                } label: {
-                    Text(p.cleanName)
-                        .font(.system(size: 11, weight: selected ? .semibold : .medium))
-                        .foregroundColor(selected ? .black : Color.white.opacity(0.74))
-                        .padding(.horizontal, 12)
-                        .frame(height: 26)
-                        .background {
-                            if selected {
-                                Capsule()
-                                    .fill(Color.white)
-                                    .matchedGeometryEffect(id: "iosVisualPill", in: visualPillNS)
-                            }
-                        }
-                        .contentShape(Capsule())
-                }
-                .buttonStyle(BraunPressButtonStyle(pressedScale: 0.96))
-                .accessibilityLabel("\(p.cleanName) visualizer")
-                .accessibilityAddTraits(selected ? [.isSelected] : [])
-            }
-        }
-        .padding(3)
-        .background(Color.black.opacity(0.50))
-        .background(.ultraThinMaterial)
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(Color.white.opacity(0.14), lineWidth: 0.8))
-    }
 
     private func soundscapeButton(mode: FocusSoundscape, glyphSize: CGFloat) -> some View {
         let isSelected = (state.focusMode == mode)
@@ -353,7 +343,7 @@ struct SatieiOSRootView: View {
                     .clipShape(Circle())
                     .overlay(Circle().stroke(hair, lineWidth: 1))
 
-                if state.maskingBed != .off || state.flowMinutes > 0 || state.mixWithOthers {
+                if state.maskingBed != .off || state.flowMinutes > 0 || state.mixWithOthers || !state.visualFollowsSoundscape {
                     Circle()
                         .fill(Color.white)
                         .frame(width: 6, height: 6)
@@ -391,11 +381,24 @@ struct SatieiOSRootView: View {
         DragGesture(minimumDistance: 36, coordinateSpace: .local)
             .onEnded { value in
                 if abs(value.translation.width) > abs(value.translation.height) * 1.4 {
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                        state.cycleVisual(forward: value.translation.width < 0)
-                    }
+                    state.cycleVisual(forward: value.translation.width < 0)
+                    flashVisualToast(state.preset.cleanName.uppercased())
                 }
             }
+    }
+
+    private func flashVisualToast(_ text: String) {
+        visualToastTask?.cancel()
+        withAnimation(.easeOut(duration: 0.18)) {
+            visualToastLabel = text
+        }
+        visualToastTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.3))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.35)) {
+                visualToastLabel = nil
+            }
+        }
     }
 
     private func toggleImmersion(_ enter: Bool) {
@@ -489,6 +492,35 @@ struct SatieiOSRootView: View {
                     }
                 }
 
+                // Visual World Pairing / Override (Auto by default; swipe canvas anytime)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("VISUAL")
+                            .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                            .foregroundColor(inkSoft)
+                            .tracking(0.8)
+                        Spacer()
+                        Text(state.visualFollowsSoundscape ? "PAIRED · \(state.preset.cleanName.uppercased())" : "PINNED · \(state.preset.cleanName.uppercased())")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundColor(inkDim)
+                    }
+
+                    let gridColumns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 3)
+                    LazyVGrid(columns: gridColumns, spacing: 6) {
+                        visualOptionChip(label: "Auto", selected: state.visualFollowsSoundscape) {
+                            state.setVisualOverride(nil)
+                        }
+                        ForEach(VisualPreset.allCases) { p in
+                            visualOptionChip(
+                                label: p.cleanName,
+                                selected: !state.visualFollowsSoundscape && state.preset == p
+                            ) {
+                                state.setVisualOverride(p)
+                            }
+                        }
+                    }
+                }
+
                 if state.preset == .phosphor {
                     HStack {
                         Text("CRT PHOSPHOR")
@@ -550,6 +582,20 @@ struct SatieiOSRootView: View {
             .padding(.top, 24)
             .padding(.bottom, 18)
         }
+    }
+
+    private func visualOptionChip(label: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                .foregroundColor(selected ? .black : inkSoft)
+                .frame(maxWidth: .infinity)
+                .frame(height: 34)
+                .background(selected ? Color.white : Color.white.opacity(0.07))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(BraunPressButtonStyle(pressedScale: 0.95))
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
     // MARK: - Helpers

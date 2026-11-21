@@ -4,6 +4,57 @@ import ServiceManagement
 #endif
 import Foundation
 
+public enum VisualPreset: Int, CaseIterable, Identifiable, Sendable {
+    case circuit = 0
+    case ecology = 1
+    case phosphor = 2
+    case liquid = 3
+    case horizon = 4
+
+    public var id: Int { rawValue }
+
+    public var title: String {
+        switch self {
+        case .circuit:  return "01 The Circuit"
+        case .ecology:  return "02 Ecology Wall"
+        case .phosphor: return "03 Phosphor Scope"
+        case .liquid:   return "04 Nocturne Silk"
+        case .horizon:  return "05 Horizon"
+        }
+    }
+
+    public var shortTitle: String {
+        switch self {
+        case .circuit:  return "01 Circuit"
+        case .ecology:  return "02 Ecology"
+        case .phosphor: return "03 Scope"
+        case .liquid:   return "04 Nocturne"
+        case .horizon:  return "05 Horizon"
+        }
+    }
+
+    public var cleanName: String {
+        switch self {
+        case .circuit:  return "Circuit"
+        case .ecology:  return "Ecology"
+        case .phosphor: return "Scope"
+        case .liquid:   return "Nocturne"
+        case .horizon:  return "Horizon"
+        }
+    }
+
+    /// Signature audiovisual world paired by default to each soundscape.
+    public static func paired(for mode: FocusSoundscape) -> VisualPreset {
+        switch mode {
+        case .focus: return .circuit
+        case .pulse: return .phosphor
+        case .rain:  return .ecology
+        case .still: return .horizon
+        case .drift: return .liquid
+        }
+    }
+}
+
 public enum SensitivityMode: String, CaseIterable, Identifiable, Sendable {
     case calm
     case balanced
@@ -59,6 +110,7 @@ public final class SettingsStore: @unchecked Sendable {
         static let lastReviewPromptVersion = "ac.lastReviewPromptVersion"
         static let keepScreenAwake = "ac.keepScreenAwake"
         static let mixWithOthers = "ac.mixWithOthers"
+        static let visualFollowsSoundscape = "ac.visualFollowsSoundscape"
     }
 
     public init(defaults: UserDefaults = .standard) {
@@ -149,6 +201,14 @@ public final class SettingsStore: @unchecked Sendable {
     public var mixWithOthers: Bool {
         get { defaults.bool(forKey: Keys.mixWithOthers) }
         set { defaults.set(newValue, forKey: Keys.mixWithOthers) }
+    }
+
+    public var visualFollowsSoundscape: Bool {
+        get {
+            if defaults.object(forKey: Keys.visualFollowsSoundscape) == nil { return true }
+            return defaults.bool(forKey: Keys.visualFollowsSoundscape)
+        }
+        set { defaults.set(newValue, forKey: Keys.visualFollowsSoundscape) }
     }
 
     #if os(macOS)

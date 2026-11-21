@@ -317,6 +317,7 @@ final class StudioNSWindow: NSWindow {
         case "2": AppState.shared.preset = .ecology; AppState.shared.performHaptic(); return
         case "3": AppState.shared.preset = .phosphor; AppState.shared.performHaptic(); return
         case "4": AppState.shared.preset = .liquid; AppState.shared.performHaptic(); return
+        case "5": AppState.shared.preset = .horizon; AppState.shared.performHaptic(); return
         case " ": AppState.shared.togglePlayOrStartFocus(); return
         case "m": AppState.shared.toggleSystemMute(); return
         default: break

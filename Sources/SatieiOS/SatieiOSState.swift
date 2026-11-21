@@ -5,32 +5,17 @@ import QuartzCore
 import StoreKit
 import UIKit
 
-enum iOSVisualPreset: Int, CaseIterable, Identifiable, Sendable {
-    case circuit = 0
-    case ecology = 1
-    case phosphor = 2
-    case liquid = 3
-
-    var id: Int { rawValue }
-
-    var cleanName: String {
-        switch self {
-        case .circuit: return "Circuit"
-        case .ecology: return "Ecology"
-        case .phosphor: return "Scope"
-        case .liquid: return "Liquid"
-        }
-    }
-}
-
 @MainActor
 final class SatieiOSState: ObservableObject {
     static let shared = SatieiOSState()
 
     let settings = SettingsStore()
 
-    @Published var preset: iOSVisualPreset {
+    @Published var preset: VisualPreset {
         didSet { settings.presetRaw = preset.rawValue }
+    }
+    @Published var visualFollowsSoundscape: Bool {
+        didSet { settings.visualFollowsSoundscape = visualFollowsSoundscape }
     }
     @Published var amberPhosphor: Bool {
         didSet { settings.amberPhosphor = amberPhosphor }
@@ -39,6 +24,12 @@ final class SatieiOSState: ObservableObject {
         didSet {
             settings.focusMode = focusMode
             focusSound.setMode(focusMode)
+            if visualFollowsSoundscape {
+                let target = VisualPreset.paired(for: focusMode)
+                if preset != target {
+                    preset = target
+                }
+            }
             if isFocusPlaying {
                 syncNowPlaying()
             }
@@ -91,9 +82,14 @@ final class SatieiOSState: ObservableObject {
     }
 
     private init() {
-        self.preset = iOSVisualPreset(rawValue: settings.presetRaw) ?? .circuit
+        let initialMode = settings.focusMode
+        let autoVisual = settings.visualFollowsSoundscape
+        self.visualFollowsSoundscape = autoVisual
+        self.preset = autoVisual
+            ? VisualPreset.paired(for: initialMode)
+            : (VisualPreset(rawValue: settings.presetRaw) ?? VisualPreset.paired(for: initialMode))
         self.amberPhosphor = settings.amberPhosphor
-        self.focusMode = settings.focusMode
+        self.focusMode = initialMode
         self.maskingBed = settings.maskingBed
         self.flowMinutes = settings.flowMinutes
         self.keepScreenAwake = settings.keepScreenAwake
@@ -220,9 +216,21 @@ final class SatieiOSState: ObservableObject {
     }
 
     func cycleVisual(forward: Bool = true) {
-        let all = iOSVisualPreset.allCases
+        let all = VisualPreset.allCases
         let next = all[(preset.rawValue + (forward ? 1 : all.count - 1)) % all.count]
         preset = next
+        performHaptic()
+    }
+
+    /// Pin a specific visual across all soundscapes, or pass `nil` for Auto (paired audiovisual worlds).
+    func setVisualOverride(_ override: VisualPreset?) {
+        if let pinned = override {
+            visualFollowsSoundscape = false
+            preset = pinned
+        } else {
+            visualFollowsSoundscape = true
+            preset = VisualPreset.paired(for: focusMode)
+        }
         performHaptic()
     }
 

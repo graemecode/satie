@@ -187,6 +187,8 @@ struct AcousticCoreTests {
         store.sensitivity = .vivid
         store.focusMode = .rain
         store.focusVolume = 0.62
+        #expect(store.visualFollowsSoundscape == true)
+        store.visualFollowsSoundscape = false
         store.keepScreenAwake = true
         store.mixWithOthers = true
         store.miniHUDOrigin = NSPoint(x: 420, y: 180)
@@ -198,10 +200,14 @@ struct AcousticCoreTests {
         #expect(reloaded.sensitivity == .vivid)
         #expect(reloaded.focusMode == .rain)
         #expect(abs(reloaded.focusVolume - 0.62) < 0.001)
+        #expect(reloaded.visualFollowsSoundscape == false)
         #expect(reloaded.keepScreenAwake == true)
         #expect(reloaded.mixWithOthers == true)
         #expect(reloaded.miniHUDOrigin == NSPoint(x: 420, y: 180))
         #expect(reloaded.studioFrame == NSRect(x: 100, y: 120, width: 1280, height: 820))
+
+        let pairedWorlds = Set(FocusSoundscape.allCases.map { VisualPreset.paired(for: $0) })
+        #expect(pairedWorlds.count == FocusSoundscape.allCases.count)
     }
 
     @Test("FocusSoundEngine generates bounded, non-silent stereo audio across all 5 modes")

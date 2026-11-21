@@ -6,42 +6,6 @@ import Foundation
 import StoreKit
 #endif
 
-enum VisualPreset: Int, CaseIterable, Identifiable, Sendable {
-    case circuit = 0
-    case ecology = 1
-    case phosphor = 2
-    case liquid = 3
-
-    var id: Int { rawValue }
-
-    var title: String {
-        switch self {
-        case .circuit: return "01 The Circuit"
-        case .ecology: return "02 Ecology Wall"
-        case .phosphor: return "03 Phosphor Scope"
-        case .liquid: return "04 Liquid Warp"
-        }
-    }
-
-    var shortTitle: String {
-        switch self {
-        case .circuit: return "01 Circuit"
-        case .ecology: return "02 Ecology"
-        case .phosphor: return "03 Scope"
-        case .liquid: return "04 Liquid"
-        }
-    }
-
-    var cleanName: String {
-        switch self {
-        case .circuit: return "Circuit"
-        case .ecology: return "Ecology"
-        case .phosphor: return "Scope"
-        case .liquid: return "Liquid"
-        }
-    }
-}
-
 enum FlowDuration: Int, CaseIterable, Sendable {
     case infinite = 0
     case min25 = 1500
@@ -73,6 +37,9 @@ final class AppState: ObservableObject {
     @Published var preset: VisualPreset {
         didSet { settings.presetRaw = preset.rawValue }
     }
+    @Published var visualFollowsSoundscape: Bool {
+        didSet { settings.visualFollowsSoundscape = visualFollowsSoundscape }
+    }
     @Published var amberPhosphor: Bool {
         didSet { settings.amberPhosphor = amberPhosphor }
     }
@@ -83,6 +50,12 @@ final class AppState: ObservableObject {
         didSet {
             settings.focusMode = focusMode
             focusSound.setMode(focusMode)
+            if visualFollowsSoundscape {
+                let target = VisualPreset.paired(for: focusMode)
+                if preset != target {
+                    preset = target
+                }
+            }
         }
     }
     @Published var focusVolume: Float {
@@ -198,10 +171,15 @@ final class AppState: ObservableObject {
     }
 
     private init() {
-        self.preset = VisualPreset(rawValue: settings.presetRaw) ?? .circuit
+        let initialMode = settings.focusMode
+        let autoVisual = settings.visualFollowsSoundscape
+        self.visualFollowsSoundscape = autoVisual
+        self.preset = autoVisual
+            ? VisualPreset.paired(for: initialMode)
+            : (VisualPreset(rawValue: settings.presetRaw) ?? VisualPreset.paired(for: initialMode))
         self.amberPhosphor = settings.amberPhosphor
         self.sensitivity = settings.sensitivity
-        self.focusMode = settings.focusMode
+        self.focusMode = initialMode
         self.focusVolume = settings.focusVolume
         self.soundIntensity = .flow
         self.maskingBed = settings.maskingBed
