@@ -158,9 +158,18 @@ public final class AcousticDSP {
         let stereoCorr = rawRMS > 0.0005 ? max(-1.0, min(1.0, dotLR / denom)) : 1.0
 
         let waveGain = min(4.5, 0.42 / max(0.04, agcPeak)) * sensitivity.transientScale
-        let startOffset = fftSize - 512
+        // Rising-edge zero-crossing oscilloscope trigger so Scope's horizontal trace locks rock-solid like a Tektronix CRT
+        var startOffset = fftSize - 512
+        let triggerMin = max(1, fftSize - 1024)
+        let triggerMax = fftSize - 512
+        for j in stride(from: triggerMax, through: triggerMin, by: -1) {
+            if rawL[j - 1] <= 0 && rawL[j] > 0.0015 {
+                startOffset = j
+                break
+            }
+        }
         for i in 0..<256 {
-            let idx = startOffset + i * 2
+            let idx = min(fftSize - 1, startOffset + i * 2)
             waveL[i] = max(-1.2, min(1.2, rawL[idx] * waveGain))
             waveR[i] = max(-1.2, min(1.2, rawR[idx] * waveGain))
         }

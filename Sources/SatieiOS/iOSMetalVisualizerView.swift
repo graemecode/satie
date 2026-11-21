@@ -21,15 +21,24 @@ struct AcousticUniforms {
     var centroid: Float = 0.4
     var amberMode: Float = 0
     var isCompact: Float = 1
-    var _pad0: Float = 0
-    var _pad1: Float = 0
-    var _pad2: Float = 0
+    var chordAge: Float = 99
+    var barPhase: Float = 0
+    var isPlaying: Float = 0
     var bands: (SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>) = (
         .zero, .zero, .zero, .zero, .zero, .zero
     )
     var impulses: (SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>) = (
         .zero, .zero, .zero, .zero, .zero, .zero
     )
+    var noteA: (
+        SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>,
+        SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>,
+        SIMD4<Float>, SIMD4<Float>, SIMD4<Float>, SIMD4<Float>
+    ) = (
+        .zero, .zero, .zero, .zero, .zero, .zero,
+        .zero, .zero, .zero, .zero, .zero, .zero
+    )
+    var noteKinds: (SIMD4<Float>, SIMD4<Float>, SIMD4<Float>) = (.zero, .zero, .zero)
 }
 
 @MainActor
@@ -263,6 +272,10 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
         uniforms.centroid = snap.centroid
         uniforms.amberMode = state.amberPhosphor ? 1.0 : 0.0
         uniforms.isCompact = 1.0
+        let music = state.focusSound.snapshotVisualMusicalFrame()
+        uniforms.chordAge = music.chordAge
+        uniforms.barPhase = music.barPhase
+        uniforms.isPlaying = music.isPlaying ? 1.0 : 0.0
 
         func pack4(_ arr: [Float], _ offset: Int) -> SIMD4<Float> {
             SIMD4<Float>(arr[offset], arr[offset + 1], arr[offset + 2], arr[offset + 3])
@@ -274,6 +287,20 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
         uniforms.impulses = (
             pack4(snap.impulses24, 0), pack4(snap.impulses24, 4), pack4(snap.impulses24, 8),
             pack4(snap.impulses24, 12), pack4(snap.impulses24, 16), pack4(snap.impulses24, 20)
+        )
+        func noteVec(_ idx: Int) -> SIMD4<Float> {
+            let n = music.notes[idx]
+            return SIMD4<Float>(n.pitchNorm, n.pan, n.velocity, n.age)
+        }
+        uniforms.noteA = (
+            noteVec(0), noteVec(1), noteVec(2), noteVec(3),
+            noteVec(4), noteVec(5), noteVec(6), noteVec(7),
+            noteVec(8), noteVec(9), noteVec(10), noteVec(11)
+        )
+        uniforms.noteKinds = (
+            SIMD4<Float>(music.notes[0].kind, music.notes[1].kind, music.notes[2].kind, music.notes[3].kind),
+            SIMD4<Float>(music.notes[4].kind, music.notes[5].kind, music.notes[6].kind, music.notes[7].kind),
+            SIMD4<Float>(music.notes[8].kind, music.notes[9].kind, music.notes[10].kind, music.notes[11].kind)
         )
 
         let uBuf = uniformBuffers[slot]
@@ -348,6 +375,7 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
             if let enc = cmd.makeRenderCommandEncoder(descriptor: renderPassDesc) {
                 enc.setRenderPipelineState(pipelines.horizonPipeline)
                 enc.setFragmentBuffer(uBuf, offset: 0, index: 0)
+                enc.setFragmentBuffer(wBuf, offset: 0, index: 1)
                 enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
                 enc.endEncoding()
             }

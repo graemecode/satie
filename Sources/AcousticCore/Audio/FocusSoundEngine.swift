@@ -156,6 +156,149 @@ public enum CircadianPhase: Int, Sendable {
     }
 }
 
+public struct VisualNoteEvent: Sendable {
+    public let pitchNorm: Float  // 0.0 (MIDI 36) .. 1.0 (MIDI 96)
+    public let pan: Float        // -1.0 (left) .. +1.0 (right)
+    public let velocity: Float   // 0.0 .. 1.0
+    public let age: Float        // seconds since note struck (>= 99.0 when inactive)
+    public let kind: Float       // 0 = figure/arp, 1 = melody, 2 = glint, 3 = sustain/chord
+
+    public static let inactive = VisualNoteEvent(pitchNorm: 0.5, pan: 0, velocity: 0, age: 99.0, kind: 0)
+}
+
+public struct VisualMusicalFrame: Sendable {
+    public let notes: [VisualNoteEvent]  // Always 12 slots
+    public let chordAge: Float           // Seconds since last chord change (>= 99.0 when inactive)
+    public let barPhase: Float           // 0..1 within current bar
+    public let isPlaying: Bool
+
+    public static let empty = VisualMusicalFrame(
+        notes: [VisualNoteEvent](repeating: .inactive, count: 12),
+        chordAge: 99.0,
+        barPhase: 0,
+        isPlaying: false
+    )
+}
+
+/// Lock-free 12-slot atomic musical event ring connecting the real-time Core Audio thread directly to Metal.
+/// Each slot packs (pitchU8 | panU8 | velU8 | kindU4 | stampMsU36) into a single Atomic<UInt64>.
+final class VisualNoteRing: @unchecked Sendable {
+    private let s0  = Atomic<UInt64>(0)
+    private let s1  = Atomic<UInt64>(0)
+    private let s2  = Atomic<UInt64>(0)
+    private let s3  = Atomic<UInt64>(0)
+    private let s4  = Atomic<UInt64>(0)
+    private let s5  = Atomic<UInt64>(0)
+    private let s6  = Atomic<UInt64>(0)
+    private let s7  = Atomic<UInt64>(0)
+    private let s8  = Atomic<UInt64>(0)
+    private let s9  = Atomic<UInt64>(0)
+    private let s10 = Atomic<UInt64>(0)
+    private let s11 = Atomic<UInt64>(0)
+
+    let clockMsAtom = Atomic<UInt64>(0)
+    let chordStampMsAtom = Atomic<UInt64>(0)
+    private var writeCursor: Int = 0
+
+    @inline(__always)
+    private func storeSlot(_ idx: Int, _ val: UInt64) {
+        switch idx {
+        case 0:  s0.store(val, ordering: .releasing)
+        case 1:  s1.store(val, ordering: .releasing)
+        case 2:  s2.store(val, ordering: .releasing)
+        case 3:  s3.store(val, ordering: .releasing)
+        case 4:  s4.store(val, ordering: .releasing)
+        case 5:  s5.store(val, ordering: .releasing)
+        case 6:  s6.store(val, ordering: .releasing)
+        case 7:  s7.store(val, ordering: .releasing)
+        case 8:  s8.store(val, ordering: .releasing)
+        case 9:  s9.store(val, ordering: .releasing)
+        case 10: s10.store(val, ordering: .releasing)
+        default: s11.store(val, ordering: .releasing)
+        }
+    }
+
+    @inline(__always)
+    private func loadSlot(_ idx: Int) -> UInt64 {
+        switch idx {
+        case 0:  return s0.load(ordering: .acquiring)
+        case 1:  return s1.load(ordering: .acquiring)
+        case 2:  return s2.load(ordering: .acquiring)
+        case 3:  return s3.load(ordering: .acquiring)
+        case 4:  return s4.load(ordering: .acquiring)
+        case 5:  return s5.load(ordering: .acquiring)
+        case 6:  return s6.load(ordering: .acquiring)
+        case 7:  return s7.load(ordering: .acquiring)
+        case 8:  return s8.load(ordering: .acquiring)
+        case 9:  return s9.load(ordering: .acquiring)
+        case 10: return s10.load(ordering: .acquiring)
+        default: return s11.load(ordering: .acquiring)
+        }
+    }
+
+    func clear() {
+        for i in 0..<12 { storeSlot(i, 0) }
+        clockMsAtom.store(0, ordering: .releasing)
+        chordStampMsAtom.store(0, ordering: .releasing)
+        writeCursor = 0
+    }
+
+    @inline(__always)
+    func recordNote(midi: Int, pan: Double, velocity: Double, kind: Int, clockSec: Double) {
+        let stampMs = UInt64(max(1.0, clockSec * 1000.0 + 1.0)) & 0x0F_FFFF_FFFF // 36 bits, non-zero
+        let pitchN = max(0.0, min(1.0, Double(midi - 36) / 60.0))
+        let panN = max(0.0, min(1.0, (pan + 1.0) * 0.5))
+        let velN = max(0.05, min(1.0, velocity))
+        let pU = UInt64(pitchN * 255.0) & 0xFF
+        let aU = UInt64(panN * 255.0) & 0xFF
+        let vU = UInt64(velN * 255.0) & 0xFF
+        let kU = UInt64(kind & 0xF)
+        let packed = stampMs | (pU << 36) | (aU << 44) | (vU << 52) | (kU << 60)
+        storeSlot(writeCursor, packed)
+        writeCursor = (writeCursor + 1) % 12
+    }
+
+    @inline(__always)
+    func recordChordChange(clockSec: Double) {
+        let stampMs = UInt64(max(1.0, clockSec * 1000.0 + 1.0))
+        chordStampMsAtom.store(stampMs, ordering: .releasing)
+    }
+
+    @inline(__always)
+    func updateClock(clockSec: Double) {
+        let ms = UInt64(max(1.0, clockSec * 1000.0 + 1.0))
+        clockMsAtom.store(ms, ordering: .releasing)
+    }
+
+    func snapshot(isPlaying: Bool, barPhase: Float) -> VisualMusicalFrame {
+        let nowMs = clockMsAtom.load(ordering: .acquiring)
+        guard isPlaying, nowMs > 0 else { return .empty }
+        var out: [VisualNoteEvent] = []
+        out.reserveCapacity(12)
+        for i in 0..<12 {
+            let packed = loadSlot(i)
+            let stampMs = packed & 0x0F_FFFF_FFFF
+            if stampMs == 0 || nowMs < stampMs {
+                out.append(.inactive)
+                continue
+            }
+            let age = Float(nowMs - stampMs) * 0.001
+            if age > 10.0 {
+                out.append(.inactive)
+                continue
+            }
+            let pitchNorm = Float((packed >> 36) & 0xFF) / 255.0
+            let pan = (Float((packed >> 44) & 0xFF) / 255.0) * 2.0 - 1.0
+            let velocity = Float((packed >> 52) & 0xFF) / 255.0
+            let kind = Float((packed >> 60) & 0xF)
+            out.append(VisualNoteEvent(pitchNorm: pitchNorm, pan: pan, velocity: velocity, age: age, kind: kind))
+        }
+        let chordStamp = chordStampMsAtom.load(ordering: .acquiring)
+        let chordAge: Float = (chordStamp > 0 && nowMs >= chordStamp) ? Float(nowMs - chordStamp) * 0.001 : 99.0
+        return VisualMusicalFrame(notes: out, chordAge: chordAge, barPhase: barPhase, isPlaying: true)
+    }
+}
+
 public struct ScoreTelemetry: Equatable, Sendable {
     public let barInForm: Int       // 0 ..< 32
     public let pass: Int            // 0 = Pass 1, 1 = Pass 2, ...
@@ -381,6 +524,10 @@ public final class FocusSoundEngine: @unchecked Sendable {
         let swapped = ((packed >> 22) & 1) != 0
         let progQ = Float((packed >> 24) & 0xFF) / 255.0
         return ScoreTelemetry(barInForm: bar, pass: pass, chordIndex: chordIdx, didSwapFigure: swapped, barProgress: progQ)
+    }
+
+    public func snapshotVisualMusicalFrame() -> VisualMusicalFrame {
+        renderState.visualRing.snapshot(isPlaying: isPlaying, barPhase: scoreTelemetry.barProgress)
     }
 
     public init(ringBuffer: StereoRingBuffer) {
@@ -810,6 +957,8 @@ private final class FocusRenderState: @unchecked Sendable {
     let telemetryPackedAtom = Atomic<UInt64>(0)
 
     let barQueue = LockFreeBarQueue()
+    let visualRing = VisualNoteRing()
+    private var lastVisualChordIdx: Int = -1
 
     private let bank = TimbreBank()
     private let sampleBank = StudioSampleBank.shared
@@ -925,6 +1074,8 @@ private final class FocusRenderState: @unchecked Sendable {
         hasCurrentBar = false
         offlineNextBarIndex = 0
         dryTransitionGain = 1.0
+        visualRing.clear()
+        lastVisualChordIdx = -1
     }
 
     /// Room-preserving acoustic crossfade: keeps the 8x8 FDN hall and Beads granular cloud ringing
@@ -952,6 +1103,10 @@ private final class FocusRenderState: @unchecked Sendable {
             hasCurrentBar = true
             barBellCursor = 0
             barSustainCursor = 0
+            if currentBar.chordIndex != lastVisualChordIdx {
+                lastVisualChordIdx = currentBar.chordIndex
+                visualRing.recordChordChange(clockSec: clockSec)
+            }
             return
         }
         if allowSyncFallback {
@@ -1176,6 +1331,8 @@ private final class FocusRenderState: @unchecked Sendable {
                 let relTime = clockSec - currentBarStartSec
                 while barBellCursor < currentBar.bellCount && currentBar.bells[barBellCursor].at <= relTime {
                     let ev = currentBar.bells[barBellCursor]
+                    let evKindCode: Int = (ev.kind == .melody) ? 1 : (ev.kind == .glint ? 2 : 0)
+                    visualRing.recordNote(midi: ev.midi, pan: ev.pan, velocity: ev.velocity, kind: evKindCode, clockSec: clockSec)
                     let root = currentBar.rootMidi
                     switch mode {
                     case .focus:
@@ -1314,6 +1471,9 @@ private final class FocusRenderState: @unchecked Sendable {
 
                 while barSustainCursor < currentBar.sustainCount && currentBar.sustained[barSustainCursor].at <= relTime {
                     let ev = currentBar.sustained[barSustainCursor]
+                    if ev.kind == .bass || ev.kind == .strings {
+                        visualRing.recordNote(midi: ev.midi, pan: ev.pan, velocity: min(1.0, max(0.35, ev.level * 1.8)), kind: 3, clockSec: clockSec)
+                    }
                     if ev.kind == .strings {
                         if sampleBank.isAvailable {
                             // Real CC0 Cello Section sustained vibrato (octave-clamped into cello sweet spot)
@@ -1556,6 +1716,7 @@ private final class FocusRenderState: @unchecked Sendable {
             telemetryPackedAtom.store(packed, ordering: .releasing)
         }
 
+        visualRing.updateClock(clockSec: clockSec)
         isAudibleOutput = blockPeak > 0.0008
     }
 }
