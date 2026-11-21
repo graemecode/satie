@@ -292,7 +292,7 @@
 			path = Renderer;
 			sourceTree = "<group>";
 		};
-		"TEMP_B8551509-EA6D-4BFB-8D93-DD1F99EE8390" /* Resources */ = {
+		"TEMP_957D3D32-7510-4564-A37C-771DEA0548CE" /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 			);

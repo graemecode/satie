@@ -63,6 +63,15 @@ targets:
       - sdk: MediaPlayer.framework
     info:
       path: AppStore/Info-AppStore.plist
+      properties:
+        CFBundleDisplayName: Satie
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        LSApplicationCategoryType: public.app-category.music
+        LSUIElement: true
+        ITSAppUsesNonExemptEncryption: false
+        NSHighResolutionCapable: true
+        NSHumanReadableCopyright: "Copyright © 2026 Graeme Boy. All rights reserved."
     entitlements:
       path: AppStore/Satie-AppStore.entitlements
       properties:
