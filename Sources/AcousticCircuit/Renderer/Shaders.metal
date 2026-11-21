@@ -293,6 +293,8 @@ fragment float4 ecologyFieldFragment(FullscreenOut in [[stage_in]],
 
     if (in.uv.x >= minB.x && in.uv.x <= maxB.x && in.uv.y >= minB.y && in.uv.y <= maxB.y) {
         float2 p = (in.uv - minB) / (maxB - minB);
+        float2 boxPx = (maxB - minB) * u.resolution;
+        float boxAspect = max(0.35, boxPx.x / max(1.0, boxPx.y));
         col = float3(0.045, 0.056, 0.074);
 
         // Subtle gold survey crosshair matching the ecology wall installation
@@ -304,9 +306,10 @@ fragment float4 ecologyFieldFragment(FullscreenOut in [[stage_in]],
         for (int i = 0; i < 5; i++) {
             float2 c = colonyAttractor(i, u.time);
             float2 d = p - c;
+            d.x *= boxAspect;
             float ang = atan2(d.y, d.x);
             float wobble = 1.0 + 0.16 * sin(ang * 3.0 + u.time + float(i)) + 0.10 * cos(ang * 5.0 - u.time * 1.3);
-            float rad = (0.10 + energies[i] * 0.15 + u.beat * 0.03) * wobble;
+            float rad = (0.11 + energies[i] * 0.15 + u.beat * 0.03) * wobble;
             float dist = length(d);
 
             float fill = smoothstep(rad, rad * 0.25, dist);
@@ -333,15 +336,18 @@ vertex SpikeVertOut ecologyAgentVertex(uint vid [[vertex_id]],
 
     float radialSeed = pow(fract(fi * 0.7548776), 0.62);
     float wobble = 1.0 + 0.16 * sin(ang * 3.0 + u.time + float(cluster));
-    float rad = radialSeed * (0.10 + bv * 0.17 + u.beat * 0.035) * wobble;
-
-    float2 p = att + float2(cos(ang), sin(ang)) * rad;
-    // Slight curl drift
-    p += float2(gradNoise(p * 5.0 + u.time * 0.25), gradNoise(p * 5.0 - u.time * 0.22 + 4.1)) * 0.025;
-    p = clamp(p, 0.02, 0.98);
+    float rad = radialSeed * (0.11 + bv * 0.17 + u.beat * 0.035) * wobble;
 
     float2 minB = (u.isCompact > 0.5) ? float2(0.02, 0.02) : float2(0.27, 0.065);
     float2 maxB = (u.isCompact > 0.5) ? float2(0.98, 0.98) : float2(0.74, 0.935);
+    float2 boxPx = (maxB - minB) * u.resolution;
+    float boxAspect = max(0.35, boxPx.x / max(1.0, boxPx.y));
+
+    float2 p = att + float2(cos(ang) * rad / boxAspect, sin(ang) * rad);
+    // Slight curl drift
+    p += float2(gradNoise(p * 5.0 + u.time * 0.25) / boxAspect, gradNoise(p * 5.0 - u.time * 0.22 + 4.1)) * 0.025;
+    p = clamp(p, 0.02, 0.98);
+
     float2 uv = mix(minB, maxB, p);
     float2 ndc = float2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
 
@@ -358,6 +364,14 @@ vertex SpikeVertOut ecologyAgentVertex(uint vid [[vertex_id]],
 // ============================================================================
 // PRESET 03: PHOSPHOR SCOPE — TRUE GPU RGBA16F PING-PONG CRT LISSAJOUS
 // ============================================================================
+static inline float2 phosphorSamplePoint(constant float2* waveLR, int idx, float scale, float time, float idleMix) {
+    float2 live = waveLR[idx] * scale;
+    if (idleMix <= 0.001) return live;
+    float ph = float(idx) * (6.2831853 / 256.0);
+    float2 idle = float2(sin(ph * 2.0 + time * 0.65) * 0.26, sin(ph * 3.0 - time * 0.42) * 0.19);
+    return mix(live, idle, idleMix);
+}
+
 fragment float4 phosphorUpdateFragment(FullscreenOut in [[stage_in]],
                                        texture2d<float> prevTex [[texture(0)]],
                                        constant AcousticUniforms& u [[buffer(0)]],
@@ -381,9 +395,12 @@ fragment float4 phosphorUpdateFragment(FullscreenOut in [[stage_in]],
     float haloAccum = 0.0;
 
     // Evaluate 128 stereo Lissajous beam segments with velocity-dependent intensity
-    float2 a = waveLR[0] * scale;
+    // When paused/silent, trace a calm breathing harmonic Lissajous figure-8 instead of collapsing to a hot center dot
+    float idleMix = smoothstep(0.03, 0.005, u.energy);
+
+    float2 a = phosphorSamplePoint(waveLR, 0, scale, u.time, idleMix);
     for (int i = 1; i < 128; i++) {
-        float2 b = waveLR[i * 2] * scale;
+        float2 b = phosphorSamplePoint(waveLR, i * 2, scale, u.time, idleMix);
         float d = sdSegment(p, a, b);
         float vel = length(b - a);
         // Real CRT physics: slower beam dwells longer -> hotter phosphor excitation
@@ -396,12 +413,15 @@ fragment float4 phosphorUpdateFragment(FullscreenOut in [[stage_in]],
     // Crisp horizontal L-channel time-domain waveform behind the Lissajous knot
     float wIdx = clamp(in.uv.x * 255.0, 0.0, 254.0);
     int wi = int(wIdx);
-    float wy = mix(waveLR[wi].x, waveLR[wi + 1].x, fract(wIdx)) * 0.32;
+    float wyLive = mix(waveLR[wi].x, waveLR[wi + 1].x, fract(wIdx)) * 0.32;
+    float wyIdle = sin(in.uv.x * 12.56637 + u.time * 1.1) * 0.055 * sin(in.uv.x * 3.14159);
+    float wy = mix(wyLive, wyIdle, idleMix);
     float wDist = abs((in.uv.y - 0.5) - wy);
-    float trace = exp(-wDist * 220.0) * 0.34;
+    float trace = exp(-wDist * 220.0) * mix(0.34, 0.22, idleMix);
 
     float3 coreHot = mix(beamCol, float3(0.95, 1.0, 0.96), 0.72);
-    col += coreHot * min(accum, 2.2) * 0.56 + beamCol * min(haloAccum, 1.4) * 0.28 + beamCol * trace;
+    float idleDim = mix(1.0, 0.48, idleMix);
+    col += (coreHot * min(accum, 2.2) * 0.56 + beamCol * min(haloAccum, 1.4) * 0.28) * idleDim + beamCol * trace;
 
     return float4(min(col, 4.0), 1.0);
 }
