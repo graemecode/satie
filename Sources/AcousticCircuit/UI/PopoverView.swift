@@ -164,12 +164,7 @@ struct PopoverView: View {
                         }
                     } label: {
                         VStack(spacing: 5) {
-                            SoundscapeGlyph(mode: mode, isActive: isActive, size: 38)
-                                .overlay(
-                                    Circle()
-                                        .stroke(isSelected && !isActive ? Color.white.opacity(0.55) : Color.clear, lineWidth: 1)
-                                        .frame(width: 34, height: 34)
-                                )
+                            SoundscapeGlyph(mode: mode, isActive: isActive, isSelected: isSelected, size: 38)
                             Text(mode.shortLabel)
                                 .font(.system(size: 8.6, weight: isActive ? .semibold : .regular, design: .monospaced))
                                 .foregroundColor(isActive ? .white : (isSelected ? inkSoft : inkDim))

@@ -1,125 +1,173 @@
 import AcousticCore
 import SwiftUI
 
-/// Bespoke 1.1pt hairline circular geometric emblems for each Satie soundscape.
-/// Stark OLED monochrome vector craft — zero generic icon bloat.
+/// Precision Swiss monochrome geometric emblems for Satie's 5 acoustic worlds:
+/// FOCUS (concentric optical aperture) · PULSE (rhythmic 5-bar waveform) ·
+/// RAIN (staggered falling rain & ripples) · STILL (serene horizon) · NIGHT (exact geometric crescent & stars).
 struct SoundscapeGlyph: View {
     let mode: FocusSoundscape
     let isActive: Bool
-    var size: CGFloat = 34
+    var isSelected: Bool = false
+    var size: CGFloat = 38
 
     var body: some View {
         Canvas { ctx, sz in
-            let rect = CGRect(origin: .zero, size: sz)
             let center = CGPoint(x: sz.width * 0.5, y: sz.height * 0.5)
             let r = min(sz.width, sz.height) * 0.44
-            let strokeColor: Color = isActive ? .black : Color.white.opacity(0.76)
-            let softStroke: Color = isActive ? .black.opacity(0.45) : Color.white.opacity(0.32)
-            let lw: CGFloat = max(1.0, size * 0.032)
+            let lw: CGFloat = max(1.15, size * 0.034)
+            let thinLW: CGFloat = max(0.95, lw * 0.78)
 
-            // Outer circular frame
+            let primary: Color = isActive ? .black : Color.white.opacity(isSelected ? 0.94 : 0.76)
+            let secondary: Color = isActive ? .black.opacity(0.42) : Color.white.opacity(isSelected ? 0.42 : 0.30)
+            let strokeStyle = StrokeStyle(lineWidth: lw, lineCap: .round, lineJoin: .round)
+            let thinStyle = StrokeStyle(lineWidth: thinLW, lineCap: .round, lineJoin: .round)
+
+            // Single unified outer circular frame (never double-stroked)
             let outer = Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2))
             if isActive {
                 ctx.fill(outer, with: .color(.white))
             } else {
-                ctx.fill(outer, with: .color(Color.white.opacity(0.04)))
-                ctx.stroke(outer, with: .color(Color.white.opacity(0.24)), lineWidth: lw)
+                ctx.fill(outer, with: .color(Color.white.opacity(isSelected ? 0.09 : 0.035)))
+                ctx.stroke(
+                    outer,
+                    with: .color(Color.white.opacity(isSelected ? 0.62 : 0.22)),
+                    lineWidth: isSelected ? lw * 1.05 : thinLW
+                )
             }
 
-            // Clip inner line-art neatly inside the circular emblem
-            ctx.clipToLayer { inner in
-                inner.fill(outer, with: .color(.white))
-            }
+            let ir = r * 0.62
 
-            let ir = r * 0.72
             switch mode {
             case .focus:
-                // Soft Light: overlapping luminous refraction arcs + warm center zenith
-                var a1 = Path()
-                a1.addArc(center: CGPoint(x: center.x - ir * 0.48, y: center.y), radius: ir * 0.92, startAngle: .degrees(-68), endAngle: .degrees(68), clockwise: false)
-                ctx.stroke(a1, with: .color(strokeColor), lineWidth: lw)
+                // FOCUS (Soft Light): Precision Dieter Rams optical aperture — clean concentric ring, 4 hairline compass ticks, poised center point
+                let ringR = ir * 0.76
+                let innerRing = Path(ellipseIn: CGRect(x: center.x - ringR, y: center.y - ringR, width: ringR * 2, height: ringR * 2))
+                ctx.stroke(innerRing, with: .color(primary), style: strokeStyle)
 
-                var a2 = Path()
-                a2.addArc(center: CGPoint(x: center.x + ir * 0.48, y: center.y), radius: ir * 0.92, startAngle: .degrees(112), endAngle: .degrees(248), clockwise: false)
-                ctx.stroke(a2, with: .color(strokeColor), lineWidth: lw)
+                // Four delicate cardinal focus ticks outside the aperture ring
+                let tickIn = ringR + ir * 0.14
+                let tickOut = r * 0.84
+                for deg in [0.0, 90.0, 180.0, 270.0] {
+                    let rad = deg * .pi / 180.0
+                    var t = Path()
+                    t.move(to: CGPoint(x: center.x + CGFloat(cos(rad)) * tickIn, y: center.y + CGFloat(sin(rad)) * tickIn))
+                    t.addLine(to: CGPoint(x: center.x + CGFloat(cos(rad)) * tickOut, y: center.y + CGFloat(sin(rad)) * tickOut))
+                    ctx.stroke(t, with: .color(secondary), style: thinStyle)
+                }
 
-                var horizon = Path()
-                horizon.move(to: CGPoint(x: center.x - r, y: center.y))
-                horizon.addLine(to: CGPoint(x: center.x + r, y: center.y))
-                ctx.stroke(horizon, with: .color(softStroke), lineWidth: lw * 0.85)
-
-                let dotR = max(1.6, size * 0.055)
+                // Crisp central focal point
+                let dotR = max(2.1, size * 0.062)
                 let dot = Path(ellipseIn: CGRect(x: center.x - dotR, y: center.y - dotR, width: dotR * 2, height: dotR * 2))
-                ctx.fill(dot, with: .color(strokeColor))
+                ctx.fill(dot, with: .color(primary))
 
             case .pulse:
-                // Kinetic Pulse: architectural longitude/latitude harmonic phase sphere
-                for frac in [-0.45, 0.0, 0.45] {
-                    let y = center.y + CGFloat(frac) * r * 0.95
-                    var h = Path()
-                    h.move(to: CGPoint(x: center.x - r, y: y))
-                    h.addLine(to: CGPoint(x: center.x + r, y: y))
-                    ctx.stroke(h, with: .color(frac == 0 ? strokeColor : softStroke), lineWidth: lw * 0.9)
+                // PULSE (Kinetic Pulse): Architectural 5-bar symmetric rhythmic waveform
+                let heights: [CGFloat] = [0.34, 0.74, 1.00, 0.64, 0.30]
+                let spacing = ir * 0.44
+                let barLW = max(1.35, lw * 1.15)
+                let barStyle = StrokeStyle(lineWidth: barLW, lineCap: .round)
+
+                for (i, hFrac) in heights.enumerated() {
+                    let x = center.x + CGFloat(i - 2) * spacing
+                    let halfH = ir * 0.84 * hFrac
+                    var bar = Path()
+                    bar.move(to: CGPoint(x: x, y: center.y - halfH))
+                    bar.addLine(to: CGPoint(x: x, y: center.y + halfH))
+                    let isHero = (i == 1 || i == 2 || i == 3)
+                    ctx.stroke(bar, with: .color(isHero ? primary : secondary), style: barStyle)
                 }
-                for wFrac in [0.34, 0.70] {
-                    let rx = r * CGFloat(wFrac)
-                    let oval = Path(ellipseIn: CGRect(x: center.x - rx, y: center.y - r, width: rx * 2, height: r * 2))
-                    ctx.stroke(oval, with: .color(strokeColor), lineWidth: lw * 0.9)
-                }
-                var v = Path()
-                v.move(to: CGPoint(x: center.x, y: center.y - r))
-                v.addLine(to: CGPoint(x: center.x, y: center.y + r))
-                ctx.stroke(v, with: .color(softStroke), lineWidth: lw * 0.85)
 
             case .rain:
-                // Rain & Glass: diagonal rain threads + concentric calm water ripples
-                for offset in [-0.36, 0.0, 0.36] {
-                    let x0 = center.x + CGFloat(offset) * ir * 1.25
-                    var drop = Path()
-                    drop.move(to: CGPoint(x: x0 + ir * 0.14, y: center.y - ir * 0.72))
-                    drop.addLine(to: CGPoint(x: x0 - ir * 0.08, y: center.y - ir * 0.05))
-                    ctx.stroke(drop, with: .color(offset == 0 ? strokeColor : softStroke), lineWidth: lw)
-                }
-                for scale in [0.46, 0.86] {
-                    let rw = ir * CGFloat(scale) * 1.2
-                    let rh = ir * CGFloat(scale) * 0.38
-                    let rip = Path(ellipseIn: CGRect(x: center.x - rw, y: center.y + ir * 0.36 - rh, width: rw * 2, height: rh * 2))
-                    ctx.stroke(rip, with: .color(scale < 0.6 ? strokeColor : softStroke), lineWidth: lw * 0.9)
+                // RAIN (Rain & Glass): Staggered falling diagonal rain threads over calm concentric ripples
+                let drops: [(x: CGFloat, yTop: CGFloat, len: CGFloat, bright: Bool)] = [
+                    (-0.46, -0.78, 0.50, false),
+                    ( 0.02, -0.92, 0.66, true),
+                    ( 0.48, -0.68, 0.46, true)
+                ]
+                for d in drops {
+                    let xTop = center.x + d.x * ir + ir * 0.10
+                    let yTop = center.y + d.yTop * ir
+                    let xBot = xTop - d.len * ir * 0.28
+                    let yBot = yTop + d.len * ir
+                    var line = Path()
+                    line.move(to: CGPoint(x: xTop, y: yTop))
+                    line.addLine(to: CGPoint(x: xBot, y: yBot))
+                    ctx.stroke(line, with: .color(d.bright ? primary : secondary), style: strokeStyle)
                 }
 
-            case .drift:
-                // Gymnopédie: nocturnal crescent arc + architectural stipple stars
-                var moon = Path()
-                moon.addArc(center: CGPoint(x: center.x - ir * 0.08, y: center.y), radius: ir * 0.74, startAngle: .degrees(38), endAngle: .degrees(322), clockwise: false)
-                moon.addArc(center: CGPoint(x: center.x + ir * 0.30, y: center.y), radius: ir * 0.56, startAngle: .degrees(294), endAngle: .degrees(66), clockwise: true)
-                moon.closeSubpath()
-                ctx.stroke(moon, with: .color(strokeColor), lineWidth: lw)
-
-                let stars: [(CGFloat, CGFloat)] = [(0.34, -0.30), (0.48, 0.04), (0.26, 0.28), (0.12, -0.04)]
-                for (sx, sy) in stars {
-                    let sr = max(1.0, size * 0.032)
-                    let p = Path(ellipseIn: CGRect(x: center.x + sx * ir - sr, y: center.y + sy * ir - sr, width: sr * 2, height: sr * 2))
-                    ctx.fill(p, with: .color(strokeColor))
+                // Delicate calm water surface ripples below
+                let rippleY = center.y + ir * 0.46
+                for (scale, bright) in [(CGFloat(0.46), true), (CGFloat(0.92), false)] {
+                    let rw = ir * scale * 1.12
+                    let rh = ir * scale * 0.34
+                    let rip = Path(ellipseIn: CGRect(x: center.x - rw, y: rippleY - rh, width: rw * 2, height: rh * 2))
+                    ctx.stroke(rip, with: .color(bright ? primary : secondary), style: thinStyle)
                 }
 
             case .still:
-                // Still (Zero-Ego Study): calm nested horizon waves (zen garden stillness)
-                for row in [-1, 0, 1] {
-                    let baseY = center.y + CGFloat(row) * ir * 0.42
-                    let amp = ir * (row == 0 ? 0.20 : 0.14)
-                    var wave = Path()
-                    let steps = 24
-                    for s in 0...steps {
-                        let t = CGFloat(s) / CGFloat(steps)
-                        let x = center.x - r + t * r * 2.0
-                        let y = baseY + sin(t * .pi * 2.0) * amp
-                        if s == 0 { wave.move(to: CGPoint(x: x, y: y)) }
-                        else { wave.addLine(to: CGPoint(x: x, y: y)) }
-                    }
-                    ctx.stroke(wave, with: .color(row == 0 ? strokeColor : softStroke), lineWidth: lw)
+                // STILL (Quiet Ambient): Serene horizon line with poised minimal reflection — pure visual quiet
+                let halfSpan = ir * 1.02
+                var horizon = Path()
+                horizon.move(to: CGPoint(x: center.x - halfSpan, y: center.y))
+                horizon.addLine(to: CGPoint(x: center.x + halfSpan, y: center.y))
+                ctx.stroke(horizon, with: .color(primary), style: strokeStyle)
+
+                // Subtle upper calm dome (rising stillness)
+                let domeR = ir * 0.46
+                var dome = Path()
+                dome.addArc(center: CGPoint(x: center.x, y: center.y), radius: domeR, startAngle: .degrees(180), endAngle: .degrees(360), clockwise: false)
+                ctx.stroke(dome, with: .color(primary), style: strokeStyle)
+
+                // Two quiet centered reflection hairlines beneath the horizon
+                for (idx, frac) in [0.58, 0.30].enumerated() {
+                    let y = center.y + CGFloat(idx + 1) * ir * 0.30
+                    let w = halfSpan * CGFloat(frac)
+                    var ref = Path()
+                    ref.move(to: CGPoint(x: center.x - w, y: y))
+                    ref.addLine(to: CGPoint(x: center.x + w, y: y))
+                    ctx.stroke(ref, with: .color(secondary), style: thinStyle)
+                }
+
+            case .drift:
+                // NIGHT (Gymnopédie): Exact mathematical crescent (true circle-circle intersection) + 2 subtle stars
+                let R = ir * 0.88
+                let c1 = CGPoint(x: center.x - ir * 0.08, y: center.y)
+                let c2 = CGPoint(x: c1.x + R * 0.62, y: c1.y - R * 0.14)
+                let r2 = R * 0.78
+
+                // Exact geometric intersection of circles (c1, R) and (c2, r2) so horns meet at razor-sharp points
+                let dx = c2.x - c1.x
+                let dy = c2.y - c1.y
+                let dist = hypot(dx, dy)
+                let a = (R * R - r2 * r2 + dist * dist) / (2.0 * dist)
+                let h = sqrt(max(0.0, R * R - a * a))
+                let xm = c1.x + a * dx / dist
+                let ym = c1.y + a * dy / dist
+                let pTop = CGPoint(x: xm + h * dy / dist, y: ym - h * dx / dist)
+                let pBot = CGPoint(x: xm - h * dy / dist, y: ym + h * dx / dist)
+
+                let ang1Top = atan2(pTop.y - c1.y, pTop.x - c1.x)
+                let ang1Bot = atan2(pBot.y - c1.y, pBot.x - c1.x)
+                let ang2Top = atan2(pTop.y - c2.y, pTop.x - c2.x)
+                let ang2Bot = atan2(pBot.y - c2.y, pBot.x - c2.x)
+
+                var moon = Path()
+                moon.addArc(center: c1, radius: R, startAngle: .radians(ang1Bot), endAngle: .radians(ang1Top), clockwise: false)
+                moon.addArc(center: c2, radius: r2, startAngle: .radians(ang2Top), endAngle: .radians(ang2Bot), clockwise: true)
+                moon.closeSubpath()
+                ctx.stroke(moon, with: .color(primary), style: strokeStyle)
+
+                // Two poised minimal stars in open night space (never crammed inside the crescent)
+                let starPos: [(CGFloat, CGFloat, CGFloat)] = [
+                    (0.46, -0.44, 1.35),
+                    (0.62,  0.10, 0.95)
+                ]
+                for (sx, sy, srScale) in starPos {
+                    let sr = max(1.0, size * 0.028 * srScale)
+                    let star = Path(ellipseIn: CGRect(x: center.x + sx * ir - sr, y: center.y + sy * ir - sr, width: sr * 2, height: sr * 2))
+                    ctx.fill(star, with: .color(srScale > 1.1 ? primary : secondary))
                 }
             }
-            _ = rect
         }
         .frame(width: size, height: size)
         .accessibilityHidden(true)

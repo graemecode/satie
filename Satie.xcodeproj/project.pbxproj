@@ -292,7 +292,7 @@
 			path = Renderer;
 			sourceTree = "<group>";
 		};
-		"TEMP_69C24761-C275-404C-8643-4B067BB30262" /* Resources */ = {
+		"TEMP_4ACB684A-DC02-45C7-874D-530620B5C3D9" /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -549,7 +549,7 @@
 				CODE_SIGN_ENTITLEMENTS = "AppStore/Satie-AppStore.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				DEVELOPMENT_TEAM = 6KM3577ETV;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "AppStore/Info-AppStore.plist";
@@ -581,7 +581,7 @@
 				CODE_SIGN_ENTITLEMENTS = "AppStore/Satie-AppStore.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 16;
+				CURRENT_PROJECT_VERSION = 17;
 				DEVELOPMENT_TEAM = 6KM3577ETV;
 				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = "AppStore/Info-AppStore.plist";

@@ -31,8 +31,8 @@ Every mode runs 100% offline at **48 kHz stereo** on a lock-free, zero-allocatio
 | **FOCUS** | **Soft Light** | Felt upright piano, soft-mallet vibraphone, concert harp glints, bowed cello, live shimmer granular halo, tape echo, and an 8×8 modulated cedar chamber. |
 | **PULSE** | **Kinetic Pulse** | 104 BPM D Dorian hypnotic analog synth (PolyBLEP ZDF filter sweeps), 56-mode physical modal resonators in 3D binaural orbit, phase-locked sub-kick, brushed micro-swung percussion. |
 | **RAIN** | **Rain & Glass** | Real 48 kHz studio light-rain recording (3-second live equal-power crossfade loop) with friction-bowed wine glasses, soft vibraphone, and concert harp in F Lydian. |
-| **DRIFT** | **Gymnopédie** | Slow 54 BPM nocturnal felt piano, Just-Intonation bowed cello swells, reverse-piano granular cloud, and generous *ma* negative space. |
 | **STILL** | **Still** | Zero-melody suspended ambient pad and warm filtered noise cocoon designed for reading, writing, and long uninterrupted sessions. |
+| **NIGHT** | **Gymnopédie** | Slow 54 BPM nocturnal felt piano, Just-Intonation bowed cello swells, reverse-piano granular cloud, and generous *ma* negative space. |
 
 Inside the single **Options** drawer (`≡`), you can set a fade-out **Timer** (`∞ · 15m · 25m · 45m · 60m · 90m`) or layer gentle **Rain** or **Brown Noise** underneath any soundscape.
 

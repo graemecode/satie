@@ -6,8 +6,8 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
     case focus
     case pulse
     case rain
-    case drift
     case still
+    case drift
 
     public var id: String { rawValue }
 
@@ -16,8 +16,8 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .focus: return "Soft Light"
         case .pulse: return "Kinetic Pulse"
         case .rain: return "Rain & Glass"
-        case .drift: return "Gymnopédie"
         case .still: return "Still"
+        case .drift: return "Gymnopédie"
         }
     }
 
@@ -26,8 +26,8 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .focus: return "FOCUS"
         case .pulse: return "PULSE"
         case .rain: return "RAIN"
-        case .drift: return "DRIFT"
         case .still: return "STILL"
+        case .drift: return "NIGHT"
         }
     }
 
@@ -36,8 +36,8 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .focus: return "Felt Piano · Vibraphone"
         case .pulse: return "Analog Pulse · Warm Sub"
         case .rain: return "Gentle Rain · Wine Glasses"
-        case .drift: return "Nocturnal Piano · Cello"
         case .still: return "Quiet Ambient · No Melody"
+        case .drift: return "Nocturnal Piano · Cello"
         }
     }
 }
