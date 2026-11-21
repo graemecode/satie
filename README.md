@@ -7,7 +7,7 @@ Named after **Erik Satie**, who invented *musique d'ameublement* ("furniture mus
 **Website & live preview:** [strangechances.com/satie](https://strangechances.com/satie/)
 
 <p align="center">
-  <img src="docs/vis-circuit.jpg" alt="Satie — 01 The Circuit (120Hz Metal + Retina Schematic)" width="100%">
+  <img src="docs/hero-menubar.jpg" alt="Satie — Native macOS Menu Bar Floating Panel" width="100%">
 </p>
 
 ## Install
@@ -35,10 +35,6 @@ Every mode runs 100% offline at **48 kHz stereo** on a lock-free, zero-allocatio
 | **STILL** | **Still** | Zero-melody suspended ambient pad and warm filtered noise cocoon designed for reading, writing, and long uninterrupted sessions. |
 
 Inside the single **Options** drawer (`≡`), you can set a fade-out **Timer** (`∞ · 15m · 25m · 45m · 60m · 90m`) or layer gentle **Rain** or **Brown Noise** underneath any soundscape.
-
-<p align="center">
-  <img src="docs/popover.png" alt="Satie Menu Bar Floating Panel" width="380">
-</p>
 
 ---
 

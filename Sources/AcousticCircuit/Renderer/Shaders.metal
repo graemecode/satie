@@ -387,21 +387,21 @@ fragment float4 phosphorUpdateFragment(FullscreenOut in [[stage_in]],
         float d = sdSegment(p, a, b);
         float vel = length(b - a);
         // Real CRT physics: slower beam dwells longer -> hotter phosphor excitation
-        float dwell = clamp(0.022 / (vel + 0.012), 0.35, 2.2);
-        accum += exp(-d * 210.0) * dwell;
-        haloAccum += exp(-d * 42.0) * dwell * 0.14;
+        float dwell = clamp(0.018 / (vel + 0.012), 0.30, 1.85);
+        accum += exp(-d * 340.0) * dwell;
+        haloAccum += exp(-d * 72.0) * dwell * 0.11;
         a = b;
     }
 
-    // Subtle horizontal L-channel time-domain waveform behind the Lissajous knot
+    // Crisp horizontal L-channel time-domain waveform behind the Lissajous knot
     float wIdx = clamp(in.uv.x * 255.0, 0.0, 254.0);
     int wi = int(wIdx);
     float wy = mix(waveLR[wi].x, waveLR[wi + 1].x, fract(wIdx)) * 0.32;
     float wDist = abs((in.uv.y - 0.5) - wy);
-    float trace = exp(-wDist * 140.0) * 0.32;
+    float trace = exp(-wDist * 220.0) * 0.34;
 
-    float3 coreHot = mix(beamCol, float3(0.95, 1.0, 0.96), 0.65);
-    col += coreHot * min(accum, 2.5) * 0.62 + beamCol * min(haloAccum, 1.8) * 0.35 + beamCol * trace;
+    float3 coreHot = mix(beamCol, float3(0.95, 1.0, 0.96), 0.72);
+    col += coreHot * min(accum, 2.2) * 0.56 + beamCol * min(haloAccum, 1.4) * 0.28 + beamCol * trace;
 
     return float4(min(col, 4.0), 1.0);
 }
@@ -446,44 +446,48 @@ fragment float4 liquidUpdateFragment(FullscreenOut in [[stage_in]],
     float r = length(p);
     float ang = atan2(p.y, p.x);
 
-    // Curl-noise domain warp + bass-driven radial zoom (MilkDrop feedback DNA)
-    float n1 = gradNoise(p * 2.4 + float2(u.time * 0.22, -u.time * 0.17));
-    float n2 = gradNoise(p * 2.4 + float2(-u.time * 0.19, u.time * 0.25) + 5.2);
+    // Curl-noise domain warp + bass-driven radial zoom (crisp liquid-silk feedback)
+    float n1 = gradNoise(p * 3.4 + float2(u.time * 0.22, -u.time * 0.17));
+    float n2 = gradNoise(p * 3.4 + float2(-u.time * 0.19, u.time * 0.25) + 5.2);
 
-    float zoom = 0.985 - u.bass * 0.014 - u.beat * 0.015;
-    float rot = 0.007 * sin(u.time * 0.42) + 0.011 * u.mid * sin(r * 3.0);
+    float zoom = 0.988 - u.bass * 0.010 - u.beat * 0.011;
+    float rot = 0.006 * sin(u.time * 0.42) + 0.009 * u.mid * sin(r * 3.4);
     float cR = cos(rot), sR = sin(rot);
 
     float2 centered = (in.uv - 0.5) * zoom;
     centered = float2(centered.x * cR - centered.y * sR, centered.x * sR + centered.y * cR);
-    float2 sampleUV = centered + 0.5 + float2(n1, n2) * (0.0045 + u.treble * 0.007);
+    float2 sampleUV = centered + 0.5 + float2(n1, n2) * (0.0036 + u.treble * 0.0055);
 
-    // Radial chromatic dispersion
-    float2 disp = normalize(p + 1e-4) * (0.0022 + u.beat * 0.0048);
+    // Subtle radial chromatic dispersion
+    float2 disp = normalize(p + 1e-4) * (0.0018 + u.beat * 0.0036);
     float3 prev;
     prev.r = prevTex.sample(s, sampleUV + disp).r;
     prev.g = prevTex.sample(s, sampleUV).g;
     prev.b = prevTex.sample(s, sampleUV - disp).b;
-    prev *= (0.935 + u.bass * 0.02);
+    prev *= (0.925 + u.bass * 0.018);
 
-    // Audio waveform ribbon
+    // Crisp audio waveform ribbon
     float wIdx = clamp(in.uv.x * 255.0, 0.0, 254.0);
     int wi = int(wIdx);
-    float wave = mix(waveLR[wi].x, waveLR[wi + 1].x, fract(wIdx)) * (0.42 + u.bass * 0.35);
-    float ribbon = exp(-abs((in.uv.y - 0.5) - wave * 0.65) * (34.0 - u.beat * 10.0));
+    float wave = mix(waveLR[wi].x, waveLR[wi + 1].x, fract(wIdx)) * (0.40 + u.bass * 0.30);
+    float ribbon = exp(-abs((in.uv.y - 0.5) - wave * 0.62) * (72.0 - u.beat * 14.0));
 
-    // Spectral harmonic ring
+    // Smoothly interpolated spectral harmonic ring (no jagged wedge seams)
     float normAng = fract(ang / 6.2831853 + 0.5 + u.time * 0.06);
-    int bIdx = int(normAng * 23.0);
-    float spec = getBand(u, bIdx);
-    float ringR = 0.22 + spec * 0.18 + u.bass * 0.08;
-    float ring = exp(-abs(r - ringR) * (28.0 - u.beat * 8.0));
+    float bandPos = normAng * 24.0;
+    int b0 = int(floor(bandPos)) % 24;
+    int b1 = (b0 + 1) % 24;
+    float bf = smoothstep(0.0, 1.0, fract(bandPos));
+    float spec = mix(getBand(u, b0), getBand(u, b1), bf);
+    float ringR = 0.21 + spec * 0.17 + u.bass * 0.06 + 0.018 * sin(ang * 5.0 + u.time * 0.9);
+    float ring = exp(-abs(r - ringR) * (62.0 - u.beat * 10.0));
+    float innerRing = exp(-abs(r - ringR * 0.58) * 85.0) * 0.45;
 
     float3 col1 = cosinePalette(u.time * 0.075 + in.uv.x * 0.65 + u.bass * 0.28);
     float3 col2 = cosinePalette(u.time * 0.075 + 0.42 + spec * 0.48);
 
-    float3 inject = col1 * ribbon * (0.58 + u.mid * 0.72) + col2 * ring * (0.55 + u.beat * 0.85);
-    float3 outCol = prev + inject * 0.25;
+    float3 inject = col1 * ribbon * (0.68 + u.mid * 0.72) + col2 * (ring + innerRing) * (0.64 + u.beat * 0.85);
+    float3 outCol = prev + inject * 0.28;
 
     float vig = smoothstep(1.28, 0.24, length((in.uv - 0.5) * 1.4));
     outCol *= mix(0.86, 1.0, vig);
