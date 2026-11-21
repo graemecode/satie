@@ -339,6 +339,8 @@ public final class FocusSoundEngine: @unchecked Sendable {
     private let renderState = FocusRenderState()
     private let lifecycleLock = NSLock()
     private var isEngineRunning = false
+    private var mixWithOthersEnabled = false
+    private var engineObservers: [NSObjectProtocol] = []
 
     // Background utility producer that keeps LockFreeBarQueue topped up off the Core Audio thread
     private let producerQueue = DispatchQueue(label: "com.strangechances.satie.score-producer", qos: .utility)
@@ -390,11 +392,84 @@ public final class FocusSoundEngine: @unchecked Sendable {
         producerQueue.async {
             _ = StudioSampleBank.shared.loadedZoneCount
         }
+        installPlatformEngineObservers()
     }
 
     deinit {
+        for obs in engineObservers {
+            NotificationCenter.default.removeObserver(obs)
+        }
+        engineObservers.removeAll()
         stopImmediately()
     }
+
+    public func setMixWithOthers(_ enabled: Bool) {
+        lifecycleLock.lock()
+        let changed = (mixWithOthersEnabled != enabled)
+        mixWithOthersEnabled = enabled
+        let running = isEngineRunning
+        #if os(iOS)
+        if changed && running {
+            try? configureAndActivateSessionLocked()
+        }
+        #endif
+        lifecycleLock.unlock()
+    }
+
+    private func installPlatformEngineObservers() {
+        #if os(iOS)
+        let nc = NotificationCenter.default
+        let cfgObs = nc.addObserver(
+            forName: .AVAudioEngineConfigurationChange,
+            object: engine,
+            queue: nil
+        ) { [weak self] _ in
+            self?.handleConfigurationChange(fullReset: false)
+        }
+        let resetObs = nc.addObserver(
+            forName: AVAudioSession.mediaServicesWereResetNotification,
+            object: AVAudioSession.sharedInstance(),
+            queue: nil
+        ) { [weak self] _ in
+            self?.handleConfigurationChange(fullReset: true)
+        }
+        engineObservers = [cfgObs, resetObs]
+        #endif
+    }
+
+    #if os(iOS)
+    private func handleConfigurationChange(fullReset: Bool) {
+        lifecycleLock.lock()
+        let shouldBePlaying = (renderState.isActiveAtom.load(ordering: .acquiring) != 0)
+        if fullReset {
+            if let node = sourceNode {
+                engine.detach(node)
+                sourceNode = nil
+            }
+            engine.reset()
+            isEngineRunning = false
+        }
+        lifecycleLock.unlock()
+
+        guard shouldBePlaying else { return }
+        Log.audio.info("iOS audio configuration changed (fullReset=\(fullReset, privacy: .public)); recovering playback")
+        _ = start(mode: currentMode)
+    }
+
+    private func configureAndActivateSessionLocked() throws {
+        let session = AVAudioSession.sharedInstance()
+        let opts: AVAudioSession.CategoryOptions = mixWithOthersEnabled ? [.mixWithOthers] : []
+        try session.setCategory(.playback, mode: .default, options: opts)
+        try? session.setPreferredSampleRate(48_000)
+        try? session.setPreferredIOBufferDuration(512.0 / 48_000.0)
+        try session.setActive(true)
+    }
+
+    private func deactivateSessionIfIdleLocked() {
+        guard !isEngineRunning else { return }
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+    #endif
 
     /// Re-anchors the audio graph cleanly after macOS system wake so Core Audio never glitches or piles up bars.
     public func handleSystemWake() {
@@ -532,7 +607,8 @@ public final class FocusSoundEngine: @unchecked Sendable {
         producerTimer = nil
     }
 
-    public func start(mode: FocusSoundscape? = nil) {
+    @discardableResult
+    public func start(mode: FocusSoundscape? = nil) -> Bool {
         let targetMode = mode ?? currentMode
         let targetPhase = CircadianPhase.current()
         if let idx = FocusSoundscape.allCases.firstIndex(of: targetMode) {
@@ -554,47 +630,48 @@ public final class FocusSoundEngine: @unchecked Sendable {
 
         startProducerTimerLocked()
         renderState.isActiveAtom.store(1, ordering: .releasing)
-        if isEngineRunning && engine.isRunning { return }
-
-        let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!
-        if sourceNode == nil {
-            let state = self.renderState
-            let rb = self.ringBuffer
-            let node = AVAudioSourceNode(format: format) { _, _, frameCount, audioBufferList -> OSStatus in
-                let abl = UnsafeMutableAudioBufferListPointer(audioBufferList)
-                guard abl.count >= 2,
-                      let outL = abl[0].mData?.assumingMemoryBound(to: Float.self),
-                      let outR = abl[1].mData?.assumingMemoryBound(to: Float.self) else {
-                    return noErr
-                }
-                let frames = Int(frameCount)
-                state.render(outL: outL, outR: outR, frames: frames, sampleRate: 48_000, allowSyncFallback: false)
-                if state.isAudibleOutput {
-                    rb.writePlanar(leftSrc: outL, rightSrc: outR, frameCount: frames)
-                }
-                return noErr
-            }
-            sourceNode = node
-            engine.attach(node)
-            engine.connect(node, to: engine.mainMixerNode, format: format)
-        }
+        if isEngineRunning && engine.isRunning { return true }
 
         do {
             #if os(iOS)
-            let session = AVAudioSession.sharedInstance()
-            try session.setCategory(.playback, mode: .default, options: [])
-            try? session.setPreferredSampleRate(48_000)
-            try? session.setPreferredIOBufferDuration(512.0 / 48_000.0)
-            try session.setActive(true)
+            // Activate iOS audio session BEFORE attaching/connecting graph so output node negotiates cleanly
+            try configureAndActivateSessionLocked()
             #endif
+
+            let format = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2)!
+            if sourceNode == nil {
+                let state = self.renderState
+                let rb = self.ringBuffer
+                let node = AVAudioSourceNode(format: format) { _, _, frameCount, audioBufferList -> OSStatus in
+                    let abl = UnsafeMutableAudioBufferListPointer(audioBufferList)
+                    guard abl.count >= 2,
+                          let outL = abl[0].mData?.assumingMemoryBound(to: Float.self),
+                          let outR = abl[1].mData?.assumingMemoryBound(to: Float.self) else {
+                        return noErr
+                    }
+                    let frames = Int(frameCount)
+                    state.render(outL: outL, outR: outR, frames: frames, sampleRate: 48_000, allowSyncFallback: false)
+                    if state.isAudibleOutput {
+                        rb.writePlanar(leftSrc: outL, rightSrc: outR, frameCount: frames)
+                    }
+                    return noErr
+                }
+                sourceNode = node
+                engine.attach(node)
+                engine.connect(node, to: engine.mainMixerNode, format: format)
+            }
+
             engine.prepare()
             try engine.start()
             isEngineRunning = true
             Log.audio.info("Satie Audio Engine v3 started (mode=\(self.currentMode.shortLabel, privacy: .public), circadian=\(targetPhase.label, privacy: .public))")
+            return true
         } catch {
             renderState.isActiveAtom.store(0, ordering: .releasing)
             stopProducerTimerLocked()
+            isEngineRunning = false
             Log.audio.error("Satie synth failed to start: \(error.localizedDescription, privacy: .public)")
+            return false
         }
     }
 
@@ -608,6 +685,9 @@ public final class FocusSoundEngine: @unchecked Sendable {
                 self.engine.pause()
                 self.stopProducerTimerLocked()
                 self.isEngineRunning = false
+                #if os(iOS)
+                self.deactivateSessionIfIdleLocked()
+                #endif
             }
         }
     }
@@ -621,6 +701,9 @@ public final class FocusSoundEngine: @unchecked Sendable {
             engine.stop()
             isEngineRunning = false
         }
+        #if os(iOS)
+        deactivateSessionIfIdleLocked()
+        #endif
     }
 
     /// Deterministic offline synthesis helper used by unit tests & audiophile psychoacoustic benchmarks.

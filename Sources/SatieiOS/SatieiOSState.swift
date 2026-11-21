@@ -56,6 +56,12 @@ final class SatieiOSState: ObservableObject {
             updateIdleTimer()
         }
     }
+    @Published var mixWithOthers: Bool {
+        didSet {
+            settings.mixWithOthers = mixWithOthers
+            focusSound.setMixWithOthers(mixWithOthers)
+        }
+    }
 
     @Published var isFocusPlaying: Bool = false
     @Published var flowMinutes: Int = 0
@@ -70,6 +76,7 @@ final class SatieiOSState: ObservableObject {
     let nowPlaying = NowPlayingBridge()
 
     private var housekeepingTimer: Timer?
+    private var flowEndDate: Date? = nil
     private var lastFrameTime: CFTimeInterval = CACurrentMediaTime()
     private var wasPlayingBeforeInterruption: Bool = false
     private let lightHaptic = UIImpactFeedbackGenerator(style: .light)
@@ -90,6 +97,7 @@ final class SatieiOSState: ObservableObject {
         self.maskingBed = settings.maskingBed
         self.flowMinutes = settings.flowMinutes
         self.keepScreenAwake = settings.keepScreenAwake
+        self.mixWithOthers = settings.mixWithOthers
 
         self.focusRingBuffer = StereoRingBuffer()
         self.focusSound = FocusSoundEngine(ringBuffer: focusRingBuffer)
@@ -98,12 +106,12 @@ final class SatieiOSState: ObservableObject {
         self.focusSound.setVolume(0.88)
         self.focusSound.setIntensity(.flow)
         self.focusSound.setMaskingBed(settings.maskingBed)
+        self.focusSound.setMixWithOthers(settings.mixWithOthers)
         self.focusSound.setCircadianPhase(CircadianPhase.current())
         self.dsp = AcousticDSP()
 
         configureMediaControls()
         installAudioSessionObservers()
-        startHousekeeping()
         lightHaptic.prepare()
         mediumHaptic.prepare()
     }
@@ -139,16 +147,31 @@ final class SatieiOSState: ObservableObject {
         }
         focusMode = mode
         focusSound.setCircadianPhase(CircadianPhase.current())
-        focusSound.start(mode: mode)
+        let started = focusSound.start(mode: mode)
+        guard started else {
+            isFocusPlaying = false
+            stopHousekeeping()
+            updateIdleTimer()
+            syncNowPlaying()
+            return
+        }
+
         isFocusPlaying = true
         if flowMinutes > 0 {
-            if flowRemainingSeconds == nil {
-                flowRemainingSeconds = Double(flowMinutes * 60)
+            if flowEndDate == nil {
+                let dur = Double(flowMinutes * 60)
+                flowEndDate = Date().addingTimeInterval(dur)
+                flowRemainingSeconds = dur
+            } else {
+                refreshCountdownFromWallClock()
             }
             focusSound.setSessionProgress(sessionProgress)
         } else {
+            flowEndDate = nil
+            flowRemainingSeconds = nil
             focusSound.setSessionProgress(nil)
         }
+        startHousekeepingIfNeeded()
         updateIdleTimer()
         syncNowPlaying()
     }
@@ -157,7 +180,9 @@ final class SatieiOSState: ObservableObject {
         focusSound.stop()
         focusSound.setSessionProgress(nil)
         isFocusPlaying = false
+        flowEndDate = nil
         flowRemainingSeconds = nil
+        stopHousekeeping()
         updateIdleTimer()
         syncNowPlaying()
     }
@@ -167,12 +192,17 @@ final class SatieiOSState: ObservableObject {
         flowMinutes = clamped
         settings.flowMinutes = clamped
         if clamped == 0 {
+            flowEndDate = nil
             flowRemainingSeconds = nil
             focusSound.setSessionProgress(nil)
         } else {
-            flowRemainingSeconds = Double(clamped * 60)
+            let dur = Double(clamped * 60)
+            flowRemainingSeconds = dur
             if isFocusPlaying {
+                flowEndDate = Date().addingTimeInterval(dur)
                 focusSound.setSessionProgress(0.0)
+            } else {
+                flowEndDate = nil
             }
         }
     }
@@ -198,6 +228,18 @@ final class SatieiOSState: ObservableObject {
 
     func setForeground(_ foreground: Bool) {
         isForeground = foreground
+        if foreground {
+            // Reconcile state & wall-clock timer immediately upon returning to foreground
+            if isFocusPlaying && !focusSound.isPlaying {
+                isFocusPlaying = false
+                flowEndDate = nil
+                flowRemainingSeconds = nil
+                stopHousekeeping()
+                syncNowPlaying()
+            } else if isFocusPlaying {
+                refreshCountdownFromWallClock()
+            }
+        }
         updateIdleTimer()
     }
 
@@ -277,6 +319,8 @@ final class SatieiOSState: ObservableObject {
                     if self.isFocusPlaying {
                         self.focusSound.stopImmediately()
                         self.isFocusPlaying = false
+                        self.stopHousekeeping()
+                        self.updateIdleTimer()
                         self.syncNowPlaying()
                     }
                 case .ended:
@@ -312,7 +356,8 @@ final class SatieiOSState: ObservableObject {
         sessionObservers = [intObs, routeObs]
     }
 
-    private func startHousekeeping() {
+    private func startHousekeepingIfNeeded() {
+        guard housekeepingTimer == nil else { return }
         housekeepingTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.tickHousekeeping()
@@ -320,25 +365,37 @@ final class SatieiOSState: ObservableObject {
         }
     }
 
-    private func tickHousekeeping() {
-        focusSound.setCircadianPhase(CircadianPhase.current())
+    private func stopHousekeeping() {
+        housekeepingTimer?.invalidate()
+        housekeepingTimer = nil
+    }
 
-        if isFocusPlaying, let rem = flowRemainingSeconds {
-            let next = rem - 1.0
-            if next <= 0 {
-                flowRemainingSeconds = nil
-                focusSound.setSessionProgress(1.0)
-                focusSound.triggerSessionChime()
-                settings.completedFocusSessions += 1
-                Task { @MainActor [weak self] in
-                    try? await Task.sleep(for: .seconds(4.0))
-                    guard let self, self.isFocusPlaying, self.flowRemainingSeconds == nil else { return }
-                    self.stopFocusSound()
-                }
-            } else {
-                flowRemainingSeconds = next
-                focusSound.setSessionProgress(sessionProgress)
+    private func tickHousekeeping() {
+        guard isFocusPlaying else {
+            stopHousekeeping()
+            return
+        }
+        focusSound.setCircadianPhase(CircadianPhase.current())
+        refreshCountdownFromWallClock()
+    }
+
+    private func refreshCountdownFromWallClock() {
+        guard isFocusPlaying, let endDate = flowEndDate else { return }
+        let rem = endDate.timeIntervalSinceNow
+        if rem <= 0 {
+            flowEndDate = nil
+            flowRemainingSeconds = nil
+            focusSound.setSessionProgress(1.0)
+            focusSound.triggerSessionChime()
+            settings.completedFocusSessions += 1
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(4.0))
+                guard let self, self.isFocusPlaying, self.flowEndDate == nil else { return }
+                self.stopFocusSound()
             }
+        } else {
+            flowRemainingSeconds = rem
+            focusSound.setSessionProgress(sessionProgress)
         }
     }
 }

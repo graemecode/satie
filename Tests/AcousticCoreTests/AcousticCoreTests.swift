@@ -187,6 +187,8 @@ struct AcousticCoreTests {
         store.sensitivity = .vivid
         store.focusMode = .rain
         store.focusVolume = 0.62
+        store.keepScreenAwake = true
+        store.mixWithOthers = true
         store.miniHUDOrigin = NSPoint(x: 420, y: 180)
         store.studioFrame = NSRect(x: 100, y: 120, width: 1280, height: 820)
 
@@ -196,6 +198,8 @@ struct AcousticCoreTests {
         #expect(reloaded.sensitivity == .vivid)
         #expect(reloaded.focusMode == .rain)
         #expect(abs(reloaded.focusVolume - 0.62) < 0.001)
+        #expect(reloaded.keepScreenAwake == true)
+        #expect(reloaded.mixWithOthers == true)
         #expect(reloaded.miniHUDOrigin == NSPoint(x: 420, y: 180))
         #expect(reloaded.studioFrame == NSRect(x: 100, y: 120, width: 1280, height: 820))
     }

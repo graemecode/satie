@@ -144,9 +144,12 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
-    private func ensurePingPongTextures(size: CGSize) {
-        let w = max(2, Int(size.width))
-        let h = max(2, Int(size.height))
+    private func ensurePingPongTextures(drawableSize size: CGSize) {
+        // Render offscreen RGBA16F feedback at 0.55x native Retina (~3.3x less GPU work);
+        // the display pass still renders at full 3x native resolution so CRT graticule stays razor-sharp.
+        let scale: CGFloat = 0.55
+        let w = max(2, Int((size.width * scale).rounded()))
+        let h = max(2, Int((size.height * scale).rounded()))
         if Int(pingPongSize.width) == w && Int(pingPongSize.height) == h && pingPongTextures[0] != nil {
             return
         }
@@ -198,8 +201,19 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
         guard state.isForeground else { return }
 
         let snap = state.stepDSP()
+        let preset = state.preset
         let maxFPS = window?.screen.maximumFramesPerSecond ?? 60
-        let desiredFPS = snap.isSilent ? 24 : min(120, maxFPS)
+        let proc = ProcessInfo.processInfo
+        let isPingPong = (preset == .phosphor || preset == .liquid)
+        let activeCap: Int
+        if proc.isLowPowerModeEnabled || proc.thermalState == .serious || proc.thermalState == .critical {
+            activeCap = 30
+        } else if proc.thermalState == .fair || isPingPong {
+            activeCap = min(60, maxFPS)
+        } else {
+            activeCap = min(120, maxFPS)
+        }
+        let desiredFPS = snap.isSilent ? 20 : activeCap
         scheduleFPS(desiredFPS)
 
         guard let drawable = currentDrawable,
@@ -209,7 +223,6 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
         let frameDt = Float(max(0.002, min(0.05, now - lastDrawTime)))
         lastDrawTime = now
 
-        let preset = state.preset
         if preset != lastPreset {
             lastPreset = preset
             if preset == .phosphor || preset == .liquid {
@@ -219,14 +232,23 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
 
         let size = drawableSize
         let isPortrait = size.height > size.width
+        let isCompactLandscape = !isPortrait && (traitCollection.verticalSizeClass == .compact)
         let slot = frameSlot % 3
         frameSlot &+= 1
 
         var uniforms = AcousticUniforms()
         uniforms.resolution = SIMD2<Float>(Float(size.width), Float(size.height))
-        // Frame the luminous core slightly above center on portrait iPhone so it floats gracefully above the bottom dock
-        uniforms.coreCenter = isPortrait ? SIMD2<Float>(0.5, 0.42) : SIMD2<Float>(0.5, 0.46)
-        uniforms.coreScale = isPortrait ? 0.56 : 0.78
+        // Frame the luminous core gracefully in the open stage across iPhone Portrait, iPhone Landscape desk-stand, and iPad
+        if isPortrait {
+            uniforms.coreCenter = SIMD2<Float>(0.5, 0.42)
+            uniforms.coreScale = 0.56
+        } else if isCompactLandscape {
+            uniforms.coreCenter = SIMD2<Float>(0.5, 0.44)
+            uniforms.coreScale = 0.72
+        } else {
+            uniforms.coreCenter = SIMD2<Float>(0.5, 0.45)
+            uniforms.coreScale = 0.72
+        }
         uniforms.time = Float(snap.time)
         uniforms.dt = frameDt
         uniforms.bass = snap.bass
@@ -293,7 +315,7 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
             }
 
         case .phosphor, .liquid:
-            ensurePingPongTextures(size: size)
+            ensurePingPongTextures(drawableSize: size)
             let nextIndex = 1 - pingIndex
             if let prevTex = pingPongTextures[pingIndex], let dstTex = pingPongTextures[nextIndex] {
                 let fbPass = MTLRenderPassDescriptor()

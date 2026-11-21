@@ -9,18 +9,30 @@ public enum AcousticInstrumentID: String, CaseIterable, Sendable {
     case glass  // CC0 VCSL Bowed Vibraphone + Friction Wine Glasses
 }
 
-/// Immutable decoded 48 kHz stereo PCM zone for zero-allocation real-time playback.
+/// Immutable decoded 48 kHz stereo Int16 PCM zone for zero-allocation real-time playback (half the RAM of Float32, 96 dB dynamic range).
 final class DecodedSampleZone: @unchecked Sendable {
+    static let int16ToFloat: Float = 1.0 / 32767.0
+
     let midi: Int
     let frameCount: Int
-    let left: [Float]
-    let right: [Float]
+    let left: [Int16]
+    let right: [Int16]
 
-    init(midi: Int, left: [Float], right: [Float]) {
+    init(midi: Int, left: [Int16], right: [Int16]) {
         self.midi = midi
         self.frameCount = min(left.count, right.count)
         self.left = left
         self.right = right
+    }
+
+    @inline(__always)
+    func sampleL(_ index: Int) -> Float {
+        Float(left[index]) * Self.int16ToFloat
+    }
+
+    @inline(__always)
+    func sampleR(_ index: Int) -> Float {
+        Float(right[index]) * Self.int16ToFloat
     }
 }
 
@@ -131,47 +143,57 @@ final class StudioSampleBank: @unchecked Sendable {
 
     private static func decodeStereo48k(url: URL, midi: Int) -> DecodedSampleZone? {
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-        do {
-            let file = try AVAudioFile(forReading: url)
-            let targetFmt = AVAudioFormat(standardFormatWithSampleRate: 48_000.0, channels: 2)!
-            let srcFmt = file.processingFormat
-            let estFrames = AVAudioFrameCount(max(1024, Int(Double(file.length) * (48_000.0 / max(1.0, srcFmt.sampleRate))) + 2048))
+        return autoreleasepool {
+            do {
+                let file = try AVAudioFile(forReading: url)
+                let targetFmt = AVAudioFormat(standardFormatWithSampleRate: 48_000.0, channels: 2)!
+                let srcFmt = file.processingFormat
+                let estFrames = AVAudioFrameCount(max(1024, Int(Double(file.length) * (48_000.0 / max(1.0, srcFmt.sampleRate))) + 2048))
 
-            guard let srcBuf = AVAudioPCMBuffer(pcmFormat: srcFmt, frameCapacity: AVAudioFrameCount(file.length) + 1024) else {
-                return nil
-            }
-            try file.read(into: srcBuf)
-
-            let finalBuf: AVAudioPCMBuffer
-            if srcFmt.sampleRate == 48_000.0 && srcFmt.channelCount == 2 && srcFmt.commonFormat == .pcmFormatFloat32 && !srcFmt.isInterleaved {
-                finalBuf = srcBuf
-            } else {
-                guard let converter = AVAudioConverter(from: srcFmt, to: targetFmt),
-                      let outBuf = AVAudioPCMBuffer(pcmFormat: targetFmt, frameCapacity: estFrames) else {
+                guard let srcBuf = AVAudioPCMBuffer(pcmFormat: srcFmt, frameCapacity: AVAudioFrameCount(file.length) + 1024) else {
                     return nil
                 }
-                nonisolated(unsafe) var provided = false
-                var convError: NSError?
-                converter.convert(to: outBuf, error: &convError) { _, outStatus in
-                    if provided {
-                        outStatus.pointee = .endOfStream
+                try file.read(into: srcBuf)
+
+                let finalBuf: AVAudioPCMBuffer
+                if srcFmt.sampleRate == 48_000.0 && srcFmt.channelCount == 2 && srcFmt.commonFormat == .pcmFormatFloat32 && !srcFmt.isInterleaved {
+                    finalBuf = srcBuf
+                } else {
+                    guard let converter = AVAudioConverter(from: srcFmt, to: targetFmt),
+                          let outBuf = AVAudioPCMBuffer(pcmFormat: targetFmt, frameCapacity: estFrames) else {
                         return nil
                     }
-                    provided = true
-                    outStatus.pointee = .haveData
-                    return srcBuf
+                    nonisolated(unsafe) var provided = false
+                    var convError: NSError?
+                    converter.convert(to: outBuf, error: &convError) { _, outStatus in
+                        if provided {
+                            outStatus.pointee = .endOfStream
+                            return nil
+                        }
+                        provided = true
+                        outStatus.pointee = .haveData
+                        return srcBuf
+                    }
+                    if convError != nil || outBuf.frameLength == 0 { return nil }
+                    finalBuf = outBuf
                 }
-                if convError != nil || outBuf.frameLength == 0 { return nil }
-                finalBuf = outBuf
-            }
 
-            let frames = Int(finalBuf.frameLength)
-            guard frames > 64, let chData = finalBuf.floatChannelData else { return nil }
-            let left = Array(UnsafeBufferPointer(start: chData[0], count: frames))
-            let right = Array(UnsafeBufferPointer(start: chData[1], count: frames))
-            return DecodedSampleZone(midi: midi, left: left, right: right)
-        } catch {
-            return nil
+                let frames = Int(finalBuf.frameLength)
+                guard frames > 64, let chData = finalBuf.floatChannelData else { return nil }
+                let srcL = chData[0]
+                let srcR = chData[1]
+                var left = [Int16](repeating: 0, count: frames)
+                var right = [Int16](repeating: 0, count: frames)
+                for i in 0..<frames {
+                    let clL = max(-1.0 as Float, min(1.0 as Float, srcL[i]))
+                    let clR = max(-1.0 as Float, min(1.0 as Float, srcR[i]))
+                    left[i] = Int16(clL * 32767.0)
+                    right[i] = Int16(clR * 32767.0)
+                }
+                return DecodedSampleZone(midi: midi, left: left, right: right)
+            } catch {
+                return nil
+            }
         }
     }
 }
@@ -314,8 +336,8 @@ struct AcousticSamplerVoice: @unchecked Sendable {
         let i1 = idx + 1
         let i2 = min(z.frameCount - 1, idx + 2)
 
-        let rawL = AudioMath.hermite(z.left[iM1], z.left[idx], z.left[i1], z.left[i2], frac: frac)
-        let rawR = AudioMath.hermite(z.right[iM1], z.right[idx], z.right[i1], z.right[i2], frac: frac)
+        let rawL = AudioMath.hermite(z.sampleL(iM1), z.sampleL(idx), z.sampleL(i1), z.sampleL(i2), frac: frac)
+        let rawR = AudioMath.hermite(z.sampleR(iM1), z.sampleR(idx), z.sampleR(i1), z.sampleR(i2), frac: frac)
 
         readPos += rate
         age += dt
@@ -399,8 +421,8 @@ struct StudioRainPlayer: @unchecked Sendable {
         sampleCounter &+= 1
 
         let idxA = trimStart + cursor
-        var outL = z.left[idxA]
-        var outR = z.right[idxA]
+        var outL = z.sampleL(idxA)
+        var outR = z.sampleR(idxA)
 
         // Seamless equal-power cosine/sine overlap at loop boundary
         if cursor < xfadeLength {
@@ -408,8 +430,8 @@ struct StudioRainPlayer: @unchecked Sendable {
             let gIn = Float(sin(0.5 * Double.pi * t))
             let gOut = Float(cos(0.5 * Double.pi * t))
             let idxB = trimStart + loopLength + cursor
-            outL = outL * gIn + z.left[idxB] * gOut
-            outR = outR * gIn + z.right[idxB] * gOut
+            outL = outL * gIn + z.sampleL(idxB) * gOut
+            outR = outR * gIn + z.sampleR(idxB) * gOut
         }
 
         cursor += 1

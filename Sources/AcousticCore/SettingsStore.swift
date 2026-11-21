@@ -58,6 +58,7 @@ public final class SettingsStore: @unchecked Sendable {
         static let completedFocusSessions = "ac.completedFocusSessions"
         static let lastReviewPromptVersion = "ac.lastReviewPromptVersion"
         static let keepScreenAwake = "ac.keepScreenAwake"
+        static let mixWithOthers = "ac.mixWithOthers"
     }
 
     public init(defaults: UserDefaults = .standard) {
@@ -143,6 +144,11 @@ public final class SettingsStore: @unchecked Sendable {
     public var keepScreenAwake: Bool {
         get { defaults.bool(forKey: Keys.keepScreenAwake) }
         set { defaults.set(newValue, forKey: Keys.keepScreenAwake) }
+    }
+
+    public var mixWithOthers: Bool {
+        get { defaults.bool(forKey: Keys.mixWithOthers) }
+        set { defaults.set(newValue, forKey: Keys.mixWithOthers) }
     }
 
     #if os(macOS)

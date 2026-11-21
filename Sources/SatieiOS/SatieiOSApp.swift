@@ -9,7 +9,6 @@ struct SatieiOSApp: App {
         WindowGroup {
             SatieiOSRootView(state: state)
                 .preferredColorScheme(.dark)
-                .statusBarHidden(false)
                 .onChange(of: scenePhase) { _, phase in
                     state.setForeground(phase == .active)
                 }

@@ -2,11 +2,27 @@ import AcousticCore
 import AVKit
 import SwiftUI
 
+private struct BraunPressButtonStyle: ButtonStyle {
+    var pressedScale: CGFloat = 0.93
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? pressedScale : 1.0)
+            .opacity(configuration.isPressed ? 0.84 : 1.0)
+            .animation(.spring(response: 0.22, dampingFraction: 0.72), value: configuration.isPressed)
+    }
+}
+
 struct SatieiOSRootView: View {
     @ObservedObject var state: SatieiOSState
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     @State private var showOptions: Bool = false
     @State private var immersionMode: Bool = false
+    @State private var showImmersionHint: Bool = false
+    @State private var immersionHintTask: Task<Void, Never>? = nil
+    @State private var presetTransitionVeil: Double = 0.0
     @Namespace private var visualPillNS
 
     private let timerPresets: [Int] = [0, 15, 25, 45, 60, 90]
@@ -15,18 +31,38 @@ struct SatieiOSRootView: View {
     private let inkSoft = Color.white.opacity(0.74)
     private let inkDim = Color.white.opacity(0.46)
 
+    private var isCompactLandscape: Bool {
+        verticalSizeClass == .compact
+    }
+
+    private var isRegularCanvas: Bool {
+        horizontalSizeClass == .regular && verticalSizeClass == .regular
+    }
+
+    private var contentMaxWidth: CGFloat {
+        if isCompactLandscape { return 720 }
+        if isRegularCanvas { return 580 }
+        return 430
+    }
+
     var body: some View {
         ZStack {
-            // 1. Full-bleed edge-to-edge 120Hz Metal OLED stage
+            // 1. Full-bleed edge-to-edge Metal OLED stage
             iOSMetalVisualizerRepresentable(isActive: state.isForeground, preset: state.preset)
                 .ignoresSafeArea()
+
+            // Subtle dissolve veil on visual preset switch so transitions glide instead of snapping
+            Color.black
+                .opacity(presetTransitionVeil)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
 
             // Soundscape-matched whisper-subtle atmospheric light aura
             RadialGradient(
                 colors: [soundscapeAuraColor.opacity(0.20), Color.clear],
-                center: UnitPoint(x: 0.5, y: 0.40),
+                center: UnitPoint(x: 0.5, y: isCompactLandscape ? 0.44 : 0.40),
                 startRadius: 24,
-                endRadius: 340
+                endRadius: isRegularCanvas ? 440 : 340
             )
             .blendMode(.screen)
             .ignoresSafeArea()
@@ -39,7 +75,7 @@ struct SatieiOSRootView: View {
                     colors: [Color.black.opacity(0.68), Color.black.opacity(0.0)],
                     startPoint: .top, endPoint: .bottom
                 )
-                .frame(height: 150)
+                .frame(height: isCompactLandscape ? 92 : 150)
 
                 Spacer()
 
@@ -47,332 +83,473 @@ struct SatieiOSRootView: View {
                     colors: [Color.black.opacity(0.0), Color.black.opacity(0.84)],
                     startPoint: .top, endPoint: .bottom
                 )
-                .frame(height: 310)
+                .frame(height: isCompactLandscape ? 128 : 310)
             }
             .ignoresSafeArea()
-            .opacity(immersionMode ? 0.15 : 1.0)
+            .opacity(immersionMode ? 0.12 : 1.0)
             .animation(.easeInOut(duration: 0.3), value: immersionMode)
             .allowsHitTesting(false)
-
-            // Full-canvas touch surface: tap for Immersion Mode, swipe left/right to switch visualizations
-            Color.clear
-                .contentShape(Rectangle())
-                .ignoresSafeArea()
-                .onTapGesture {
-                    state.performHaptic()
-                    withAnimation(.easeInOut(duration: 0.28)) {
-                        immersionMode.toggle()
-                    }
-                }
-                .gesture(
-                    DragGesture(minimumDistance: 36, coordinateSpace: .local)
-                        .onEnded { value in
-                            if abs(value.translation.width) > abs(value.translation.height) * 1.4 {
-                                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                                    state.cycleVisual(forward: value.translation.width < 0)
-                                }
-                            }
-                        }
-                )
 
             // 2. Floating Editorial HUD (hides cleanly in Immersion Mode)
             VStack(spacing: 0) {
                 // Top Header: Title + Acoustic Palette on left, quiet AirPlay picker on right
-                HStack(alignment: .top, spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(state.focusMode.title)
-                            .font(.system(size: 28, weight: .medium))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
+                headerBar
+                    .frame(maxWidth: contentMaxWidth)
+                    .padding(.horizontal, 22)
+                    .padding(.top, isCompactLandscape ? 10 : (isRegularCanvas ? 22 : 14))
 
-                        Text(heroSubtitle)
-                            .font(.system(size: 10.5, weight: .regular, design: .monospaced))
-                            .foregroundColor(inkSoft)
-                            .tracking(0.6)
-                            .lineLimit(1)
+                // Interactive open stage surface: tap for Immersion Mode, swipe left/right to switch visualizations.
+                // Scoped to the open canvas (not behind dock buttons) so a 2px mis-tap near a glyph never hides the HUD.
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        toggleImmersion(true)
                     }
-                    .allowsHitTesting(false)
+                    .gesture(stageSwipeGesture)
+                    .accessibilityHidden(true)
 
-                    Spacer()
-
-                    AirPlayRouteButton()
-                        .frame(width: 36, height: 36)
-                        .background(Color.white.opacity(0.07))
-                        .clipShape(Circle())
-                        .overlay(Circle().stroke(hairSoft, lineWidth: 1))
+                // Bottom Tactile Control Dock (adapts cleanly across iPhone Portrait, iPhone Landscape Desk Stand, and iPad)
+                if isCompactLandscape {
+                    compactLandscapeDock
+                        .frame(maxWidth: contentMaxWidth)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 12)
+                } else {
+                    portraitOrTabletDock
+                        .frame(maxWidth: contentMaxWidth)
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, isRegularCanvas ? 30 : 22)
                 }
-                .padding(.horizontal, 22)
-                .padding(.top, 14)
-
-                Spacer()
-
-                // Bottom Tactile Control Dock (centered nicely on both iPhone & iPad)
-                VStack(spacing: 20) {
-                    // Frosted Visual Mode Switcher Pill (Circuit · Ecology · Scope · Liquid)
-                    HStack(spacing: 2) {
-                        ForEach(iOSVisualPreset.allCases) { p in
-                            let selected = (state.preset == p)
-                            Button {
-                                withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
-                                    state.preset = p
-                                }
-                                state.performHaptic()
-                            } label: {
-                                Text(p.cleanName)
-                                    .font(.system(size: 11, weight: selected ? .semibold : .medium))
-                                    .foregroundColor(selected ? .black : Color.white.opacity(0.74))
-                                    .padding(.horizontal, 12)
-                                    .frame(height: 26)
-                                    .background {
-                                        if selected {
-                                            Capsule()
-                                                .fill(Color.white)
-                                                .matchedGeometryEffect(id: "iosVisualPill", in: visualPillNS)
-                                        }
-                                    }
-                                    .contentShape(Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .padding(3)
-                    .background(Color.black.opacity(0.50))
-                    .background(.ultraThinMaterial)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.white.opacity(0.14), lineWidth: 0.8))
-
-                    // Five Iconic Circular Geometric Soundscape Glyphs (FOCUS · PULSE · RAIN · STILL · NIGHT)
-                    HStack(spacing: 0) {
-                        ForEach(FocusSoundscape.allCases) { mode in
-                            let isSelected = (state.focusMode == mode)
-                            let isActive = state.isFocusPlaying && (state.focusMode == mode)
-                            Button {
-                                if isActive {
-                                    state.stopFocusSound()
-                                } else {
-                                    state.toggleFocusSound(mode)
-                                }
-                            } label: {
-                                VStack(spacing: 7) {
-                                    SoundscapeGlyph(mode: mode, isActive: isActive, isSelected: isSelected, size: 46)
-                                    Text(mode.shortLabel)
-                                        .font(.system(size: 9.5, weight: isActive ? .semibold : .regular, design: .monospaced))
-                                        .foregroundColor(isActive ? .white : (isSelected ? inkSoft : inkDim))
-                                        .tracking(0.6)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-
-                    // Dead-Center Play / Pause + One Consolidated Options Button
-                    HStack(spacing: 22) {
-                        // Left wing: live countdown pill ONLY when a sleep timer is counting down
-                        HStack {
-                            if let countdown = compactCountdown {
-                                Button {
-                                    state.performHaptic()
-                                    showOptions = true
-                                } label: {
-                                    HStack(spacing: 5) {
-                                        Image(systemName: "timer")
-                                            .font(.system(size: 12, weight: .medium))
-                                        Text(countdown)
-                                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                    }
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 12)
-                                    .frame(height: 36)
-                                    .background(Color.white.opacity(0.12))
-                                    .clipShape(Capsule())
-                                    .overlay(Capsule().stroke(hairSoft, lineWidth: 1))
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-
-                        // Hero Pure-White Play / Pause Circle (dead center beneath RAIN)
-                        Button {
-                            state.togglePlayOrPause()
-                        } label: {
-                            Image(systemName: state.isFocusPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 22, weight: .semibold))
-                                .foregroundColor(.black)
-                                .offset(x: state.isFocusPlaying ? 0 : 2)
-                                .frame(width: 64, height: 64)
-                                .background(Color.white)
-                                .clipShape(Circle())
-                                .shadow(color: Color.white.opacity(state.isFocusPlaying ? 0.22 : 0.08), radius: 18)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(state.isFocusPlaying ? "Pause \(state.focusMode.title)" : "Play \(state.focusMode.title)")
-
-                        // Right wing: Single Consolidated Options Button
-                        HStack {
-                            Button {
-                                state.performHaptic()
-                                showOptions = true
-                            } label: {
-                                ZStack(alignment: .topTrailing) {
-                                    Image(systemName: "slider.horizontal.3")
-                                        .font(.system(size: 16, weight: .medium))
-                                        .foregroundColor(Color.white.opacity(0.84))
-                                        .frame(width: 44, height: 44)
-                                        .background(Color.white.opacity(0.08))
-                                        .clipShape(Circle())
-                                        .overlay(Circle().stroke(hair, lineWidth: 1))
-
-                                    if state.maskingBed != .off || state.flowMinutes > 0 {
-                                        Circle()
-                                            .fill(Color.white)
-                                            .frame(width: 6, height: 6)
-                                            .offset(x: -3, y: 3)
-                                    }
-                                }
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel("Options")
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.top, 2)
-                }
-                .frame(maxWidth: 430)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 22)
             }
             .opacity(immersionMode ? 0.0 : 1.0)
             .animation(.easeInOut(duration: 0.28), value: immersionMode)
             .allowsHitTesting(!immersionMode)
+
+            // 3. Full-screen tap/swipe catcher ONLY while in Immersion Mode
+            if immersionMode {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture {
+                        toggleImmersion(false)
+                    }
+                    .gesture(stageSwipeGesture)
+                    .overlay(alignment: .bottom) {
+                        if showImmersionHint {
+                            Text("TAP ANYWHERE TO SHOW CONTROLS")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .tracking(0.8)
+                                .foregroundColor(Color.white.opacity(0.76))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 8)
+                                .background(Color.black.opacity(0.55))
+                                .background(.ultraThinMaterial)
+                                .clipShape(Capsule())
+                                .overlay(Capsule().stroke(hairSoft, lineWidth: 0.8))
+                                .padding(.bottom, 36)
+                                .transition(.opacity)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                    .accessibilityLabel("Exit immersion mode")
+                    .accessibilityHint("Double tap to show Satie controls")
+            }
+        }
+        .statusBarHidden(immersionMode)
+        .onChange(of: state.preset) { _, _ in
+            presetTransitionVeil = 0.55
+            withAnimation(.easeOut(duration: 0.28)) {
+                presetTransitionVeil = 0.0
+            }
         }
         .sheet(isPresented: $showOptions) {
             optionsSheet
-                .presentationDetents([.height(state.preset == .phosphor ? 345 : 295)])
+                .presentationDetents([
+                    .height(state.preset == .phosphor ? 415 : 365),
+                    .medium
+                ])
                 .presentationDragIndicator(.visible)
                 .presentationBackground(Color(red: 0.055, green: 0.062, blue: 0.078))
+        }
+    }
+
+    // MARK: - Header & Docks
+
+    private var headerBar: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(state.focusMode.title)
+                    .font(.system(size: isCompactLandscape ? 22 : (isRegularCanvas ? 32 : 28), weight: .medium))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+
+                Text(heroSubtitle)
+                    .font(.system(size: isCompactLandscape ? 9.5 : 10.5, weight: .regular, design: .monospaced))
+                    .foregroundColor(inkSoft)
+                    .tracking(0.6)
+                    .lineLimit(1)
+            }
+            .allowsHitTesting(false)
+            .accessibilityElement(children: .combine)
+
+            Spacer()
+
+            AirPlayRouteButton()
+                .frame(width: 36, height: 36)
+                .background(Color.white.opacity(0.07))
+                .clipShape(Circle())
+                .overlay(Circle().stroke(hairSoft, lineWidth: 1))
+                .accessibilityLabel("Audio Output and AirPlay")
+        }
+    }
+
+    private var portraitOrTabletDock: some View {
+        VStack(spacing: isRegularCanvas ? 22 : 20) {
+            visualSwitcherPill
+
+            // Five Iconic Circular Geometric Soundscape Glyphs (FOCUS · PULSE · RAIN · STILL · NIGHT)
+            HStack(spacing: 0) {
+                ForEach(FocusSoundscape.allCases) { mode in
+                    soundscapeButton(mode: mode, glyphSize: isRegularCanvas ? 52 : 46)
+                }
+            }
+
+            // Dead-Center Play / Pause + One Consolidated Options Button
+            HStack(spacing: 22) {
+                HStack {
+                    if let countdown = compactCountdown {
+                        countdownPill(countdown)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .trailing)
+
+                playPauseButton(diameter: isRegularCanvas ? 68 : 64, iconSize: 22)
+
+                HStack {
+                    optionsButton(diameter: 44, iconSize: 16)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    /// Single-row Braun desktop-instrument bar for iPhone landscape MagSafe desk-stand orientation.
+    private var compactLandscapeDock: some View {
+        VStack(spacing: 10) {
+            visualSwitcherPill
+
+            HStack(spacing: 14) {
+                HStack(spacing: 6) {
+                    ForEach(FocusSoundscape.allCases) { mode in
+                        soundscapeButton(mode: mode, glyphSize: 38)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+
+                HStack(spacing: 12) {
+                    if let countdown = compactCountdown {
+                        countdownPill(countdown)
+                    }
+                    playPauseButton(diameter: 50, iconSize: 18)
+                    optionsButton(diameter: 38, iconSize: 14)
+                }
+            }
+        }
+    }
+
+    // MARK: - Controls
+
+    private var visualSwitcherPill: some View {
+        HStack(spacing: 2) {
+            ForEach(iOSVisualPreset.allCases) { p in
+                let selected = (state.preset == p)
+                Button {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                        state.preset = p
+                    }
+                    state.performHaptic()
+                } label: {
+                    Text(p.cleanName)
+                        .font(.system(size: 11, weight: selected ? .semibold : .medium))
+                        .foregroundColor(selected ? .black : Color.white.opacity(0.74))
+                        .padding(.horizontal, 12)
+                        .frame(height: 26)
+                        .background {
+                            if selected {
+                                Capsule()
+                                    .fill(Color.white)
+                                    .matchedGeometryEffect(id: "iosVisualPill", in: visualPillNS)
+                            }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(BraunPressButtonStyle(pressedScale: 0.96))
+                .accessibilityLabel("\(p.cleanName) visualizer")
+                .accessibilityAddTraits(selected ? [.isSelected] : [])
+            }
+        }
+        .padding(3)
+        .background(Color.black.opacity(0.50))
+        .background(.ultraThinMaterial)
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(Color.white.opacity(0.14), lineWidth: 0.8))
+    }
+
+    private func soundscapeButton(mode: FocusSoundscape, glyphSize: CGFloat) -> some View {
+        let isSelected = (state.focusMode == mode)
+        let isActive = state.isFocusPlaying && (state.focusMode == mode)
+        return Button {
+            if isActive {
+                state.stopFocusSound()
+            } else {
+                state.toggleFocusSound(mode)
+            }
+        } label: {
+            VStack(spacing: isCompactLandscape ? 4 : 7) {
+                SoundscapeGlyph(mode: mode, isActive: isActive, isSelected: isSelected, size: glyphSize)
+                Text(mode.shortLabel)
+                    .font(.system(size: isCompactLandscape ? 8.5 : 9.5, weight: isActive ? .semibold : .regular, design: .monospaced))
+                    .foregroundColor(isActive ? .white : (isSelected ? inkSoft : inkDim))
+                    .tracking(0.6)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(BraunPressButtonStyle(pressedScale: 0.92))
+        .accessibilityLabel("\(mode.title), \(mode.subtitle)")
+        .accessibilityHint(isActive ? "Double tap to pause" : "Double tap to play")
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
+    }
+
+    private func playPauseButton(diameter: CGFloat, iconSize: CGFloat) -> some View {
+        Button {
+            state.togglePlayOrPause()
+        } label: {
+            Image(systemName: state.isFocusPlaying ? "pause.fill" : "play.fill")
+                .font(.system(size: iconSize, weight: .semibold))
+                .foregroundColor(.black)
+                .offset(x: state.isFocusPlaying ? 0 : 2)
+                .frame(width: diameter, height: diameter)
+                .background(Color.white)
+                .clipShape(Circle())
+                .shadow(color: Color.white.opacity(state.isFocusPlaying ? 0.24 : 0.08), radius: 18)
+        }
+        .buttonStyle(BraunPressButtonStyle(pressedScale: 0.91))
+        .accessibilityLabel(state.isFocusPlaying ? "Pause \(state.focusMode.title)" : "Play \(state.focusMode.title)")
+    }
+
+    private func optionsButton(diameter: CGFloat, iconSize: CGFloat) -> some View {
+        Button {
+            state.performHaptic()
+            showOptions = true
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: iconSize, weight: .medium))
+                    .foregroundColor(Color.white.opacity(0.84))
+                    .frame(width: diameter, height: diameter)
+                    .background(Color.white.opacity(0.08))
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(hair, lineWidth: 1))
+
+                if state.maskingBed != .off || state.flowMinutes > 0 || state.mixWithOthers {
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 6, height: 6)
+                        .offset(x: -3, y: 3)
+                }
+            }
+        }
+        .buttonStyle(BraunPressButtonStyle(pressedScale: 0.92))
+        .accessibilityLabel("Options")
+    }
+
+    private func countdownPill(_ countdown: String) -> some View {
+        Button {
+            state.performHaptic()
+            showOptions = true
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "timer")
+                    .font(.system(size: 12, weight: .medium))
+                Text(countdown)
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            .background(Color.white.opacity(0.12))
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(hairSoft, lineWidth: 1))
+        }
+        .buttonStyle(BraunPressButtonStyle(pressedScale: 0.94))
+        .accessibilityLabel("Sleep timer, \(countdown) remaining")
+    }
+
+    private var stageSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 36, coordinateSpace: .local)
+            .onEnded { value in
+                if abs(value.translation.width) > abs(value.translation.height) * 1.4 {
+                    withAnimation(.spring(response: 0.28, dampingFraction: 0.82)) {
+                        state.cycleVisual(forward: value.translation.width < 0)
+                    }
+                }
+            }
+    }
+
+    private func toggleImmersion(_ enter: Bool) {
+        state.performHaptic()
+        immersionHintTask?.cancel()
+        withAnimation(.easeInOut(duration: 0.28)) {
+            immersionMode = enter
+            showImmersionHint = enter
+        }
+        if enter {
+            immersionHintTask = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1.8))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: 0.45)) {
+                    showImmersionHint = false
+                }
+            }
         }
     }
 
     // MARK: - Consolidated Native Options Sheet
 
     private var optionsSheet: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            // Sleep / Focus Timer
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("TIMER")
-                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                        .foregroundColor(inkSoft)
-                        .tracking(0.8)
-                    Spacer()
-                    Text(timerStatusLabel)
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(state.flowMinutes > 0 ? .white : inkDim)
-                }
-
-                HStack(spacing: 6) {
-                    ForEach(timerPresets, id: \.self) { mins in
-                        let on = state.flowMinutes == mins
-                        Button {
-                            state.setFlowMinutes(mins)
-                            state.performHaptic()
-                        } label: {
-                            Text(mins == 0 ? "∞" : "\(mins)m")
-                                .font(.system(size: 12, weight: on ? .semibold : .regular, design: .monospaced))
-                                .foregroundColor(on ? .black : inkSoft)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 36)
-                                .background(on ? Color.white : Color.white.opacity(0.07))
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 18) {
+                // Sleep / Focus Timer
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("TIMER")
+                            .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                            .foregroundColor(inkSoft)
+                            .tracking(0.8)
+                        Spacer()
+                        Text(timerStatusLabel)
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundColor(state.flowMinutes > 0 ? .white : inkDim)
                     }
-                }
-            }
 
-            // Optional Background Noise Layer
-            VStack(alignment: .leading, spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("BACKGROUND NOISE")
-                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                        .foregroundColor(inkSoft)
-                        .tracking(0.8)
-                    Text("Layer gentle rain or brown noise under any mode")
-                        .font(.system(size: 12))
-                        .foregroundColor(inkDim)
-                }
-
-                HStack(spacing: 6) {
-                    ForEach(MaskingBed.allCases) { bed in
-                        let on = state.maskingBed == bed
-                        Button {
-                            state.maskingBed = bed
-                            state.performHaptic()
-                        } label: {
-                            Text(bed.label)
-                                .font(.system(size: 12.5, weight: on ? .semibold : .regular))
-                                .foregroundColor(on ? .black : inkSoft)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 36)
-                                .background(on ? Color.white : Color.white.opacity(0.07))
-                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-
-            if state.preset == .phosphor {
-                HStack {
-                    Text("CRT PHOSPHOR")
-                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                        .foregroundColor(inkSoft)
-                        .tracking(0.8)
-                    Spacer()
                     HStack(spacing: 6) {
-                        ForEach([(false, "P31 Emerald"), (true, "P39 Amber")], id: \.0) { isAmber, label in
-                            let on = state.amberPhosphor == isAmber
+                        ForEach(timerPresets, id: \.self) { mins in
+                            let on = state.flowMinutes == mins
                             Button {
-                                state.amberPhosphor = isAmber
+                                state.setFlowMinutes(mins)
                                 state.performHaptic()
                             } label: {
-                                Text(label)
-                                    .font(.system(size: 11, weight: on ? .semibold : .regular, design: .monospaced))
+                                Text(mins == 0 ? "∞" : "\(mins)m")
+                                    .font(.system(size: 12, weight: on ? .semibold : .regular, design: .monospaced))
                                     .foregroundColor(on ? .black : inkSoft)
-                                    .padding(.horizontal, 10)
-                                    .frame(height: 28)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 36)
                                     .background(on ? Color.white : Color.white.opacity(0.07))
-                                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(BraunPressButtonStyle(pressedScale: 0.95))
+                            .accessibilityLabel(mins == 0 ? "No timer limit" : "\(mins) minute timer")
+                            .accessibilityAddTraits(on ? [.isSelected] : [])
                         }
                     }
                 }
-            }
 
-            Divider().overlay(hairSoft)
+                // Optional Background Noise Layer
+                VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("BACKGROUND NOISE")
+                            .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                            .foregroundColor(inkSoft)
+                            .tracking(0.8)
+                        Text("Layer gentle rain or brown noise under any mode")
+                            .font(.system(size: 12))
+                            .foregroundColor(inkDim)
+                    }
 
-            Toggle(isOn: $state.keepScreenAwake) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("KEEP SCREEN AWAKE")
-                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                        .foregroundColor(inkSoft)
-                        .tracking(0.8)
-                    Text("Keep the visual display glowing on a desk or stand")
-                        .font(.system(size: 12))
-                        .foregroundColor(inkDim)
+                    HStack(spacing: 6) {
+                        ForEach(MaskingBed.allCases) { bed in
+                            let on = state.maskingBed == bed
+                            Button {
+                                state.maskingBed = bed
+                                state.performHaptic()
+                            } label: {
+                                Text(bed.label)
+                                    .font(.system(size: 12.5, weight: on ? .semibold : .regular))
+                                    .foregroundColor(on ? .black : inkSoft)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 36)
+                                    .background(on ? Color.white : Color.white.opacity(0.07))
+                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            }
+                            .buttonStyle(BraunPressButtonStyle(pressedScale: 0.95))
+                            .accessibilityAddTraits(on ? [.isSelected] : [])
+                        }
+                    }
                 }
-            }
-            .tint(.white)
 
-            Spacer(minLength: 0)
+                if state.preset == .phosphor {
+                    HStack {
+                        Text("CRT PHOSPHOR")
+                            .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                            .foregroundColor(inkSoft)
+                            .tracking(0.8)
+                        Spacer()
+                        HStack(spacing: 6) {
+                            ForEach([(false, "P31 Emerald"), (true, "P39 Amber")], id: \.0) { isAmber, label in
+                                let on = state.amberPhosphor == isAmber
+                                Button {
+                                    state.amberPhosphor = isAmber
+                                    state.performHaptic()
+                                } label: {
+                                    Text(label)
+                                        .font(.system(size: 11, weight: on ? .semibold : .regular, design: .monospaced))
+                                        .foregroundColor(on ? .black : inkSoft)
+                                        .padding(.horizontal, 10)
+                                        .frame(height: 28)
+                                        .background(on ? Color.white : Color.white.opacity(0.07))
+                                        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                                }
+                                .buttonStyle(BraunPressButtonStyle(pressedScale: 0.95))
+                                .accessibilityAddTraits(on ? [.isSelected] : [])
+                            }
+                        }
+                    }
+                }
+
+                Divider().overlay(hairSoft)
+
+                Toggle(isOn: $state.mixWithOthers) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("MIX WITH OTHER AUDIO")
+                            .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                            .foregroundColor(inkSoft)
+                            .tracking(0.8)
+                        Text("Play Satie underneath podcasts, videos, or other music")
+                            .font(.system(size: 12))
+                            .foregroundColor(inkDim)
+                    }
+                }
+                .tint(.white)
+
+                Toggle(isOn: $state.keepScreenAwake) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("KEEP SCREEN AWAKE")
+                            .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                            .foregroundColor(inkSoft)
+                            .tracking(0.8)
+                        Text("Keep the visual display glowing on a desk or stand")
+                            .font(.system(size: 12))
+                            .foregroundColor(inkDim)
+                    }
+                }
+                .tint(.white)
+            }
+            .padding(.horizontal, 22)
+            .padding(.top, 24)
+            .padding(.bottom, 18)
         }
-        .padding(.horizontal, 22)
-        .padding(.top, 24)
-        .padding(.bottom, 12)
     }
 
     // MARK: - Helpers
