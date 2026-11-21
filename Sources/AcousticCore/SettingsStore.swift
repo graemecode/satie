@@ -1,6 +1,8 @@
+#if os(macOS)
 import AppKit
-import Foundation
 import ServiceManagement
+#endif
+import Foundation
 
 public enum SensitivityMode: String, CaseIterable, Identifiable, Sendable {
     case calm
@@ -55,6 +57,7 @@ public final class SettingsStore: @unchecked Sendable {
         static let studioFrame = "ac.studioFrame"
         static let completedFocusSessions = "ac.completedFocusSessions"
         static let lastReviewPromptVersion = "ac.lastReviewPromptVersion"
+        static let keepScreenAwake = "ac.keepScreenAwake"
     }
 
     public init(defaults: UserDefaults = .standard) {
@@ -137,6 +140,12 @@ public final class SettingsStore: @unchecked Sendable {
         set { defaults.set(newValue, forKey: Keys.autoDuck) }
     }
 
+    public var keepScreenAwake: Bool {
+        get { defaults.bool(forKey: Keys.keepScreenAwake) }
+        set { defaults.set(newValue, forKey: Keys.keepScreenAwake) }
+    }
+
+    #if os(macOS)
     public var miniHUDOrigin: NSPoint? {
         get {
             guard let str = defaults.string(forKey: Keys.miniHUDFrame) else { return nil }
@@ -162,6 +171,7 @@ public final class SettingsStore: @unchecked Sendable {
             }
         }
     }
+    #endif
 
     public var completedFocusSessions: Int {
         get { defaults.integer(forKey: Keys.completedFocusSessions) }
@@ -173,6 +183,7 @@ public final class SettingsStore: @unchecked Sendable {
         set { defaults.set(newValue, forKey: Keys.lastReviewPromptVersion) }
     }
 
+    #if os(macOS)
     // MARK: - Native macOS Login Item (SMAppService)
 
     public var launchAtLogin: Bool {
@@ -194,4 +205,5 @@ public final class SettingsStore: @unchecked Sendable {
             return false
         }
     }
+    #endif
 }

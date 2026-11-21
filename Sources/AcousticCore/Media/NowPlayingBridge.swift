@@ -1,10 +1,14 @@
+#if os(macOS)
 import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
 import Foundation
 import MediaPlayer
 
 /// Native Apple MediaPlayer bridge so physical MacBook media keys (Play/Pause, Next, Previous),
-/// AirPods stem taps, and macOS Control Center control Satie seamlessly while focus audio is active,
-/// and release Control Center cleanly when stopped or auto-ducked.
+/// AirPods stem taps, Lock Screen, Dynamic Island, and Control Center control Satie seamlessly
+/// while focus audio is active, and release Control Center cleanly when stopped.
 ///
 /// IMPORTANT (Swift 6 concurrency): MediaPlayer invokes BOTH `MPMediaItemArtwork`'s `requestHandler`
 /// and `MPRemoteCommandCenter`'s `addTarget` blocks on its private background `accessQueue`.
@@ -20,9 +24,15 @@ public final class NowPlayingBridge: @unchecked Sendable {
     /// Builds a thread-safe `MPMediaItemArtwork` backed by immutable PNG bytes so MediaPlayer can
     /// safely invoke the handler from its background `accessQueue` without tripping Swift 6 isolation checks.
     public static func makeArtwork(pngData: Data, boundsSize: CGSize = CGSize(width: 256, height: 256)) -> MPMediaItemArtwork {
+        #if os(macOS)
         MPMediaItemArtwork(boundsSize: boundsSize) { _ in
             NSImage(data: pngData) ?? NSImage(size: boundsSize)
         }
+        #else
+        MPMediaItemArtwork(boundsSize: boundsSize) { _ in
+            UIImage(data: pngData) ?? UIImage()
+        }
+        #endif
     }
 
     public func configureCommands(
@@ -82,16 +92,28 @@ public final class NowPlayingBridge: @unchecked Sendable {
         var art = cachedArtwork
         lock.unlock()
 
-        if art == nil,
-           let icon = NSApp.applicationIconImage,
-           let tiff = icon.tiffRepresentation,
-           let rep = NSBitmapImageRep(data: tiff),
-           let png = rep.representation(using: .png, properties: [:]) {
-            let built = Self.makeArtwork(pngData: png)
-            lock.lock()
-            cachedArtwork = built
-            art = built
-            lock.unlock()
+        if art == nil {
+            #if os(macOS)
+            if let icon = NSApp.applicationIconImage,
+               let tiff = icon.tiffRepresentation,
+               let rep = NSBitmapImageRep(data: tiff),
+               let png = rep.representation(using: .png, properties: [:]) {
+                let built = Self.makeArtwork(pngData: png)
+                lock.lock()
+                cachedArtwork = built
+                art = built
+                lock.unlock()
+            }
+            #else
+            if let img = UIImage(named: "NowPlayingArt") ?? UIImage(named: "AppIcon"),
+               let png = img.pngData() {
+                let built = Self.makeArtwork(pngData: png, boundsSize: CGSize(width: 512, height: 512))
+                lock.lock()
+                cachedArtwork = built
+                art = built
+                lock.unlock()
+            }
+            #endif
         }
 
         var info: [String: Any] = [

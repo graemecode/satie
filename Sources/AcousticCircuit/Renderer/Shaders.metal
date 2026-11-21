@@ -80,6 +80,11 @@ static inline float sdSegment(float2 p, float2 a, float2 b) {
     return length(pa - ba * h);
 }
 
+static inline float2 minDimCoord(float2 uv, float2 center, float aspect) {
+    float2 d = uv - center;
+    return (aspect >= 1.0) ? float2(d.x * aspect, d.y) : float2(d.x, d.y / max(0.25, aspect));
+}
+
 static inline float3 cosinePalette(float t) {
     float3 a = float3(0.55, 0.45, 0.66);
     float3 b = float3(0.45, 0.42, 0.46);
@@ -287,15 +292,18 @@ fragment float4 ecologyFieldFragment(FullscreenOut in [[stage_in]],
     // Deep charcoal gallery backdrop
     float3 col = float3(0.055, 0.067, 0.086);
 
-    // Map active colony box (center panel in Studio mode, full frame in compact mode)
-    float2 minB = (u.isCompact > 0.5) ? float2(0.0, 0.0) : float2(0.265, 0.055);
-    float2 maxB = (u.isCompact > 0.5) ? float2(1.0, 1.0) : float2(0.745, 0.945);
+    float screenAspect = u.resolution.x / max(1.0, u.resolution.y);
+    bool isPortrait = screenAspect < 0.95;
+
+    // Map active colony box (center panel in Studio mode, full frame in compact landscape, open stage in portrait iPhone)
+    float2 minB = isPortrait ? float2(0.0, 0.12) : ((u.isCompact > 0.5) ? float2(0.0, 0.0) : float2(0.265, 0.055));
+    float2 maxB = isPortrait ? float2(1.0, 0.72) : ((u.isCompact > 0.5) ? float2(1.0, 1.0) : float2(0.745, 0.945));
 
     if (in.uv.x >= minB.x && in.uv.x <= maxB.x && in.uv.y >= minB.y && in.uv.y <= maxB.y) {
         float2 p = (in.uv - minB) / (maxB - minB);
         float2 boxPx = (maxB - minB) * u.resolution;
         float boxAspect = max(0.35, boxPx.x / max(1.0, boxPx.y));
-        col = float3(0.045, 0.056, 0.074);
+        col = isPortrait ? float3(0.055, 0.067, 0.086) : float3(0.045, 0.056, 0.074);
 
         // Subtle gold survey crosshair matching the ecology wall installation
         float crossH = smoothstep(0.0022, 0.0, abs(p.y - 0.55));
@@ -305,8 +313,7 @@ fragment float4 ecologyFieldFragment(FullscreenOut in [[stage_in]],
         float energies[5] = { u.bass, u.mid, u.treble, u.energy, u.flux };
         for (int i = 0; i < 5; i++) {
             float2 c = colonyAttractor(i, u.time);
-            float2 d = p - c;
-            d.x *= boxAspect;
+            float2 d = minDimCoord(p, c, boxAspect);
             float ang = atan2(d.y, d.x);
             float wobble = 1.0 + 0.16 * sin(ang * 3.0 + u.time + float(i)) + 0.10 * cos(ang * 5.0 - u.time * 1.3);
             float rad = (0.11 + energies[i] * 0.15 + u.beat * 0.03) * wobble;
@@ -338,14 +345,23 @@ vertex SpikeVertOut ecologyAgentVertex(uint vid [[vertex_id]],
     float wobble = 1.0 + 0.16 * sin(ang * 3.0 + u.time + float(cluster));
     float rad = radialSeed * (0.11 + bv * 0.17 + u.beat * 0.035) * wobble;
 
-    float2 minB = (u.isCompact > 0.5) ? float2(0.02, 0.02) : float2(0.27, 0.065);
-    float2 maxB = (u.isCompact > 0.5) ? float2(0.98, 0.98) : float2(0.74, 0.935);
+    float screenAspect = u.resolution.x / max(1.0, u.resolution.y);
+    bool isPortrait = screenAspect < 0.95;
+
+    float2 minB = isPortrait ? float2(0.02, 0.12) : ((u.isCompact > 0.5) ? float2(0.02, 0.02) : float2(0.27, 0.065));
+    float2 maxB = isPortrait ? float2(0.98, 0.72) : ((u.isCompact > 0.5) ? float2(0.98, 0.98) : float2(0.74, 0.935));
     float2 boxPx = (maxB - minB) * u.resolution;
     float boxAspect = max(0.35, boxPx.x / max(1.0, boxPx.y));
 
-    float2 p = att + float2(cos(ang) * rad / boxAspect, sin(ang) * rad);
+    float2 offset = (boxAspect >= 1.0)
+        ? float2(cos(ang) * rad / boxAspect, sin(ang) * rad)
+        : float2(cos(ang) * rad, sin(ang) * rad * boxAspect);
+    float2 p = att + offset;
     // Slight curl drift
-    p += float2(gradNoise(p * 5.0 + u.time * 0.25) / boxAspect, gradNoise(p * 5.0 - u.time * 0.22 + 4.1)) * 0.025;
+    float2 drift = (boxAspect >= 1.0)
+        ? float2(gradNoise(p * 5.0 + u.time * 0.25) / boxAspect, gradNoise(p * 5.0 - u.time * 0.22 + 4.1))
+        : float2(gradNoise(p * 5.0 + u.time * 0.25), gradNoise(p * 5.0 - u.time * 0.22 + 4.1) * boxAspect);
+    p += drift * 0.025;
     p = clamp(p, 0.02, 0.98);
 
     float2 uv = mix(minB, maxB, p);
@@ -384,7 +400,8 @@ fragment float4 phosphorUpdateFragment(FullscreenOut in [[stage_in]],
     float3 col = prev * clamp(decay, 0.72, 0.91);
 
     float aspect = u.resolution.x / max(1.0, u.resolution.y);
-    float2 p = (in.uv - 0.5) * float2(aspect, 1.0);
+    float2 center = (aspect < 1.0) ? u.coreCenter : float2(0.5, 0.5);
+    float2 p = minDimCoord(in.uv, center, aspect);
 
     float3 beamCol = (u.amberMode > 0.5)
         ? float3(1.00, 0.64, 0.18)   // P39 Warm Amber
@@ -416,7 +433,7 @@ fragment float4 phosphorUpdateFragment(FullscreenOut in [[stage_in]],
     float wyLive = mix(waveLR[wi].x, waveLR[wi + 1].x, fract(wIdx)) * 0.32;
     float wyIdle = sin(in.uv.x * 12.56637 + u.time * 1.1) * 0.055 * sin(in.uv.x * 3.14159);
     float wy = mix(wyLive, wyIdle, idleMix);
-    float wDist = abs((in.uv.y - 0.5) - wy);
+    float wDist = abs(p.y - wy);
     float trace = exp(-wDist * 220.0) * mix(0.34, 0.22, idleMix);
 
     float3 coreHot = mix(beamCol, float3(0.95, 1.0, 0.96), 0.72);
@@ -435,18 +452,23 @@ fragment float4 phosphorDisplayFragment(FullscreenOut in [[stage_in]],
     float3 bg = (u.amberMode > 0.5) ? float3(0.036, 0.026, 0.014) : float3(0.018, 0.036, 0.024);
     float3 grCol = (u.amberMode > 0.5) ? float3(1.0, 0.72, 0.30) : float3(0.36, 1.0, 0.60);
 
-    // Crisp calibration CRT graticule
-    float2 gridUV = in.uv * float2(12.0, 8.0);
+    float aspect = u.resolution.x / max(1.0, u.resolution.y);
+    float2 center = (aspect < 1.0) ? u.coreCenter : float2(0.5, 0.5);
+
+    // Crisp calibration CRT graticule (square cells on both landscape and portrait screens)
+    float2 gridUV = (aspect >= 1.0)
+        ? (in.uv * float2(12.0, 8.0))
+        : ((in.uv - center) * float2(8.0, 8.0 / max(0.35, aspect)) + 0.5);
     float2 gv = abs(fract(gridUV - 0.5) - 0.5) / max(float2(1e-4), fwidth(gridUV));
     float gridLine = 1.0 - min(min(gv.x, gv.y), 1.0);
 
-    float2 axis = abs(in.uv - 0.5) * u.resolution;
+    float2 axis = abs(in.uv - center) * u.resolution;
     float centerAxis = max(smoothstep(1.3, 0.0, axis.x), smoothstep(1.3, 0.0, axis.y));
 
     float3 col = bg + grCol * (gridLine * 0.055 + centerAxis * 0.14) + beam;
 
     // Gentle CRT glass vignette + filmic curve
-    float vig = smoothstep(1.3, 0.25, length((in.uv - 0.5) * 1.45));
+    float vig = smoothstep(1.3, 0.25, length((in.uv - center) * 1.45));
     col *= mix(0.75, 1.0, vig);
     col = col / (1.0 + col * 0.35);
     return float4(col, 1.0);
@@ -461,7 +483,8 @@ fragment float4 liquidUpdateFragment(FullscreenOut in [[stage_in]],
                                      constant float2* waveLR [[buffer(1)]]) {
     constexpr sampler s(filter::linear, address::clamp_to_edge);
     float aspect = u.resolution.x / max(1.0, u.resolution.y);
-    float2 p = (in.uv - 0.5) * float2(aspect, 1.0);
+    float2 center = (aspect < 1.0) ? u.coreCenter : float2(0.5, 0.5);
+    float2 p = minDimCoord(in.uv, center, aspect);
 
     float r = length(p);
     float ang = atan2(p.y, p.x);
@@ -474,12 +497,13 @@ fragment float4 liquidUpdateFragment(FullscreenOut in [[stage_in]],
     float rot = 0.006 * sin(u.time * 0.42) + 0.009 * u.mid * sin(r * 3.4);
     float cR = cos(rot), sR = sin(rot);
 
-    float2 centered = (in.uv - 0.5) * zoom;
-    centered = float2(centered.x * cR - centered.y * sR, centered.x * sR + centered.y * cR);
-    float2 sampleUV = centered + 0.5 + float2(n1, n2) * (0.0036 + u.treble * 0.0055);
+    float2 rotP = float2(p.x * cR - p.y * sR, p.x * sR + p.y * cR) * zoom;
+    float2 centered = (aspect >= 1.0) ? float2(rotP.x / aspect, rotP.y) : float2(rotP.x, rotP.y * aspect);
+    float2 sampleUV = centered + center + float2(n1, n2) * (0.0036 + u.treble * 0.0055);
 
     // Subtle radial chromatic dispersion
-    float2 disp = normalize(p + 1e-4) * (0.0018 + u.beat * 0.0036);
+    float2 dirP = normalize(p + 1e-4) * (0.0018 + u.beat * 0.0036);
+    float2 disp = (aspect >= 1.0) ? float2(dirP.x / aspect, dirP.y) : float2(dirP.x, dirP.y * aspect);
     float3 prev;
     prev.r = prevTex.sample(s, sampleUV + disp).r;
     prev.g = prevTex.sample(s, sampleUV).g;
@@ -490,7 +514,7 @@ fragment float4 liquidUpdateFragment(FullscreenOut in [[stage_in]],
     float wIdx = clamp(in.uv.x * 255.0, 0.0, 254.0);
     int wi = int(wIdx);
     float wave = mix(waveLR[wi].x, waveLR[wi + 1].x, fract(wIdx)) * (0.40 + u.bass * 0.30);
-    float ribbon = exp(-abs((in.uv.y - 0.5) - wave * 0.62) * (72.0 - u.beat * 14.0));
+    float ribbon = exp(-abs(p.y - wave * 0.62) * (72.0 - u.beat * 14.0));
 
     // Smoothly interpolated spectral harmonic ring (no jagged wedge seams)
     float normAng = fract(ang / 6.2831853 + 0.5 + u.time * 0.06);
@@ -509,7 +533,7 @@ fragment float4 liquidUpdateFragment(FullscreenOut in [[stage_in]],
     float3 inject = col1 * ribbon * (0.68 + u.mid * 0.72) + col2 * (ring + innerRing) * (0.64 + u.beat * 0.85);
     float3 outCol = prev + inject * 0.28;
 
-    float vig = smoothstep(1.28, 0.24, length((in.uv - 0.5) * 1.4));
+    float vig = smoothstep(1.28, 0.24, length((in.uv - center) * 1.4));
     outCol *= mix(0.86, 1.0, vig);
 
     return float4(clamp(outCol, 0.0, 3.0), 1.0);

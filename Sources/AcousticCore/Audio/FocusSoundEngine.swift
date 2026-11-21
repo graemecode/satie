@@ -580,6 +580,13 @@ public final class FocusSoundEngine: @unchecked Sendable {
         }
 
         do {
+            #if os(iOS)
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .default, options: [])
+            try? session.setPreferredSampleRate(48_000)
+            try? session.setPreferredIOBufferDuration(512.0 / 48_000.0)
+            try session.setActive(true)
+            #endif
             engine.prepare()
             try engine.start()
             isEngineRunning = true

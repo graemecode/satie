@@ -1,3 +1,4 @@
+#if os(macOS)
 import Carbon
 import Foundation
 
@@ -114,3 +115,4 @@ public final class GlobalHotKeyManager {
         handler = nil
     }
 }
+#endif
