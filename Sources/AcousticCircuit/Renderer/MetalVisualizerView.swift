@@ -242,8 +242,11 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
     }
 
     private func ensurePingPongTextures(size: CGSize) {
-        let w = max(2, Int(size.width))
-        let h = max(2, Int(size.height))
+        // Render offscreen RGBA16F feedback at 0.55x native Retina (~3.3x less GPU work);
+        // the display pass still renders at full Retina resolution so CRT graticule stays razor-sharp.
+        let scale: CGFloat = 0.55
+        let w = max(2, Int((size.width * scale).rounded()))
+        let h = max(2, Int((size.height * scale).rounded()))
         if Int(pingPongSize.width) == w && Int(pingPongSize.height) == h && pingPongTextures[0] != nil {
             return
         }
@@ -286,10 +289,21 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
         let state = AppState.shared
         let snap = state.stepDSP(drivenByMetal: true)
 
-        // Match display refresh rate cleanly (deferred asynchronously so we never restart CVDisplayLink re-entrantly inside draw(in:))
+        // Match display refresh rate cleanly with thermal, Low Power Mode, and Reduce Motion awareness
         let screenMax = win.screen?.maximumFramesPerSecond ?? 60
-        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        let activeCap = reduceMotion ? 15 : (compactMode ? min(60, screenMax) : min(120, screenMax))
+        let preset = state.preset
+        let proc = ProcessInfo.processInfo
+        let isPingPong = (preset == .phosphor || preset == .liquid)
+        let activeCap: Int
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            activeCap = 15
+        } else if proc.isLowPowerModeEnabled || proc.thermalState == .serious || proc.thermalState == .critical {
+            activeCap = 30
+        } else if proc.thermalState == .fair || isPingPong || compactMode {
+            activeCap = min(60, screenMax)
+        } else {
+            activeCap = min(120, screenMax)
+        }
         let desiredFPS = snap.isSilent ? 15 : activeCap
         scheduleFPSChange(desiredFPS)
 
@@ -300,7 +314,6 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
         let frameDt = Float(max(0.002, min(0.05, now - lastDrawTime)))
         lastDrawTime = now
 
-        let preset = state.preset
         if preset != lastPreset {
             lastPreset = preset
             if preset == .phosphor || preset == .liquid {

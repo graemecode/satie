@@ -68,37 +68,101 @@ struct StudioStageRepresentable: NSViewRepresentable {
 
 struct StudioContentView: View {
     @ObservedObject var state: AppState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let onToggleFullscreen: () -> Void
     let onSwitchToMiniHUD: () -> Void
 
     @State private var hudVisible: Bool = true
+    @State private var immersionMode: Bool = false
+    @State private var showImmersionHint: Bool = false
+    @State private var immersionHintTask: Task<Void, Never>?
     @State private var hideTask: Task<Void, Never>?
+    @State private var presetTransitionVeil: Double = 0.0
+    @Namespace private var worldPillNS
 
-    private let hair = Color(red: 0.86, green: 0.91, blue: 0.98).opacity(0.22)
-    private let hairSoft = Color(red: 0.86, green: 0.91, blue: 0.98).opacity(0.11)
-    private let inkSoft = Color(red: 0.88, green: 0.92, blue: 0.98).opacity(0.76)
-    private let inkDim = Color(red: 0.84, green: 0.89, blue: 0.96).opacity(0.45)
+    private let hair = Color.white.opacity(0.14)
+    private let hairSoft = Color.white.opacity(0.09)
+    private let inkSoft = Color.white.opacity(0.76)
+    private let inkDim = Color.white.opacity(0.46)
+
+    private var showChrome: Bool {
+        !immersionMode && (!state.isFullscreen || hudVisible)
+    }
 
     var body: some View {
         ZStack {
+            // 1. Full-bleed edge-to-edge 120Hz Metal + Retina Schematic Stage
+            StudioStageRepresentable(isActive: state.isStudioOpen, preset: state.preset)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // Smooth crossfade veil when switching visual worlds
+            Color.black
+                .opacity(presetTransitionVeil)
+                .allowsHitTesting(false)
+
+            // Soft top & bottom vignettes when chrome is visible
             VStack(spacing: 0) {
-                // Top Studio Titlebar Chrome (collapses smoothly in fullscreen idle)
-                if !state.isFullscreen || hudVisible {
-                    topBar
-                        .transition(.opacity)
-                }
+                LinearGradient(
+                    colors: [Color.black.opacity(0.62), Color.black.opacity(0.0)],
+                    startPoint: .top, endPoint: .bottom
+                )
+                .frame(height: 88)
 
-                // Main Metal + Retina Schematic Stage
-                StudioStageRepresentable(isActive: state.isStudioOpen, preset: state.preset)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                Spacer()
 
-                // Bottom Status Bar (collapses smoothly in fullscreen idle)
-                if !state.isFullscreen || hudVisible {
-                    statusBar
-                        .transition(.opacity)
-                }
+                LinearGradient(
+                    colors: [Color.black.opacity(0.0), Color.black.opacity(0.72)],
+                    startPoint: .top, endPoint: .bottom
+                )
+                .frame(height: 92)
             }
-            .background(Color(red: 0.028, green: 0.043, blue: 0.071))
+            .opacity(showChrome ? 1.0 : 0.0)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.26), value: showChrome)
+            .allowsHitTesting(false)
+
+            // 2. Floating Braun Top Bar + Bottom Bar (click open stage for Immersion Mode)
+            VStack(spacing: 0) {
+                topBar
+                    .opacity(showChrome ? 1.0 : 0.0)
+                    .allowsHitTesting(showChrome)
+
+                // Open canvas tap target toggles Immersion Mode cleanly without interfering with bar buttons
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        toggleImmersion(!immersionMode)
+                    }
+                    .overlay(alignment: .bottom) {
+                        if immersionMode && showImmersionHint {
+                            Text("CLICK ANYWHERE TO SHOW CONTROLS")
+                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                                .tracking(0.8)
+                                .foregroundColor(Color.white.opacity(0.78))
+                                .padding(.horizontal, 13)
+                                .padding(.vertical, 7)
+                                .background(Color.black.opacity(0.56))
+                                .background(.ultraThinMaterial)
+                                .clipShape(Capsule())
+                                .overlay(Capsule().stroke(hairSoft, lineWidth: 0.8))
+                                .padding(.bottom, 22)
+                                .transition(.opacity)
+                                .allowsHitTesting(false)
+                        }
+                    }
+
+                statusBar
+                    .opacity(showChrome ? 1.0 : 0.0)
+                    .allowsHitTesting(showChrome)
+            }
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.26), value: showChrome)
+        }
+        .background(Color(red: 0.022, green: 0.032, blue: 0.052))
+        .onChange(of: state.preset) { _, _ in
+            guard !reduceMotion else { return }
+            presetTransitionVeil = 0.55
+            withAnimation(.easeOut(duration: 0.26)) {
+                presetTransitionVeil = 0.0
+            }
         }
         .onContinuousHover { phase in
             switch phase {
@@ -125,83 +189,112 @@ struct StudioContentView: View {
                 Spacer().frame(width: 68)
             }
 
-            // Preset Tabs (01 - 04)
+            // Primary Soundscape Worlds Pill (FOCUS · PULSE · RAIN · STILL · NIGHT)
             HStack(spacing: 2) {
-                ForEach(VisualPreset.allCases) { p in
+                ForEach(FocusSoundscape.allCases) { mode in
+                    let selected = (state.focusMode == mode)
                     Button {
-                        state.preset = p
+                        withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)) {
+                            if state.isFocusPlaying && state.focusMode == mode {
+                                state.stopFocusSound()
+                            } else {
+                                state.toggleFocusSound(mode)
+                            }
+                        }
                     } label: {
-                        Text(p.title.uppercased())
-                            .font(.system(size: 10, weight: state.preset == p ? .semibold : .regular, design: .monospaced))
-                            .foregroundColor(state.preset == p ? Color(red: 0.03, green: 0.05, blue: 0.09) : inkDim)
-                            .padding(.horizontal, 10)
+                        Text(mode.shortLabel)
+                            .font(.system(size: 10, weight: selected ? .semibold : .medium, design: .monospaced))
+                            .tracking(0.5)
+                            .foregroundColor(selected ? .black : inkSoft)
+                            .padding(.horizontal, 11)
                             .frame(height: 24)
-                            .background(state.preset == p ? Color(red: 0.93, green: 0.96, blue: 1.0) : Color.clear)
+                            .background {
+                                if selected {
+                                    Capsule()
+                                        .fill(Color.white)
+                                        .matchedGeometryEffect(id: "studioWorldPill", in: worldPillNS)
+                                }
+                            }
+                            .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
+                    .help("\(mode.title) — \(mode.subtitle)")
+                    .accessibilityLabel("\(mode.title), \(mode.subtitle)")
+                    .accessibilityAddTraits(selected ? [.isSelected] : [])
                 }
             }
-            .padding(2)
-            .background(Color.white.opacity(0.025))
-            .overlay(Rectangle().stroke(hairSoft, lineWidth: 1))
-
-            if state.preset == .phosphor {
-                Button {
-                    state.amberPhosphor.toggle()
-                } label: {
-                    Text(state.amberPhosphor ? "P39 AMBER" : "P31 EMERALD")
-                        .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                        .foregroundColor(state.amberPhosphor ? Color(red: 1.0, green: 0.72, blue: 0.30) : Color(red: 0.38, green: 1.0, blue: 0.62))
-                        .padding(.horizontal, 8)
-                        .frame(height: 24)
-                        .background(Color.white.opacity(0.04))
-                        .overlay(Rectangle().stroke(hairSoft, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-            }
+            .padding(3)
+            .background(Color.black.opacity(0.46))
+            .background(.ultraThinMaterial)
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(hair, lineWidth: 0.8))
 
             Spacer()
 
-            // Work Soundscape quick menu
+            // Quiet Visual World Override Menu (Auto by default, or pin any of the 5 visuals)
             Menu {
-                ForEach(FocusSoundscape.allCases) { mode in
+                Button {
+                    state.setVisualOverride(nil)
+                } label: {
+                    if state.visualFollowsSoundscape {
+                        Label("Auto (Paired to Sound)", systemImage: "checkmark")
+                    } else {
+                        Text("Auto (Paired to Sound)")
+                    }
+                }
+                Divider()
+                ForEach(VisualPreset.allCases) { p in
                     Button {
-                        state.toggleFocusSound(mode)
+                        state.setVisualOverride(p)
                     } label: {
-                        if state.isFocusPlaying && state.focusMode == mode {
-                            Label(mode.title, systemImage: "checkmark")
+                        if !state.visualFollowsSoundscape && state.preset == p {
+                            Label(p.cleanName, systemImage: "checkmark")
                         } else {
-                            Text(mode.title)
+                            Text(p.cleanName)
                         }
                     }
                 }
-                if state.isFocusPlaying {
+                if state.preset == .phosphor {
                     Divider()
-                    Button("Stop Soundscape") {
-                        state.stopFocusSound()
+                    Button(state.amberPhosphor ? "Switch to P31 Emerald" : "Switch to P39 Amber") {
+                        state.amberPhosphor.toggle()
+                        state.performHaptic()
                     }
                 }
             } label: {
                 HStack(spacing: 5) {
-                    Image(systemName: state.isFocusPlaying ? "waveform" : "sparkles")
+                    Image(systemName: "sparkles")
                         .font(.system(size: 9.5))
-                    Text(state.isFocusPlaying ? state.focusMode.shortLabel : "SOUND")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    Text(state.visualFollowsSoundscape ? state.preset.cleanName.uppercased() : "PIN · \(state.preset.cleanName.uppercased())")
+                        .font(.system(size: 9.5, weight: .medium, design: .monospaced))
                 }
-                .foregroundColor(state.isFocusPlaying ? Color(red: 0.03, green: 0.05, blue: 0.09) : inkSoft)
-                .padding(.horizontal, 9)
-                .frame(height: 25)
-                .background(state.isFocusPlaying ? Color(red: 0.93, green: 0.96, blue: 1.0) : Color.white.opacity(0.04))
-                .overlay(Rectangle().stroke(hairSoft, lineWidth: 1))
+                .foregroundColor(inkSoft)
+                .padding(.horizontal, 10)
+                .frame(height: 26)
+                .background(Color.black.opacity(0.40))
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(hairSoft, lineWidth: 0.8))
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
+            .help("Choose or pin visual (keys 1–5)")
+
+            Button {
+                toggleImmersion(true)
+            } label: {
+                Image(systemName: "eye.slash")
+                    .font(.system(size: 10.5))
+                    .frame(width: 26, height: 26)
+            }
+            .buttonStyle(HairlineIconButtonStyle())
+            .help("Immersion Mode (click stage to exit)")
 
             if !state.isFullscreen {
                 Button(action: onSwitchToMiniHUD) {
                     Image(systemName: "pip")
                         .font(.system(size: 11))
-                        .frame(width: 26, height: 25)
+                        .frame(width: 26, height: 26)
                 }
                 .buttonStyle(HairlineIconButtonStyle())
                 .help("Shrink to Floating Mini HUD (⌘M)")
@@ -210,88 +303,128 @@ struct StudioContentView: View {
             Button(action: onToggleFullscreen) {
                 Image(systemName: state.isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                     .font(.system(size: 10.5))
-                    .frame(width: 26, height: 25)
+                    .frame(width: 26, height: 26)
             }
             .buttonStyle(HairlineIconButtonStyle())
             .help(state.isFullscreen ? "Exit Fullscreen (Esc)" : "Fullscreen Wall (⌘F)")
         }
-        .padding(.horizontal, 14)
-        .frame(height: 44)
-        .background(Color(red: 0.045, green: 0.068, blue: 0.110))
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(hairSoft).frame(height: 1)
-        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 6)
     }
 
     private var statusBar: some View {
         HStack(spacing: 14) {
-            HStack(spacing: 8) {
+            HStack(spacing: 10) {
                 Button {
                     state.togglePlayOrStartFocus()
                 } label: {
-                    Image(systemName: state.isFocusPlaying ? "stop.fill" : (state.isPrimaryPlaying ? "pause.fill" : "play.fill"))
-                        .font(.system(size: 9.5))
-                        .frame(width: 24, height: 22)
+                    Image(systemName: state.isFocusPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.black)
+                        .offset(x: state.isFocusPlaying ? 0 : 1)
+                        .frame(width: 30, height: 30)
+                        .background(Color.white)
+                        .clipShape(Circle())
                 }
-                .buttonStyle(HairlineIconButtonStyle(prominent: true))
-                .help(state.isFocusPlaying ? "Stop soundscape (Space)" : "Play / Pause (Space)")
+                .buttonStyle(.plain)
+                .help(state.isFocusPlaying ? "Pause \(state.focusMode.title) (Space)" : "Play \(state.focusMode.title) (Space)")
+                .accessibilityLabel(state.isFocusPlaying ? "Pause \(state.focusMode.title)" : "Play \(state.focusMode.title)")
 
-                Button {
-                    state.toggleSystemMute()
-                } label: {
-                    Image(systemName: state.isSystemMuted ? "speaker.slash.fill" : "speaker.wave.2")
-                        .font(.system(size: 9.5))
-                        .foregroundColor(state.isSystemMuted ? Color(red: 1.0, green: 0.65, blue: 0.58) : .white)
-                        .frame(width: 24, height: 22)
-                }
-                .buttonStyle(HairlineIconButtonStyle())
-                .help(state.isSystemMuted ? "Unmute Mac audio (⌥⌘M)" : "Mute Mac audio (⌥⌘M)")
-
-                Text(state.activeTitle)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-
-                if state.isFocusAudible {
-                    Text(state.activeSourceLabel)
-                        .font(.system(size: 9.5, design: .monospaced))
-                        .foregroundColor(inkDim)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(state.activeTitle)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    Text(state.focusMode.subtitle.uppercased())
+                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                        .foregroundColor(inkSoft)
+                        .tracking(0.5)
                         .lineLimit(1)
                 }
             }
 
             Spacer()
 
-            HStack(spacing: 14) {
-                Text(state.effectiveKeyBadge)
+            HStack(spacing: 12) {
+                if let countdown = compactCountdown {
+                    HStack(spacing: 4) {
+                        Image(systemName: "timer")
+                            .font(.system(size: 10))
+                        Text(countdown)
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    }
                     .foregroundColor(.white)
-                    .fontWeight(.semibold)
-                Text(String(format: "ENERGY %.2f", state.displayEnergy))
-                Text(String(format: "FLUX %.2f", state.displayFlux))
-                Text(String(format: "PHASE %+.2f", state.displayPhase))
-                Text("\(state.displayFPS) HZ METAL")
+                    .padding(.horizontal, 10)
+                    .frame(height: 24)
+                    .background(Color.white.opacity(0.10))
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(hairSoft, lineWidth: 0.8))
+                }
+
+                // Quiet volume hairline
+                HStack(spacing: 6) {
+                    Button {
+                        state.toggleSystemMute()
+                    } label: {
+                        Image(systemName: state.isSystemMuted ? "speaker.slash.fill" : "speaker.wave.2")
+                            .font(.system(size: 10))
+                            .foregroundColor(state.isSystemMuted ? Color(red: 1.0, green: 0.65, blue: 0.58) : inkSoft)
+                    }
+                    .buttonStyle(.plain)
+                    .help(state.isSystemMuted ? "Unmute Mac audio (⌥⌘M)" : "Mute Mac audio (⌥⌘M)")
+
+                    Slider(
+                        value: Binding(
+                            get: { Double(state.focusVolume) },
+                            set: { state.focusVolume = Float($0) }
+                        ),
+                        in: 0.05...1.0
+                    )
+                    .controlSize(.mini)
+                    .tint(.white)
+                    .frame(width: 90)
+                }
             }
-            .font(.system(size: 10, design: .monospaced))
-            .foregroundColor(inkDim)
         }
-        .padding(.horizontal, 14)
-        .frame(height: 34)
-        .background(Color(red: 0.038, green: 0.058, blue: 0.095))
-        .overlay(alignment: .top) {
-            Rectangle().fill(hairSoft).frame(height: 1)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+    }
+
+    private var compactCountdown: String? {
+        guard state.isFocusPlaying, let rem = state.flowRemainingSeconds else { return nil }
+        let sec = max(0, Int(ceil(rem)))
+        return String(format: "%d:%02d", sec / 60, sec % 60)
+    }
+
+    private func toggleImmersion(_ enter: Bool) {
+        state.performHaptic()
+        immersionHintTask?.cancel()
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.26)) {
+            immersionMode = enter
+            showImmersionHint = enter
+        }
+        if enter {
+            immersionHintTask = Task { @MainActor in
+                try? await Task.sleep(for: .seconds(1.8))
+                guard !Task.isCancelled else { return }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.4)) {
+                    showImmersionHint = false
+                }
+            }
         }
     }
 
     private func bumpFullscreenHUD() {
-        guard state.isFullscreen else { return }
+        guard state.isFullscreen, !immersionMode else { return }
         if !hudVisible {
-            withAnimation(.easeOut(duration: 0.2)) { hudVisible = true }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { hudVisible = true }
         }
         hideTask?.cancel()
         hideTask = Task {
             try? await Task.sleep(for: .seconds(2.5))
             guard !Task.isCancelled, state.isFullscreen else { return }
-            withAnimation(.easeInOut(duration: 0.35)) { hudVisible = false }
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) { hudVisible = false }
         }
     }
 }

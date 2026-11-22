@@ -2,6 +2,18 @@ import AcousticCore
 import AppKit
 import SwiftUI
 
+private struct MacBraunPressButtonStyle: ButtonStyle {
+    var pressedScale: CGFloat = 0.93
+    var reduceMotion: Bool = false
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect((configuration.isPressed && !reduceMotion) ? pressedScale : 1.0)
+            .opacity(configuration.isPressed ? 0.84 : 1.0)
+            .animation(reduceMotion ? nil : .spring(response: 0.22, dampingFraction: 0.72), value: configuration.isPressed)
+    }
+}
+
 struct PopoverView: View {
     @ObservedObject var state: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -12,10 +24,9 @@ struct PopoverView: View {
     var onRequestResize: (() -> Void)? = nil
 
     @State private var showOptions: Bool = false
-    @State private var isHoveringStage: Bool = false
-    @State private var peekVisualSwitcher: Bool = false
-    @State private var peekHideTask: Task<Void, Never>? = nil
-    @Namespace private var visualPillNS
+    @State private var visualToastLabel: String? = nil
+    @State private var visualToastTask: Task<Void, Never>? = nil
+    @State private var presetTransitionVeil: Double = 0.0
 
     private let timerPresets: [Int] = [0, 15, 25, 45, 60, 90]
 
@@ -32,6 +43,11 @@ struct PopoverView: View {
                     .frame(height: 192)
                     .clipped()
 
+                // Subtle dissolve veil on visual preset switch so transitions glide instead of snapping
+                Color.black
+                    .opacity(presetTransitionVeil)
+                    .allowsHitTesting(false)
+
                 // Whisper-subtle atmospheric light temperature matched to the active soundscape
                 RadialGradient(
                     colors: [soundscapeAuraColor.opacity(0.22), Color.clear],
@@ -40,7 +56,7 @@ struct PopoverView: View {
                     endRadius: 185
                 )
                 .blendMode(.screen)
-                .animation(.easeInOut(duration: 0.9), value: state.focusMode)
+                .animation(reduceMotion ? nil : .easeInOut(duration: 0.9), value: state.focusMode)
                 .allowsHitTesting(false)
 
                 // Soft top vignette so floating typography reads cleanly over bright peaks
@@ -54,17 +70,15 @@ struct PopoverView: View {
                 }
                 .allowsHitTesting(false)
 
-                // Tap anywhere on the stage to cycle 120Hz Metal visual modes effortlessly
+                // Click stage to quietly cycle visuals (zero chrome at rest, brief fading badge)
                 Color.clear
                     .contentShape(Rectangle())
                     .onTapGesture {
                         let all = VisualPreset.allCases
                         let next = all[(state.preset.rawValue + 1) % all.count]
-                        withAnimation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82)) {
-                            state.preset = next
-                        }
+                        state.preset = next
                         state.performHaptic()
-                        revealVisualSwitcherBriefly()
+                        flashVisualToast(next.cleanName.uppercased())
                     }
 
                 VStack(spacing: 0) {
@@ -83,6 +97,7 @@ struct PopoverView: View {
                                 .lineLimit(1)
                         }
                         .allowsHitTesting(false)
+                        .accessibilityElement(children: .combine)
 
                         Spacer(minLength: 4)
 
@@ -91,50 +106,28 @@ struct PopoverView: View {
                             help: "Open Studio Visualizer (⌘F Fullscreen · ⌘M Mini HUD)",
                             action: onOpenStudio
                         )
+                        .accessibilityLabel("Open Studio Visualizer")
                     }
                     .padding(.horizontal, 13)
                     .padding(.top, 11)
 
                     Spacer()
 
-                    // Hover-revealed frosted glass visual switcher (0% clutter at rest, instant override on hover or 1–5)
-                    HStack(spacing: 1.5) {
-                        ForEach(VisualPreset.allCases) { p in
-                            let selected = (state.preset == p)
-                            Button {
-                                withAnimation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.82)) {
-                                    state.preset = p
-                                }
-                                state.performHaptic()
-                            } label: {
-                                Text(p.cleanName)
-                                    .font(.system(size: 9.0, weight: selected ? .semibold : .medium))
-                                    .foregroundColor(selected ? .black : Color.white.opacity(0.72))
-                                    .padding(.horizontal, 7.5)
-                                    .frame(height: 20)
-                                    .background {
-                                        if selected {
-                                            Capsule()
-                                                .fill(Color.white)
-                                                .matchedGeometryEffect(id: "activeVisualPill", in: visualPillNS)
-                                        }
-                                    }
-                                    .contentShape(Capsule())
-                            }
-                            .buttonStyle(.plain)
-                        }
+                    if let label = visualToastLabel {
+                        Text(label)
+                            .font(.system(size: 9.0, weight: .semibold, design: .monospaced))
+                            .tracking(0.9)
+                            .foregroundColor(Color.white.opacity(0.88))
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 5)
+                            .background(Color.black.opacity(0.58))
+                            .background(.ultraThinMaterial)
+                            .clipShape(Capsule())
+                            .overlay(Capsule().stroke(hair, lineWidth: 0.75))
+                            .padding(.bottom, 10)
+                            .transition(.opacity)
+                            .allowsHitTesting(false)
                     }
-                    .padding(3)
-                    .background(Color.black.opacity(0.58))
-                    .background(.ultraThinMaterial)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.white.opacity(0.14), lineWidth: 0.75))
-                    .padding(.bottom, 10)
-                    .opacity((isHoveringStage || peekVisualSwitcher) ? 1.0 : 0.0)
-                    .offset(y: (isHoveringStage || peekVisualSwitcher) ? 0 : 4)
-                    .animation(.easeInOut(duration: 0.2), value: isHoveringStage)
-                    .animation(.easeInOut(duration: 0.2), value: peekVisualSwitcher)
-                    .allowsHitTesting(isHoveringStage || peekVisualSwitcher)
                 }
             }
             .frame(height: 192)
@@ -143,11 +136,15 @@ struct PopoverView: View {
                 RoundedRectangle(cornerRadius: 11, style: .continuous)
                     .stroke(hairSoft, lineWidth: 1)
             )
-            .onHover { hovering in
-                isHoveringStage = hovering
+            .onChange(of: state.preset) { _, _ in
+                guard !reduceMotion else { return }
+                presetTransitionVeil = 0.55
+                withAnimation(.easeOut(duration: 0.26)) {
+                    presetTransitionVeil = 0.0
+                }
             }
 
-            // 2. Five Iconic Circular Geometric Soundscape Glyphs (Focus · Pulse · Rain · Drift · Still)
+            // 2. Five Iconic Circular Geometric Soundscape Worlds (FOCUS · PULSE · RAIN · STILL · NIGHT)
             HStack(spacing: 0) {
                 ForEach(FocusSoundscape.allCases) { mode in
                     let isSelected = (state.focusMode == mode)
@@ -169,8 +166,11 @@ struct PopoverView: View {
                         .frame(maxWidth: .infinity)
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(MacBraunPressButtonStyle(pressedScale: 0.92, reduceMotion: reduceMotion))
                     .help("\(mode.title) — \(mode.subtitle)")
+                    .accessibilityLabel("\(mode.title), \(mode.subtitle)")
+                    .accessibilityHint(isActive ? "Press to pause" : "Press to play")
+                    .accessibilityAddTraits(isActive ? [.isSelected] : [])
                 }
             }
             .padding(.top, 1)
@@ -196,8 +196,9 @@ struct PopoverView: View {
                             .clipShape(Capsule())
                             .overlay(Capsule().stroke(hairSoft, lineWidth: 1))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(MacBraunPressButtonStyle(pressedScale: 0.94, reduceMotion: reduceMotion))
                         .help("Adjust or clear sleep timer")
+                        .accessibilityLabel("Sleep timer, \(countdown) remaining")
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
@@ -213,30 +214,36 @@ struct PopoverView: View {
                         .frame(width: 46, height: 46)
                         .background(Color.white)
                         .clipShape(Circle())
+                        .shadow(color: Color.white.opacity(state.isFocusPlaying ? 0.22 : 0.06), radius: 14)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(MacBraunPressButtonStyle(pressedScale: 0.91, reduceMotion: reduceMotion))
                 .help(state.isFocusPlaying ? "Pause \(state.focusMode.title) (Space)" : "Play \(state.focusMode.title) (Space)")
+                .accessibilityLabel(state.isFocusPlaying ? "Pause \(state.focusMode.title)" : "Play \(state.focusMode.title)")
 
                 // Right wing: One consolidated Options button (plus mute indicator only when Mac is muted)
                 HStack(spacing: 10) {
                     CircularControlButton(
                         systemName: "slider.horizontal.3",
                         isActive: showOptions,
-                        hasIndicatorDot: state.maskingBed != .off || state.flowMinutes > 0,
-                        help: "Options (Timer, Background noise)"
+                        hasIndicatorDot: state.maskingBed != .off || state.flowMinutes > 0 || !state.visualFollowsSoundscape,
+                        reduceMotion: reduceMotion,
+                        help: "Options (Timer, Background noise, Visual)"
                     ) {
                         toggleOptions()
                     }
+                    .accessibilityLabel("Options")
 
                     if state.isSystemMuted {
                         CircularControlButton(
                             systemName: "speaker.slash.fill",
                             isActive: true,
                             tintWarning: true,
+                            reduceMotion: reduceMotion,
                             help: "Unmute Mac audio"
                         ) {
                             state.toggleSystemMute()
                         }
+                        .accessibilityLabel("Unmute Mac audio")
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -274,7 +281,7 @@ struct PopoverView: View {
         )
     }
 
-    // MARK: - Consolidated Options Drawer (Timer + Background Noise + Pause for Calls + Volume + Window Actions)
+    // MARK: - Consolidated Options Drawer (Timer + Background Noise + Visual + Volume + Utility Footer)
 
     private var optionsDrawer: some View {
         VStack(spacing: 12) {
@@ -305,19 +312,22 @@ struct PopoverView: View {
                                 .background(on ? Color.white : Color.white.opacity(0.05))
                                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(MacBraunPressButtonStyle(pressedScale: 0.95, reduceMotion: reduceMotion))
+                        .accessibilityLabel(mins == 0 ? "No timer limit" : "\(mins) minute timer")
+                        .accessibilityAddTraits(on ? [.isSelected] : [])
                     }
                 }
             }
 
-            // Optional Rain or Brown Noise layer underneath any soundscape
+            // Optional Background Noise Layer
             VStack(alignment: .leading, spacing: 6) {
-                VStack(alignment: .leading, spacing: 1) {
+                HStack {
                     Text("BACKGROUND NOISE")
                         .font(.system(size: 9, weight: .semibold, design: .monospaced))
                         .foregroundColor(inkSoft)
-                    Text("Layer gentle rain or brown noise under any mode")
-                        .font(.system(size: 9.5))
+                    Spacer()
+                    Text("LAYER UNDER ANY MODE")
+                        .font(.system(size: 8.5, design: .monospaced))
                         .foregroundColor(inkDim)
                 }
 
@@ -336,7 +346,64 @@ struct PopoverView: View {
                                 .background(on ? Color.white : Color.white.opacity(0.05))
                                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(MacBraunPressButtonStyle(pressedScale: 0.95, reduceMotion: reduceMotion))
+                        .accessibilityAddTraits(on ? [.isSelected] : [])
+                    }
+                }
+            }
+
+            // Visual World Pairing / Override (Auto by default; click stage anytime)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("VISUAL")
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(inkSoft)
+                    Spacer()
+                    Text(state.visualFollowsSoundscape ? "PAIRED · \(state.preset.cleanName.uppercased())" : "PINNED · \(state.preset.cleanName.uppercased())")
+                        .font(.system(size: 8.5, design: .monospaced))
+                        .foregroundColor(inkDim)
+                }
+
+                let cols = Array(repeating: GridItem(.flexible(), spacing: 4), count: 3)
+                LazyVGrid(columns: cols, spacing: 4) {
+                    visualOptionChip(label: "Auto", selected: state.visualFollowsSoundscape) {
+                        state.setVisualOverride(nil)
+                    }
+                    ForEach(VisualPreset.allCases) { p in
+                        visualOptionChip(
+                            label: p.cleanName,
+                            selected: !state.visualFollowsSoundscape && state.preset == p
+                        ) {
+                            state.setVisualOverride(p)
+                        }
+                    }
+                }
+            }
+
+            if state.preset == .phosphor {
+                HStack {
+                    Text("CRT PHOSPHOR")
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(inkSoft)
+                    Spacer()
+                    HStack(spacing: 4) {
+                        ForEach([(false, "P31 Emerald"), (true, "P39 Amber")], id: \.0) { isAmber, label in
+                            let on = state.amberPhosphor == isAmber
+                            Button {
+                                state.amberPhosphor = isAmber
+                                state.performHaptic()
+                            } label: {
+                                Text(label)
+                                    .font(.system(size: 9.5, weight: on ? .semibold : .regular, design: .monospaced))
+                                    .foregroundColor(on ? .black : inkSoft)
+                                    .padding(.horizontal, 8)
+                                    .frame(height: 22)
+                                    .background(on ? Color.white : Color.white.opacity(0.05))
+                                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+                            }
+                            .buttonStyle(MacBraunPressButtonStyle(pressedScale: 0.95, reduceMotion: reduceMotion))
+                            .accessibilityAddTraits(on ? [.isSelected] : [])
+                        }
                     }
                 }
             }
@@ -352,8 +419,8 @@ struct PopoverView: View {
                 Button("FULLSCREEN") { onOpenFullscreen() }
                     .buttonStyle(QuietTextLinkStyle())
                 Button("PRIVACY") {
-                    if let url = URL(string: "https://strangechances.com/satie/privacy/") {
-                        NSWorkspace.shared.open(url)
+                    if let privacyPolicyURL = URL(string: "https://strangechances.com/satie/privacy/") {
+                        NSWorkspace.shared.open(privacyPolicyURL)
                     }
                 }
                 .buttonStyle(QuietTextLinkStyle())
@@ -370,6 +437,20 @@ struct PopoverView: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(Color.white.opacity(0.11), lineWidth: 1)
         )
+    }
+
+    private func visualOptionChip(label: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 10, weight: selected ? .semibold : .regular))
+                .foregroundColor(selected ? .black : inkSoft)
+                .frame(maxWidth: .infinity)
+                .frame(height: 24)
+                .background(selected ? Color.white : Color.white.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        }
+        .buttonStyle(MacBraunPressButtonStyle(pressedScale: 0.95, reduceMotion: reduceMotion))
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
     private var volumeSliderRow: some View {
@@ -404,13 +485,17 @@ struct PopoverView: View {
         }
     }
 
-    private func revealVisualSwitcherBriefly() {
-        peekHideTask?.cancel()
-        peekVisualSwitcher = true
-        peekHideTask = Task { @MainActor in
+    private func flashVisualToast(_ text: String) {
+        visualToastTask?.cancel()
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
+            visualToastLabel = text
+        }
+        visualToastTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(1300))
             guard !Task.isCancelled else { return }
-            peekVisualSwitcher = false
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.32)) {
+                visualToastLabel = nil
+            }
         }
     }
 
@@ -485,6 +570,7 @@ private struct CircularControlButton: View {
     let isActive: Bool
     var hasIndicatorDot: Bool = false
     var tintWarning: Bool = false
+    var reduceMotion: Bool = false
     let help: String
     let action: () -> Void
 
@@ -507,7 +593,7 @@ private struct CircularControlButton: View {
                 }
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MacBraunPressButtonStyle(pressedScale: 0.92, reduceMotion: reduceMotion))
         .help(help)
     }
 }

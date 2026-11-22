@@ -128,6 +128,7 @@ final class AppState: ObservableObject {
     private var menuBarTimer: Timer?
     private var currentMenuBarHz: Double = 24.0
     private var housekeepingTimer: Timer?
+    private var flowEndDate: Date? = nil
     private var isSleeping: Bool = false
     private var sleepObservers: [NSObjectProtocol] = []
 
@@ -250,6 +251,18 @@ final class AppState: ObservableObject {
         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
     }
 
+    /// Pin a specific visual across all soundscapes, or pass `nil` for Auto (paired audiovisual worlds).
+    func setVisualOverride(_ override: VisualPreset?) {
+        performHaptic()
+        if let pinned = override {
+            visualFollowsSoundscape = false
+            preset = pinned
+        } else {
+            visualFollowsSoundscape = true
+            preset = VisualPreset.paired(for: focusMode)
+        }
+    }
+
     func toggleFocusSound(_ mode: FocusSoundscape) {
         performHaptic()
         if isFocusPlaying && focusMode == mode {
@@ -259,15 +272,28 @@ final class AppState: ObservableObject {
             let phase = circadianOverride.resolvedPhase()
             circadianPhase = phase
             focusSound.setCircadianPhase(phase)
-            focusSound.start(mode: mode)
+            let started = focusSound.start(mode: mode)
+            guard started else {
+                isFocusPlaying = false
+                flowEndDate = nil
+                flowRemainingSeconds = nil
+                syncNowPlaying()
+                return
+            }
             isFocusPlaying = true
             scheduleMenuBarTimer(hz: 28.0)
             if flowMinutes > 0 {
-                if flowRemainingSeconds == nil {
-                    flowRemainingSeconds = Double(flowMinutes * 60)
+                if flowEndDate == nil {
+                    let dur = Double(flowMinutes * 60)
+                    flowEndDate = Date().addingTimeInterval(dur)
+                    flowRemainingSeconds = dur
+                } else {
+                    refreshCountdownFromWallClock()
                 }
                 focusSound.setSessionProgress(sessionProgress)
             } else {
+                flowEndDate = nil
+                flowRemainingSeconds = nil
                 focusSound.setSessionProgress(nil)
             }
             syncNowPlaying()
@@ -278,6 +304,7 @@ final class AppState: ObservableObject {
         focusSound.stop()
         focusSound.setSessionProgress(nil)
         isFocusPlaying = false
+        flowEndDate = nil
         flowRemainingSeconds = nil
         syncNowPlaying()
     }
@@ -297,13 +324,18 @@ final class AppState: ObservableObject {
         settings.flowMinutes = clamped
         if clamped == 0 {
             flowDuration = .infinite
+            flowEndDate = nil
             flowRemainingSeconds = nil
             focusSound.setSessionProgress(nil)
         } else {
             flowDuration = clamped == 25 ? .min25 : (clamped == 50 ? .min50 : .min25)
-            flowRemainingSeconds = Double(clamped * 60)
+            let dur = Double(clamped * 60)
+            flowRemainingSeconds = dur
             if isFocusPlaying {
+                flowEndDate = Date().addingTimeInterval(dur)
                 focusSound.setSessionProgress(0.0)
+            } else {
+                flowEndDate = nil
             }
         }
     }
@@ -397,32 +429,36 @@ final class AppState: ObservableObject {
             focusSound.setCircadianPhase(nowPhase)
         }
 
-        // Sleep / Focus timer countdown + soft landing chime
-        if isFocusPlaying, let rem = flowRemainingSeconds {
-            let next = rem - 1.0
-            if next <= 0 {
-                flowRemainingSeconds = nil
-                flowDuration = .infinite
-                focusSound.setSessionProgress(1.0)
-                focusSound.triggerSessionChime()
-                settings.completedFocusSessions += 1
-                Log.app.info("Focus session completed (#\(self.settings.completedFocusSessions)) — playing resolving fifth chime")
-                #if APP_STORE
-                let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
-                if settings.completedFocusSessions >= 5 && settings.lastReviewPromptVersion != ver {
-                    settings.lastReviewPromptVersion = ver
-                    SKStoreReviewController.requestReview()
-                }
-                #endif
-                Task { @MainActor [weak self] in
-                    try? await Task.sleep(for: .seconds(4.0))
-                    guard let self, self.isFocusPlaying, self.flowRemainingSeconds == nil else { return }
-                    self.stopFocusSound()
-                }
-            } else {
-                flowRemainingSeconds = next
-                focusSound.setSessionProgress(sessionProgress)
+        // Wall-clock sleep / focus timer countdown (zero drift under macOS App Nap timer coalescing)
+        refreshCountdownFromWallClock()
+    }
+
+    private func refreshCountdownFromWallClock() {
+        guard isFocusPlaying, let endDate = flowEndDate else { return }
+        let rem = endDate.timeIntervalSinceNow
+        if rem <= 0 {
+            flowEndDate = nil
+            flowRemainingSeconds = nil
+            flowDuration = .infinite
+            focusSound.setSessionProgress(1.0)
+            focusSound.triggerSessionChime()
+            settings.completedFocusSessions += 1
+            Log.app.info("Focus session completed (#\(self.settings.completedFocusSessions)) — playing resolving fifth chime")
+            #if APP_STORE
+            let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+            if settings.completedFocusSessions >= 5 && settings.lastReviewPromptVersion != ver {
+                settings.lastReviewPromptVersion = ver
+                SKStoreReviewController.requestReview()
             }
+            #endif
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(4.0))
+                guard let self, self.isFocusPlaying, self.flowEndDate == nil else { return }
+                self.stopFocusSound()
+            }
+        } else {
+            flowRemainingSeconds = rem
+            focusSound.setSessionProgress(sessionProgress)
         }
     }
 
