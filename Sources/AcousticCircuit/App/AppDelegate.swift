@@ -83,13 +83,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let state = AppState.shared
         state.onFrameTick = { [weak self] snap in
-            self?.menuBarIconView.update(snapshot: snap, isMuted: AppState.shared.isSystemMuted)
+            let s = AppState.shared
+            self?.menuBarIconView.update(snapshot: snap, isPlaying: s.isFocusPlaying, isMuted: s.isSystemMuted)
         }
         state.$isSystemMuted
             .removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self] muted in
-                self?.menuBarIconView.update(snapshot: AppState.shared.snapshot, isMuted: muted)
+                let s = AppState.shared
+                self?.menuBarIconView.update(snapshot: s.snapshot, isPlaying: s.isFocusPlaying, isMuted: muted)
+            }
+            .store(in: &layoutCancellables)
+        state.$isFocusPlaying
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] playing in
+                let s = AppState.shared
+                self?.menuBarIconView.update(snapshot: s.snapshot, isPlaying: playing, isMuted: s.isSystemMuted)
             }
             .store(in: &layoutCancellables)
 
@@ -192,7 +202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Status Bar & Notch-Safe Floating Panel
 
     private func setupMenuBar() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: 28)
         statusItem.autosaveName = "SatieStatusItem"
         guard let button = statusItem.button else { return }
 
