@@ -7,7 +7,7 @@ DISPLAY_NAME="Satie"
 BUNDLE_ID="com.strangechances.Satie"
 TEAM_ID="6KM3577ETV"
 VERSION="3.1.0"
-BUILD_NUM="17"
+BUILD_NUM="18"
 BUILD_DIR="$ROOT_DIR/build"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 CONTENTS="$APP_BUNDLE/Contents"
@@ -53,11 +53,17 @@ mkdir -p "$MACOS_DIR" "$RES_DIR"
 cp "$BIN_PATH" "$MACOS_DIR/$APP_NAME"
 strip -x "$MACOS_DIR/$APP_NAME" || true
 
-echo "==> Compiling Metal shaders -> default.metallib..."
+echo "==> Compiling Metal shaders -> default.metallib (targeting macOS 15.0+)..."
 TMP_AIR="$BUILD_DIR/Shaders.air"
-xcrun metal -O2 -c "$ROOT_DIR/Sources/AcousticCircuit/Renderer/Shaders.metal" -o "$TMP_AIR"
-xcrun metallib "$TMP_AIR" -o "$RES_DIR/default.metallib"
+xcrun -sdk macosx metal -mmacosx-version-min=15.0 -O2 -c "$ROOT_DIR/Sources/AcousticCircuit/Renderer/Shaders.metal" -o "$TMP_AIR"
+xcrun -sdk macosx metallib "$TMP_AIR" -o "$RES_DIR/default.metallib"
 rm -f "$TMP_AIR"
+# Proof gate: refuse to ship a metallib that accidentally targets macOS 26+ instead of macOS 15.0
+METAL_MAJOR="$(xcrun metal-readobj --file-headers "$RES_DIR/default.metallib" | awk '/PlatformMajor:/{print $2}')"
+if [[ "$METAL_MAJOR" != "15" ]]; then
+  echo "ERROR: default.metallib PlatformMajor=$METAL_MAJOR (expected 15 for macOS 15+ compatibility)" >&2
+  exit 1
+fi
 
 echo "==> Generating AppIcon.icns..."
 ICONSET="$BUILD_DIR/AppIcon.iconset"
@@ -70,6 +76,9 @@ rm -rf "$ICONSET"
 if [[ -d "$ROOT_DIR/Sources/AcousticCore/Resources/Samples" ]]; then
   echo "==> Bundling CC0 studio acoustic samples..."
   cp -R "$ROOT_DIR/Sources/AcousticCore/Resources/Samples" "$RES_DIR/Samples"
+fi
+if [[ -f "$ROOT_DIR/AppStore/PrivacyInfo.xcprivacy" ]]; then
+  cp "$ROOT_DIR/AppStore/PrivacyInfo.xcprivacy" "$RES_DIR/PrivacyInfo.xcprivacy"
 fi
 
 echo "==> Writing Info.plist..."
