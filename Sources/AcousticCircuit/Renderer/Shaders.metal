@@ -162,20 +162,24 @@ fragment float4 circuitBackgroundFragment(FullscreenOut in [[stage_in]],
     float2 d = minDimCoord(in.uv, u.coreCenter, aspectVal);
     float dist = length(d);
 
-    // Midnight-slate Room C architectural gradient
-    float3 inner = float3(0.086, 0.133, 0.212);
-    float3 midC  = float3(0.043, 0.067, 0.110);
-    float3 outer = float3(0.024, 0.039, 0.067);
+    // Architectural Room C gradient (circadian-aware: warm slate-obsidian after 8 PM)
+    float isNight = clamp(u.breathDepth.z, 0.0, 1.0);
+    float3 inner = mix(float3(0.068, 0.104, 0.172), float3(0.082, 0.056, 0.044), isNight * 0.72);
+    float3 midC  = mix(float3(0.030, 0.048, 0.082), float3(0.036, 0.025, 0.020), isNight * 0.72);
+    float3 outer = mix(float3(0.014, 0.022, 0.040), float3(0.016, 0.012, 0.010), isNight * 0.72);
 
-    float3 col = mix(inner, midC, smoothstep(0.05, 0.48, dist));
-    col = mix(col, outer, smoothstep(0.42, 0.95, dist));
+    float3 col = mix(inner, midC, smoothstep(0.06, 0.50, dist));
+    col = mix(col, outer, smoothstep(0.42, 0.92, dist));
 
     // Chord-change volumetric bloom + pan/pitch-localized note halos
     float chordBloom = (u.isPlaying > 0.5) ? exp(-max(0.0, u.chordAge) * 1.15) : 0.0;
-    float haloR = max(0.12, u.coreScale * 0.56);
-    float halo = exp(-(dist * dist) / (haloR * haloR * (0.62 + u.energy * 0.28 + chordBloom * 0.24)));
-    col += float3(0.24, 0.34, 0.52) * halo * (0.24 + u.energy * 0.36 + chordBloom * 0.22);
-    col += float3(0.76, 0.82, 0.94) * exp(-(dist * dist) / (haloR * haloR * 0.18)) * (0.10 + u.energy * 0.16 + chordBloom * 0.18);
+    float haloR = max(0.14, u.coreScale * 0.56);
+    float halo = exp(-(dist * dist) / (haloR * haloR * (0.68 + u.energy * 0.25 + chordBloom * 0.22)));
+    float3 haloTint = mix(float3(0.20, 0.30, 0.48), float3(0.38, 0.22, 0.12), isNight * 0.75);
+    col += haloTint * halo * (0.18 + u.energy * 0.22 + chordBloom * 0.18);
+    // Ring-shaped ambient glow instead of hot white center spot so optical fibers read cleanly
+    float ringGlow = exp(-pow((dist - haloR * 0.42) / (haloR * 0.34), 2.0));
+    col += mix(float3(0.58, 0.70, 0.88), float3(0.76, 0.50, 0.28), isNight * 0.75) * ringGlow * (0.06 + chordBloom * 0.10);
 
     if (u.isPlaying > 0.5) {
         for (int n = 0; n < 12; n++) {
@@ -183,19 +187,21 @@ fragment float4 circuitBackgroundFragment(FullscreenOut in [[stage_in]],
             float age = ev.w;
             if (age > 4.2 || ev.z <= 0.01) continue;
             float env = exp(-age * 1.45) * ev.z;
-            float2 nPos = float2(ev.y * 0.24, (0.5 - ev.x) * 0.26);
+            float2 nPos = float2(ev.y * 0.26, (0.5 - ev.x) * 0.28);
             float nd = length(d - nPos);
-            float ringR = 0.04 + age * 0.07;
-            float softBloom = exp(-(nd * nd) / (0.014 + age * 0.012)) * env * 0.14;
-            float fineWave = exp(-abs(nd - ringR) * 65.0) * env * 0.10;
+            float ringR = 0.04 + age * 0.075;
+            float softBloom = exp(-(nd * nd) / (0.012 + age * 0.012)) * env * 0.09;
+            float fineWave = exp(-abs(nd - ringR) * 78.0) * env * 0.11;
             float kind = getNoteKind(u, n);
-            float3 nCol = (kind > 0.5 && kind < 1.5) ? float3(1.00, 0.90, 0.74) : float3(0.72, 0.86, 1.00);
+            float3 nCol = (kind > 0.5 && kind < 1.5)
+                ? float3(1.00, 0.86, 0.64)
+                : mix(float3(0.66, 0.84, 1.00), float3(0.92, 0.64, 0.38), isNight * 0.72);
             col += nCol * (softBloom + fineWave);
         }
     }
 
     // Spatiotemporal 64x64 blue-noise dither + linear Display P3 EDR output
-    float edrMask = clamp(halo * (0.25 + chordBloom * 0.45), 0.0, 0.45);
+    float edrMask = clamp(ringGlow * (0.18 + chordBloom * 0.35), 0.0, 0.40);
     return finalizeDisplayColor(col, edrMask, 0.0065, in.position.xy, u, blueNoiseTex);
 }
 
@@ -258,11 +264,11 @@ vertex RibbonVertOut circuitRibbonVertex(uint vid [[vertex_id]],
     }
     noteExcite = min(noteExcite, 1.8);
 
-    // Three nested shells: inner = bass/sustain, middle = piano/vibe chords, outer = high harp glints
-    float shell = mix(0.46, 1.04, strandPitch);
-    float baseR = shell * (0.86 + 0.18 * fract(fi * 0.7548776));
-    float chordBreath = (u.isPlaying > 0.5) ? exp(-max(0.0, u.chordAge) * 1.3) * 0.09 : 0.0;
-    float pulse = 1.0 + bv * 0.18 + chordBreath + noteExcite * 0.24 + noteWave * 0.11;
+    // Three open architectural optical-fiber shells (spacious void center prevents white blowout)
+    float shell = mix(0.60, 1.14, strandPitch);
+    float baseR = shell * (0.88 + 0.16 * fract(fi * 0.7548776));
+    float chordBreath = (u.isPlaying > 0.5) ? exp(-max(0.0, u.chordAge) * 1.3) * 0.08 : 0.0;
+    float pulse = 1.0 + bv * 0.16 + chordBreath + noteExcite * 0.22 + noteWave * 0.10;
 
     float angle = frac * 6.2831853;
     float wobble = 0.18 + 0.10 * sin(angle * freq2 + t * 0.42 + phaseB)
@@ -303,19 +309,21 @@ vertex RibbonVertOut circuitRibbonVertex(uint vid [[vertex_id]],
     float radiusNDC = u.coreScale * 0.54;
     float2 pos = centerNDC + float2((x1 * persp * radiusNDC) / max(0.5, aspect), y2 * persp * radiusNDC);
 
-    float depthFade = clamp(0.42 + 0.58 * (z2 * 0.5 + 0.5), 0.16, 1.0);
-    float baseAlpha = (iid % 9 == 0) ? 0.22 : ((iid % 3 == 0) ? 0.10 : 0.052);
-    // Strands flare crisply when their matching note strikes, creating unmistakable note-to-light causality
-    float alpha = clamp((baseAlpha + bv * 0.14 + imp * 0.14 + noteExcite * 0.44) * depthFade, 0.015, 0.88);
+    float depthFade = clamp(0.36 + 0.64 * (z2 * 0.5 + 0.5), 0.12, 1.0);
+    float baseAlpha = (iid % 9 == 0) ? 0.14 : ((iid % 3 == 0) ? 0.068 : 0.036);
+    // Calibrated linear-EDR opacity so every individual glowing glass filament stays crisp and sculptural
+    float alpha = clamp((baseAlpha + bv * 0.09 + imp * 0.10 + noteExcite * 0.30) * depthFade, 0.012, 0.68);
 
-    float3 coolSilk = mix(float3(0.90, 0.94, 1.00), float3(0.56, 0.78, 1.00), smoothstep(0.45, 0.95, bv));
-    float3 warmIvory = float3(1.00, 0.93, 0.80);
-    float3 col = mix(coolSilk, warmIvory, clamp(noteWarmth * 0.85, 0.0, 0.9));
+    float isNight = clamp(u.breathDepth.z, 0.0, 1.0);
+    float3 coolSilk = mix(float3(0.76, 0.87, 1.00), float3(0.44, 0.72, 0.98), smoothstep(0.40, 0.95, bv));
+    coolSilk = mix(coolSilk, float3(0.92, 0.66, 0.40), isNight * 0.72);
+    float3 warmIvory = float3(1.00, 0.86, 0.62);
+    float3 col = mix(coolSilk, warmIvory, clamp(noteWarmth * 0.90, 0.0, 0.92));
 
     RibbonVertOut out;
     out.position = float4(pos, 0.0, 1.0);
-    float ribbonBoost = clamp(noteExcite * 0.65 + imp * 0.35, 0.0, 1.0);
-    out.color = float4(additiveColorToTarget(col, alpha, ribbonBoost * 0.55, u), alpha);
+    float ribbonBoost = clamp(noteExcite * 0.55 + imp * 0.28, 0.0, 0.85);
+    out.color = float4(additiveColorToTarget(col, alpha, ribbonBoost * 0.45, u), alpha);
     return out;
 }
 
@@ -431,12 +439,18 @@ fragment float4 ecologyFieldFragment(FullscreenOut in [[stage_in]],
         float2 p = (in.uv - minB) / (maxB - minB);
         float2 boxPx = (maxB - minB) * u.resolution;
         float boxAspect = max(0.35, boxPx.x / max(1.0, boxPx.y));
-        col = isPortrait ? float3(0.045, 0.056, 0.074) : float3(0.040, 0.050, 0.068);
+        col = isPortrait ? float3(0.036, 0.044, 0.058) : float3(0.032, 0.040, 0.054);
+        float isNight = clamp(u.breathDepth.z, 0.0, 1.0);
+        col = mix(col, float3(0.038, 0.026, 0.020), isNight * 0.65);
 
-        // Subtle gold architectural survey crosshair
-        float crossH = smoothstep(0.0020, 0.0, abs(p.y - 0.55));
-        float crossV = smoothstep(0.0016, 0.0, abs(p.x - 0.62));
-        col += float3(0.84, 0.71, 0.42) * max(crossH, crossV) * 0.18;
+        // Whisper-subtle architectural pond survey hairs (recedes quietly behind organic ripples)
+        float crossH = smoothstep(0.0018, 0.0, abs(p.y - 0.55));
+        float crossV = smoothstep(0.0014, 0.0, abs(p.x - 0.62));
+        col += float3(0.84, 0.71, 0.42) * max(crossH, crossV) * 0.045;
+
+        // Delicate ambient rainfall stone-pond shimmer
+        float rainMist = gradNoise(p * 18.0 + float2(u.time * 0.09, -u.time * 0.06)) * 0.008;
+        col += max(rainMist, 0.0) * mix(float3(0.54, 0.72, 0.82), float3(0.82, 0.54, 0.32), isNight * 0.75);
 
         if (u.isPlaying > 0.5) {
             // Live expanding concentric water ripples + cymatic standing rings spawned directly by every struck note
@@ -580,9 +594,13 @@ fragment float4 phosphorUpdateFragment(FullscreenOut in [[stage_in]],
     float2 center = (aspect < 1.0) ? u.coreCenter : float2(0.5, 0.5);
     float2 p = minDimCoord(in.uv, center, aspect);
 
-    float3 beamCol = (u.amberMode > 0.5)
-        ? float3(1.00, 0.64, 0.18)   // P39 Warm Amber
-        : float3(0.24, 1.00, 0.56);  // P31 Emerald Phosphor
+    // P31 Emerald daytime phosphor; shifts gracefully toward low-melanopic P39 Amber after 8 PM
+    float nightAmber = max(u.amberMode, clamp(u.breathDepth.z, 0.0, 1.0) * 0.88);
+    float3 beamCol = mix(
+        float3(0.24, 1.00, 0.56),  // P31 Emerald Phosphor
+        float3(1.00, 0.60, 0.16),  // P39 Warm Amber
+        nightAmber
+    );
 
     // Crisp CRT electron-beam intensity surge on fresh note plucks & sub beats
     float notePulse = 0.0;
@@ -595,35 +613,39 @@ fragment float4 phosphorUpdateFragment(FullscreenOut in [[stage_in]],
         }
     }
 
-    float scale = 0.42 * (1.0 + u.beat * 0.10 + notePulse * 0.08);
+    float scale = 0.42 * (1.0 + u.beat * 0.08 + notePulse * 0.06);
+    float minDist = 10.0;
     float accum = 0.0;
     float haloAccum = 0.0;
 
     float idleMix = smoothstep(0.03, 0.005, u.energy);
 
+    // Full 255-segment stride-1 beam + min-distance continuous core eliminates vertex knot beading
     float2 a = phosphorSamplePoint(waveLR, 0, scale, u.time, idleMix);
-    for (int i = 1; i < 128; i++) {
-        float2 b = phosphorSamplePoint(waveLR, i * 2, scale, u.time, idleMix);
+    for (int i = 1; i < 256; i++) {
+        float2 b = phosphorSamplePoint(waveLR, i, scale, u.time, idleMix);
         float d = sdSegment(p, a, b);
+        minDist = min(minDist, d);
         float vel = length(b - a);
-        float dwell = clamp(0.018 / (vel + 0.012), 0.30, 1.85);
-        accum += exp(-d * 340.0) * dwell;
-        haloAccum += exp(-d * 72.0) * dwell * 0.11;
+        float dwell = clamp(0.011 / (vel + 0.010), 0.25, 1.35);
+        accum += exp(-d * 300.0) * dwell * 0.45;
+        haloAccum += exp(-d * 68.0) * dwell * 0.055;
         a = b;
     }
+    float silkyCore = exp(-minDist * 360.0) * 0.95;
 
     // Trigger-locked horizontal L-channel time-domain waveform
     float wIdx = clamp(in.uv.x * 255.0, 0.0, 254.0);
     int wi = int(wIdx);
-    float wyLive = mix(waveLR[wi].x, waveLR[wi + 1].x, fract(wIdx)) * 0.32;
+    float wyLive = mix(waveLR[wi].x, waveLR[wi + 1].x, fract(wIdx)) * 0.30;
     float wyIdle = sin(in.uv.x * 12.56637 + u.time * 1.1) * 0.055 * sin(in.uv.x * 3.14159);
     float wy = mix(wyLive, wyIdle, idleMix);
     float wDist = abs(p.y - wy);
-    float trace = exp(-wDist * 220.0) * mix(0.36 + notePulse * 0.22, 0.22, idleMix);
+    float trace = exp(-wDist * 230.0) * mix(0.32 + notePulse * 0.18, 0.20, idleMix);
 
-    float3 coreHot = mix(beamCol, float3(0.95, 1.0, 0.96), 0.72);
-    float idleDim = mix(1.0 + notePulse * 0.28, 0.48, idleMix);
-    col += (coreHot * min(accum, 2.2) * 0.56 + beamCol * min(haloAccum, 1.4) * 0.28) * idleDim + beamCol * trace;
+    float3 coreHot = mix(beamCol, float3(0.98, 0.99, 0.95), 0.72);
+    float idleDim = mix(1.0 + notePulse * 0.22, 0.48, idleMix);
+    col += (coreHot * (silkyCore + min(accum, 1.4) * 0.32) * 0.58 + beamCol * min(haloAccum, 1.2) * 0.26) * idleDim + beamCol * trace;
 
     return float4(min(col, 4.0), 1.0);
 }
@@ -635,8 +657,9 @@ fragment float4 phosphorDisplayFragment(FullscreenOut in [[stage_in]],
     constexpr sampler s(filter::linear, address::clamp_to_edge);
     float3 beam = scopeTex.sample(s, in.uv).rgb;
 
-    float3 bg = (u.amberMode > 0.5) ? float3(0.036, 0.026, 0.014) : float3(0.018, 0.036, 0.024);
-    float3 grCol = (u.amberMode > 0.5) ? float3(1.0, 0.72, 0.30) : float3(0.36, 1.0, 0.60);
+    float nightAmber = max(u.amberMode, clamp(u.breathDepth.z, 0.0, 1.0) * 0.88);
+    float3 bg = mix(float3(0.014, 0.028, 0.019), float3(0.030, 0.020, 0.010), nightAmber);
+    float3 grCol = mix(float3(0.36, 1.0, 0.60), float3(1.0, 0.68, 0.26), nightAmber);
 
     float aspect = u.resolution.x / max(1.0, u.resolution.y);
     float2 center = (aspect < 1.0) ? u.coreCenter : float2(0.5, 0.5);
@@ -676,7 +699,7 @@ static inline float3 nocturnePalette(float t) {
 }
 
 // ============================================================================
-// PRESET 04: NOCTURNE — CANDLELIGHT INK BLOOMS IN VELVET INDIGO
+// PRESET 04: NOCTURNE — CANDLELIT SUMI-E INK RINGS & MOONLIT WATER REFLECTION
 // ============================================================================
 fragment float4 liquidUpdateFragment(FullscreenOut in [[stage_in]],
                                      texture2d<float> prevTex [[texture(0)]],
@@ -686,83 +709,77 @@ fragment float4 liquidUpdateFragment(FullscreenOut in [[stage_in]],
     float aspect = u.resolution.x / max(1.0, u.resolution.y);
     float2 center = (aspect < 1.0) ? u.coreCenter : float2(0.5, 0.5);
     float2 p = minDimCoord(in.uv, center, aspect);
+    float isNight = clamp(u.breathDepth.z, 0.0, 1.0);
 
-    // Slow, restful upward thermal drift + silky curl diffusion (11:30pm calm)
-    float n1 = gradNoise(p * 2.4 + float2(u.time * 0.08, -u.time * 0.06));
-    float n2 = gradNoise(p * 2.4 + float2(-u.time * 0.07, u.time * 0.09) + 5.2);
+    // Multi-scale curl smoke/ink advection (delicate rising lantern wisps, zero mushy zoom blur)
+    float eps = 0.015;
+    float psi0 = gradNoise(p * 3.1 + float2(u.time * 0.045, -u.time * 0.032))
+               + 0.45 * gradNoise(p * 6.8 - float2(u.time * 0.03, u.time * 0.04) + 3.1);
+    float psiX = gradNoise((p + float2(eps, 0.0)) * 3.1 + float2(u.time * 0.045, -u.time * 0.032))
+               + 0.45 * gradNoise((p + float2(eps, 0.0)) * 6.8 - float2(u.time * 0.03, u.time * 0.04) + 3.1);
+    float psiY = gradNoise((p + float2(0.0, eps)) * 3.1 + float2(u.time * 0.045, -u.time * 0.032))
+               + 0.45 * gradNoise((p + float2(0.0, eps)) * 6.8 - float2(u.time * 0.03, u.time * 0.04) + 3.1);
+    // Divergence-free curl velocity (preserves crisp delicate ink filaments across 5+ seconds!)
+    float2 curl = float2(psiY - psi0, -(psiX - psi0)) / eps;
+    float2 vel = curl * 0.00055 + float2(0.0, 0.00075);
+    float2 advUV = in.uv + ((aspect >= 1.0) ? float2(vel.x / aspect, vel.y) : float2(vel.x, vel.y * aspect));
 
-    float zoom = 0.996 - u.bass * 0.003;
-    float rot = 0.0018 * sin(u.time * 0.22);
-    float cR = cos(rot), sR = sin(rot);
-
-    float2 rotP = float2(p.x * cR - p.y * sR, p.x * sR + p.y * cR) * zoom;
-    float2 centered = (aspect >= 1.0) ? float2(rotP.x / aspect, rotP.y) : float2(rotP.x, rotP.y * aspect);
-    // Gentle upward candlelight ember drift + soft curl
-    float2 driftUV = float2(n1 * 0.0022, n2 * 0.0022 + 0.00055);
-    float2 sampleUV = centered + center + driftUV;
-
-    float2 dirP = normalize(p + 1e-4) * 0.0009;
-    float2 disp = (aspect >= 1.0) ? float2(dirP.x / aspect, dirP.y) : float2(dirP.x, dirP.y * aspect);
-    float3 prev;
-    prev.r = prevTex.sample(s, sampleUV + disp).r;
-    prev.g = prevTex.sample(s, sampleUV).g;
-    prev.b = prevTex.sample(s, sampleUV - disp).b;
-    // Long ~5s velvety persistence so each Gymnopédie note blooms and dissolves slowly
-    float decay = pow(0.24, clamp(u.dt, 0.004, 0.05));
-    prev *= clamp(decay, 0.91, 0.985);
+    float3 prev = prevTex.sample(s, advUV).rgb;
+    float decay = pow(0.32, clamp(u.dt, 0.004, 0.05));
+    prev *= clamp(decay, 0.93, 0.988);
 
     float3 inject = float3(0.0);
 
     if (u.isPlaying > 0.5) {
-        // Every slow nocturnal piano / cello / glass note injects a warm candlelight-amber or moonlit-indigo ink bloom
+        // Each struck nocturnal piano / cello / glass note paints a crisp gilded ink-wash halo + hairline echo
         for (int n = 0; n < 12; n++) {
             float4 ev = u.noteA[n];
             float age = ev.w;
-            if (age > 0.75 || ev.z <= 0.01) continue;
+            if (age > 2.4 || ev.z <= 0.01) continue;
             float kind = getNoteKind(u, n);
-            // Smooth attack envelope so ink blooms cleanly into the feedback buffer
-            float env = smoothstep(0.0, 0.04, age) * exp(-age * 5.2) * ev.z;
-            float2 nPos = float2(ev.y * 0.28, (0.5 - ev.x) * 0.30);
-            float nd = length(p - nPos);
-            float bloomR = (kind > 2.5) ? 0.14 : ((kind > 0.5 && kind < 1.5) ? 0.085 : 0.055);
-            float blob = exp(-(nd * nd) / (bloomR * bloomR));
-            float halo = exp(-abs(nd - bloomR * (0.8 + age * 2.2)) * 55.0) * 0.55;
+            float env = smoothstep(0.0, 0.045, age) * exp(-age * 2.15) * ev.z;
+            float2 nPos = float2(ev.y * 0.32, (0.48 - ev.x) * 0.28);
+            float2 dp = p - nPos;
+            float nd = length(dp);
+            float ang = atan2(dp.y, dp.x);
 
-            // Melody/piano = warm candlelight amber; cello/sustain = deep midnight indigo; glint = moonlit pearl
+            // Delicate brush-ink ring radius expanding gracefully with harmonic azimuth ripple
+            float rBase = (kind > 2.5) ? 0.065 : ((kind > 0.5 && kind < 1.5) ? 0.042 : 0.032);
+            float rExp = rBase + age * 0.058;
+            float brushWobble = 1.0 + 0.06 * sin(ang * (2.0 + float(n % 3)) + age * 1.1 + psi0 * 2.5);
+            float ringMain = exp(-abs(nd - rExp * brushWobble) * 145.0);
+            float ringEcho = exp(-abs(nd - max(0.01, rExp - 0.024) * brushWobble) * 95.0) * 0.42;
+            float emberCore = exp(-(nd * nd) / max(0.00025, rBase * rBase * 0.16)) * exp(-age * 4.5) * 0.45;
+
             float3 nCol;
             if (kind > 2.5) {
-                nCol = float3(0.20, 0.30, 0.56);
+                nCol = mix(float3(0.30, 0.44, 0.72), float3(0.56, 0.32, 0.18), isNight * 0.72); // Cello midnight indigo
             } else if (kind > 1.5) {
-                nCol = float3(0.76, 0.82, 0.94);
+                nCol = mix(float3(0.84, 0.88, 0.96), float3(0.95, 0.76, 0.50), isNight * 0.75); // Glass moon-pearl
             } else if (kind > 0.5) {
-                nCol = float3(0.92, 0.66, 0.36);
+                nCol = float3(0.98, 0.70, 0.34); // Felt-piano warm candlelight gold
             } else {
-                nCol = nocturnePalette(ev.x * 0.55 + u.time * 0.025);
+                nCol = mix(nocturnePalette(ev.x * 0.55 + u.time * 0.02), float3(0.88, 0.52, 0.24), isNight * 0.65);
             }
-            inject += nCol * (blob * 0.65 + halo * 0.45) * env;
+            inject += nCol * (ringMain * 0.88 + ringEcho * 0.48 + emberCore) * env;
         }
-
-        // Whisper-soft cello/pad horizon thread
-        float wIdx = clamp(in.uv.x * 255.0, 0.0, 254.0);
-        int wi = int(wIdx);
-        float wave = mix(waveLR[wi].x, waveLR[wi + 1].x, fract(wIdx)) * 0.28;
-        float ribbon = exp(-abs(p.y - wave * 0.45) * 85.0) * (0.14 + u.bass * 0.22);
-        inject += float3(0.32, 0.44, 0.68) * ribbon;
     } else {
-        // Calm nocturnal resting halo when paused/standby
+        // Serene moonlit sumi-ink halo at rest
         float r = length(p);
         float ang = atan2(p.y, p.x);
-        float ringR = 0.18 + 0.012 * sin(ang * 3.0 + u.time * 0.45);
-        float ring = exp(-abs(r - ringR) * 48.0);
-        float3 col2 = nocturnePalette(u.time * 0.025 + ang * 0.08);
-        inject += col2 * ring * 0.22;
+        float ringR = 0.16 + 0.008 * sin(ang * 3.0 + u.time * 0.35);
+        float ring = exp(-abs(r - ringR) * 115.0);
+        float3 col2 = mix(float3(0.88, 0.66, 0.38), float3(0.84, 0.50, 0.22), isNight);
+        inject += col2 * ring * 0.26;
     }
 
-    float3 outCol = prev + inject * 0.42;
-    float vig = smoothstep(1.30, 0.22, length((in.uv - center) * 1.4));
-    outCol *= mix(0.84, 1.0, vig);
+    // Subtle cello/bass breath whisper (used only to breathe luminance softly, zero cartoon waveform bar!)
+    float subEnergy = abs(waveLR[0].x + waveLR[64].y) * 0.05;
+    float3 outCol = prev + inject * (0.36 + subEnergy);
+    float vig = smoothstep(1.25, 0.20, length((in.uv - center) * 1.38));
+    outCol *= mix(0.80, 1.0, vig);
 
-    return float4(clamp(outCol, 0.0, 2.4), 1.0);
+    return float4(clamp(outCol, 0.0, 2.2), 1.0);
 }
 
 fragment float4 liquidDisplayFragment(FullscreenOut in [[stage_in]],
@@ -770,13 +787,32 @@ fragment float4 liquidDisplayFragment(FullscreenOut in [[stage_in]],
                                       texture2d<float> blueNoiseTex [[texture(1)]],
                                       constant AcousticUniforms& u [[buffer(0)]]) {
     constexpr sampler s(filter::linear, address::clamp_to_edge);
+    float aspect = u.resolution.x / max(1.0, u.resolution.y);
+    float2 center = (aspect < 1.0) ? u.coreCenter : float2(0.5, 0.5);
+    float2 p = minDimCoord(in.uv, center, aspect);
+    float isNight = clamp(u.breathDepth.z, 0.0, 1.0);
+
     float3 raw = tex.sample(s, in.uv).rgb;
+
+    // Soft moonlit water reflection along the lower third (mirrors the upper candlelight rings subtly)
+    float waterMask = smoothstep(0.08, 0.36, p.y);
+    float rippleX = gradNoise(float2(p.x * 16.0 + u.time * 0.25, p.y * 42.0 - u.time * 0.18)) * 0.008;
+    float2 reflUV = float2(clamp(in.uv.x + rippleX, 0.0, 1.0), clamp(1.0 - in.uv.y * 0.85, 0.0, 1.0));
+    float3 refl = tex.sample(s, reflUV).rgb * waterMask * 0.26;
+    raw += refl;
+
+    // Subtle ambient candlelit room paper grain + deep velvet obsidian midnight wash
+    float paper = gradNoise(in.uv * 48.0) * 0.004;
+    float3 bgObsidian = mix(float3(0.015, 0.020, 0.036), float3(0.022, 0.013, 0.010), isNight * 0.80);
+    float3 glowTint = mix(float3(0.14, 0.18, 0.32), float3(0.24, 0.12, 0.06), isNight * 0.82);
+    float radGlow = exp(-dot(p, p) * 2.8) * (0.09 + 0.08 * u.energy);
+
     float rawPeak = max(raw.r, max(raw.g, raw.b));
-    // ACES filmic HDR tonemapping into deep midnight obsidian
     float3 c = (raw * (2.51 * raw + 0.03)) / (raw * (2.43 * raw + 0.59) + 0.14);
-    c = pow(max(c, 0.0), float3(0.96));
-    c = mix(float3(0.018, 0.023, 0.040), c, smoothstep(0.0, 0.09, length(c)));
-    float edrMask = smoothstep(0.45, 1.40, rawPeak) * 0.65;
+    c = pow(max(c, 0.0), float3(0.95));
+    c = bgObsidian + glowTint * radGlow + c + paper;
+
+    float edrMask = smoothstep(0.36, 1.25, rawPeak) * 0.72;
     return finalizeDisplayColor(c, edrMask, 0.0060, in.position.xy, u, blueNoiseTex);
 }
 
@@ -791,9 +827,10 @@ fragment float4 horizonFragment(FullscreenOut in [[stage_in]],
     float2 center = (aspect < 1.0) ? u.coreCenter : float2(0.5, 0.50);
     float2 p = minDimCoord(in.uv, center, aspect);
 
-    // Deep obsidian zenith fading subtly into still slate water below
-    float3 zenith = float3(0.020, 0.026, 0.040);
-    float3 nadir  = float3(0.014, 0.018, 0.028);
+    // Deep obsidian zenith fading subtly into still slate water below (warm ember-obsidian after 8 PM)
+    float isNight = clamp(u.breathDepth.z, 0.0, 1.0);
+    float3 zenith = mix(float3(0.018, 0.024, 0.038), float3(0.024, 0.014, 0.012), isNight * 0.80);
+    float3 nadir  = mix(float3(0.011, 0.015, 0.024), float3(0.014, 0.009, 0.008), isNight * 0.80);
     float3 col = mix(zenith, nadir, smoothstep(-0.35, 0.45, p.y));
 
     float t = u.time * (0.35 + u.isPlaying * 0.45);
@@ -822,29 +859,38 @@ fragment float4 horizonFragment(FullscreenOut in [[stage_in]],
     float domeGlow = exp(-(domeDist * domeDist) / (domeRadius * domeRadius * 1.15)) * aboveHorizon;
     float domeRim = exp(-abs(domeDist - domeRadius) * 88.0) * aboveHorizon * (0.36 + acousticBreath * 0.34);
 
-    // Real low-frequency stereo drone standing-wave shimmer on the water reflection below the horizon
+    // Perspective-foreshortened moonlit sea reflection (Sugimoto / Rothko physics — zero synthetic zebra bars)
     float wIdx = clamp(in.uv.x * 255.0, 0.0, 254.0);
     int wi = int(wIdx);
     float droneWave = mix(waveLR[wi].x + waveLR[wi].y, waveLR[wi + 1].x + waveLR[wi + 1].y, fract(wIdx)) * 0.5;
-    float belowHorizon = smoothstep(-0.006, 0.020, p.y);
-    float ripplePhase = p.y * 125.0 + droneWave * (u.isPlaying > 0.5 ? 5.5 : 0.0) + mist1 * 2.0 - t * 0.45;
-    float rippleWave = 0.5 + 0.5 * sin(ripplePhase);
-    float refl = exp(-max(0.0, p.y) * 5.6) * exp(-(p.x * p.x) / (0.11 + acousticBreath * 0.06)) * belowHorizon * (0.32 + 0.68 * rippleWave);
+    float belowHorizon = smoothstep(-0.004, 0.018, p.y);
+    float pyPos = max(0.001, p.y);
+    float zDepth = 0.070 / (pyPos + 0.024); // true perspective foreshortening toward horizon
+    float wN1 = gradNoise(float2(p.x * 9.5 + mist1 * 1.4 + t * 0.14, zDepth * 3.4 - t * 0.28));
+    float wN2 = gradNoise(float2(p.x * 21.0 - t * 0.18, zDepth * 6.8 + t * 0.22 + droneWave * 2.2));
+    float causticGlint = pow(clamp(0.5 + 0.5 * (wN1 * 0.62 + wN2 * 0.38), 0.0, 1.0), 2.8);
+    float waterSpreadX = 0.055 + pyPos * 0.55 + acousticBreath * 0.035;
+    float refl = exp(-pyPos * 5.2) * exp(-(p.x * p.x) / max(0.01, waterSpreadX * waterSpreadX * 3.2))
+               * belowHorizon * (0.18 + 0.92 * causticGlint);
 
     // Hairline silver-pearl horizon filament subtly modulated by stereo waveform
-    float lineY = p.y - droneWave * (u.isPlaying > 0.5 ? 0.010 : 0.0);
-    float horizonLine = exp(-abs(lineY) * 260.0) * (0.30 + 0.48 * xMask);
+    float lineY = p.y - droneWave * (u.isPlaying > 0.5 ? 0.007 : 0.0);
+    float horizonLine = exp(-abs(lineY) * 280.0) * (0.28 + 0.50 * xMask);
 
-    // Monochrome silver-slate palette that warms slightly toward dawn parchment on harmonic chord shifts
-    float3 mistCol = mix(float3(0.30, 0.38, 0.50), float3(0.46, 0.42, 0.40), chordWarm * 0.45);
-    float3 warmCol = mix(float3(0.74, 0.78, 0.85), float3(0.92, 0.84, 0.74), chordWarm * 0.55);
-    float3 lineCol = float3(0.93, 0.95, 0.99);
+    // Architectural dawn-silver palette; shifts warmly toward twilight amber-parchment on chords & after 8 PM
+    float3 mistDay = mix(float3(0.28, 0.36, 0.50), float3(0.48, 0.42, 0.38), chordWarm * 0.48);
+    float3 warmDay = mix(float3(0.76, 0.80, 0.88), float3(0.95, 0.84, 0.72), chordWarm * 0.55);
+    float3 lineDay = float3(0.94, 0.96, 1.00);
 
-    col += mistCol * bandWide * (0.24 + acousticBreath * 0.28 + mist * 0.05);
-    col += warmCol * bandCore * (0.20 + u.mid * 0.26 + chordWarm * 0.10);
-    col += warmCol * domeGlow * (0.22 + acousticBreath * 0.28) + lineCol * domeRim * (0.42 + u.mid * 0.35);
-    col += warmCol * refl * (0.14 + u.bass * 0.22);
-    col += lineCol * horizonLine * (0.45 + u.treble * 0.30 + chordWarm * 0.12);
+    float3 mistCol = mix(mistDay, float3(0.42, 0.22, 0.14), isNight * 0.80);
+    float3 warmCol = mix(warmDay, float3(0.86, 0.52, 0.26), isNight * 0.82);
+    float3 lineCol = mix(lineDay, float3(0.96, 0.74, 0.46), isNight * 0.82);
+
+    col += mistCol * bandWide * (0.24 + acousticBreath * 0.26 + mist * 0.05);
+    col += warmCol * bandCore * (0.20 + u.mid * 0.24 + chordWarm * 0.10);
+    col += warmCol * domeGlow * (0.22 + acousticBreath * 0.26) + lineCol * domeRim * (0.42 + u.mid * 0.32);
+    col += warmCol * refl * (0.20 + u.bass * 0.24);
+    col += lineCol * horizonLine * (0.44 + u.treble * 0.28 + chordWarm * 0.12);
 
     // Spatiotemporal 64x64 blue-noise dither + localized EDR lift on horizon filament and dome rim
     float edrMask = clamp(horizonLine * 0.72 + domeRim * 0.55 + bandCore * 0.18, 0.0, 0.85);
@@ -1081,7 +1127,7 @@ fragment float4 oculusFragment(FullscreenOut in [[stage_in]],
     col = (col + grainFine) * edgeDark * dockContrast;
 
     // Filmic highlight rolloff + localized Apple EDR skylight aperture & Faraday caustic glow + 64x64 Blue Noise
-    col = col / (1.0 + col * 0.16);
-    float oculusEdr = clamp(m4 * (0.28 + 0.24 * breath01) * skyRim + edge4 * 1.1 + causticEdr, 0.0, 0.85) * playing;
+    col = col / (1.0 + col * 0.22);
+    float oculusEdr = clamp(m4 * (0.24 + 0.22 * breath01) * skyRim + edge4 * 0.95 + causticEdr, 0.0, 0.75) * playing;
     return finalizeDisplayColor(col, oculusEdr, 0.0062, in.position.xy, u, blueNoiseTex);
 }

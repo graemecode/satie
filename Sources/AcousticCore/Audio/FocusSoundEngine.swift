@@ -36,12 +36,12 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
 
     public var subtitle: String {
         switch self {
-        case .focus: return "Felt Piano · Vibraphone"
-        case .pulse: return "Analog Pulse · Warm Sub"
-        case .rain:  return "Gentle Rain · Wine Glasses"
-        case .still: return "Quiet Ambient · No Melody"
-        case .dive:  return "Rain · Bronze Bowls · Breath"
-        case .drift: return "Nocturnal Piano · Cello"
+        case .focus: return "Deep Work · Felt Piano & Vibe"
+        case .pulse: return "Flow Momentum · Silky Analog"
+        case .rain:  return "Kyoto Rain · Singing Glass"
+        case .still: return "Deep Reading · Zero Melody"
+        case .dive:  return "Meditation · Breath & Bowls"
+        case .drift: return "Late Night · Piano & Cello"
         }
     }
 }
@@ -1076,6 +1076,7 @@ private final class FocusRenderState: @unchecked Sendable {
     private var stringChorus = StereoChorus()
     private var space = StudioAcousticSpace()
     private var studioRain = StudioRainPlayer()
+    private var courtyardRain: StochasticRainField
     private var velvetBrown = VelvetBrownNoise()
     private var rainEngine = PhysicalRainEngine()
     private var grooveEngine = HypnoticGrooveEngine()
@@ -1108,6 +1109,7 @@ private final class FocusRenderState: @unchecked Sendable {
         self.noiseRNG = FastNoiseRNG(seed: baseSeed)
         self.offlineScoreRNG = SeededRNG(seed: seed)
         self.deepMeditation = DeepMeditationEngine(bank: StudioSampleBank.shared, seed: baseSeed ^ 0xD1AE_5A71)
+        self.courtyardRain = StochasticRainField(bank: StudioSampleBank.shared, seed: baseSeed ^ 0xC007_7A7D)
         self.samplerVoices = (0..<24).map { _ in AcousticSamplerVoice() }
         self.feltPianos = (0..<8).map { _ in FeltPianoVoice() }
     }
@@ -1131,6 +1133,7 @@ private final class FocusRenderState: @unchecked Sendable {
         stringChorus.clear()
         space.clear()
         studioRain.reset()
+        courtyardRain.reset()
         velvetBrown.reset()
         grooveEngine.reset()
         deepMeditation.reset()
@@ -1307,10 +1310,10 @@ private final class FocusRenderState: @unchecked Sendable {
         let spaceBloom    = hasCurrentBar ? currentBar.macroSpaceBloom : 0.55
         let resBoost      = hasCurrentBar ? currentBar.macroResonance : 0.45
 
-        let targetPadCut = (mode == .pulse ? 1100.0 : 1450.0) + filterHorizon * (mode == .pulse ? 1350.0 : 1100.0)
+        let targetPadCut = (mode == .pulse ? 1050.0 : 1450.0) + filterHorizon * (mode == .pulse ? 1050.0 : 1100.0)
         if abs(targetPadCut - lastPadCutHz) > 25.0 {
             lastPadCutHz = targetPadCut
-            let padQ = (mode == .pulse) ? (0.85 + 0.55 * resBoost) : 0.72
+            let padQ = (mode == .pulse) ? (0.76 + 0.28 * resBoost) : 0.72
             padLpL.set(cutoffHz: targetPadCut, q: padQ, sampleRate: sampleRate)
             padLpR.set(cutoffHz: targetPadCut, q: padQ, sampleRate: sampleRate)
         }
@@ -1338,15 +1341,15 @@ private final class FocusRenderState: @unchecked Sendable {
             figEchoSend = 0.22
             melEchoSend = 0.24
         case .pulse:
-            preDelayMs = 12.0
-            roomDecay = Float(0.76 + 0.04 * spaceBloom)
-            roomDampLP = 0.42
-            roomWet = 0.24
-            erMix = 0.24
-            tapeToneHz = 3200.0
-            tapeWowMs = 0.85
-            figEchoSend = 0.24
-            melEchoSend = 0.26
+            preDelayMs = 14.0
+            roomDecay = Float(0.79 + 0.04 * spaceBloom)
+            roomDampLP = 0.36
+            roomWet = 0.28
+            erMix = 0.26
+            tapeToneHz = 2900.0
+            tapeWowMs = 0.90
+            figEchoSend = 0.22
+            melEchoSend = 0.25
         case .rain:
             preDelayMs = 24.0
             roomDecay = Float(0.86 + 0.03 * spaceBloom)
@@ -1569,6 +1572,17 @@ private final class FocusRenderState: @unchecked Sendable {
                                 sampleRate: sampleRate
                             )
                             nextAnalogSlot = (nextAnalogSlot + 1) % analogs.count
+                            // Fuse warm real CC0 vibraphone body on accented steps so PULSE breathes acoustically
+                            if sampleBank.isAvailable && (barBellCursor % 3 == 0) {
+                                _ = samplerVoices[nextSamplerSlot].trigger(
+                                    bank: sampleBank, instrument: .vibe, midi: ev.midi, rootMidi: root,
+                                    velocity: ev.velocity * 0.85, duration: ev.duration * 1.15,
+                                    level: ev.level * 0.62, pan: ev.pan * 0.75,
+                                    feltMuffle: false, justSweeten: false, sustainedLayer: false,
+                                    rng: &noiseRNG, sampleRate: sampleRate
+                                )
+                                nextSamplerSlot = (nextSamplerSlot + 1) % samplerVoices.count
+                            }
                         }
 
                     case .rain:
@@ -1771,11 +1785,16 @@ private final class FocusRenderState: @unchecked Sendable {
             var filtPadL = padLpL.lowpass(pL)
             var filtPadR = padLpR.lowpass(pR)
 
-            // 4. Mode-specific Groove (Kinetic Pulse) + Band-Selective 15 Hz Beta-Range Rapid AM (Woods & Loui 2024)
+            // 4. Mode-specific Groove (Kinetic Pulse) + Beat-Locked 14.40 Hz Beta Shimmer (Woods & Loui 2024)
+            //    Strictly applied ONLY to background pad/cloud/wet halo (never chopping dry foreground instruments)
+            //    with gentle stereo phase soften so ears hear velvety flow with zero helicopter flutter.
             var pulseSub: Float = 0
             var percL: Float = 0, percR: Float = 0
             var sidechainGain: Float = 1.0
-            var betaModGain: Float = 1.0
+            var betaPadGainL: Float = 1.0
+            var betaPadGainR: Float = 1.0
+            var betaSheenL: Float = 1.0
+            var betaSheenR: Float = 1.0
             if mode == .pulse {
                 let grv = grooveEngine.step(
                     clockSec: clockSec, spb: spb, dt: dt, sampleRate: sampleRate,
@@ -1785,31 +1804,46 @@ private final class FocusRenderState: @unchecked Sendable {
                 percL = grv.percL * intGrooveScale
                 percR = grv.percR * intGrooveScale
                 sidechainGain = 1.0 - (1.0 - grv.sidechainGain) * intGrooveScale
-                // Pad & cello gently breathe around the analog sub-kick
+                // Pad gently breathes around the felt studio kick
                 filtPadL *= sidechainGain
                 filtPadR *= sidechainGain
 
-                // Woods, Loui et al. (Communications Biology, Oct 2024): smooth 15.0 Hz beta-band
-                // rapid acoustic AM on mid-upper harmonic layers (never sub-bass) supports sustained attention
-                betaAmPhase += 15.0 * dt
+                // 108 BPM = 1.80 beats/s -> 14.40 Hz = exact 8:1 32nd-note lock inside 14-16 Hz beta band!
+                // Ultra-gentle modulation (+/-0.35 dB sheen, +/-0.75 dB pad/wet) with 36° stereo soften -> silky in headphones
+                betaAmPhase += 14.40 * dt
                 if betaAmPhase >= 1.0 { betaAmPhase -= floor(betaAmPhase) }
-                let amDepth: Float = intensity == .still ? 0.22 : (intensity == .deep ? 0.42 : 0.34)
-                let modWave = 0.5 - 0.5 * Float(cos(2.0 * Double.pi * betaAmPhase))
-                betaModGain = (1.0 - amDepth * modWave) / (1.0 - amDepth * 0.5)
+                let padDepth: Float = intensity == .still ? 0.14 : (intensity == .deep ? 0.22 : 0.18)
+                let sheenDepth: Float = intensity == .still ? 0.05 : (intensity == .deep ? 0.11 : 0.08)
+                let waveL = 0.5 - 0.5 * Float(cos(2.0 * Double.pi * betaAmPhase))
+                let waveR = 0.5 - 0.5 * Float(cos(2.0 * Double.pi * (betaAmPhase + 0.10)))
+                let padNorm = 1.0 / (1.0 - padDepth * 0.5)
+                let sheenNorm = 1.0 / (1.0 - sheenDepth * 0.5)
+                betaPadGainL = (1.0 - padDepth * waveL) * padNorm
+                betaPadGainR = (1.0 - padDepth * waveR) * padNorm
+                betaSheenL = (1.0 - sheenDepth * waveL) * sheenNorm
+                betaSheenR = (1.0 - sheenDepth * waveR) * sheenNorm
             }
 
             // Independent Acoustic Masking Bed:
-            // - Rain & Glass always includes Kyoto velvet rain (unless user switches bed to Brown)
-            // - Any other mode can layer Kyoto Rain or Velvet Brown speech masking seamlessly underneath!
+            // - Rain & Glass and the Rain masking bed now use asynchronous multi-grain StochasticRainField
+            //   (zero 18.5s loop seams, -9.5 dB 3.1 kHz ear-canal scoop)
             var rainTexL: Float = 0, rainTexR: Float = 0
             let wantRainBed = (mode == .rain && maskingBed != .brown) || (maskingBed == .rain)
             let wantBrownBed = (maskingBed == .brown) || (mode == .still && maskingBed == .off)
             if wantRainBed {
                 let rainGain: Float = (mode == .rain) ? 1.0 : 0.78
                 if studioRain.isAvailable {
-                    let (rL, rR) = studioRain.step(clockSec: clockSec, spaceBloom: spaceBloom, sampleRate: sampleRate)
-                    rainTexL += rL * rainGain
-                    rainTexR += rR * rainGain
+                    let (rL, rR) = courtyardRain.step(
+                        elapsedSec: clockSec,
+                        depth01: 0.22 + 0.25 * spaceBloom,
+                        return01: 0.0,
+                        breath01: 0.5 + 0.25 * sin(clockSec * 0.11),
+                        dt: dt,
+                        sampleRate: sampleRate,
+                        sineTable: bank.sineTable
+                    )
+                    rainTexL += rL * 0.34 * rainGain
+                    rainTexR += rR * 0.34 * rainGain
                 } else {
                     let (rL, rR) = rainEngine.step(clockSec: clockSec, dt: dt, sampleRate: sampleRate, sineTable: bank.sineTable)
                     rainTexL += rL * 0.30 * rainGain
@@ -1823,13 +1857,13 @@ private final class FocusRenderState: @unchecked Sendable {
                 rainTexR += bR * brownScale
             }
 
-            // 5. Studio Acoustic Space (Pre-Delay + Early Reflections + 4-Stage Allpass + 8x8 Modulated FDN)
-            let dryL = ((fcL + mcL + scL * sidechainGain + filtPadL) * betaModGain + bsL + pulseSub + percL + rainTexL) * dryTransitionGain + beadsL * cloudWet * sidechainGain * betaModGain
-            let dryR = ((fcR + mcR + scR * sidechainGain + filtPadR) * betaModGain + bsR + pulseSub + percR + rainTexR) * dryTransitionGain + beadsR * cloudWet * sidechainGain * betaModGain
+            // 5. Studio Acoustic Space (32-tap Velvet-Noise ER + Colorless Orthogonal FDN)
+            let dryL = ((fcL + mcL) * betaSheenL + (scL * sidechainGain + filtPadL) * betaPadGainL + bsL + pulseSub + percL + rainTexL) * dryTransitionGain + beadsL * cloudWet * sidechainGain * betaPadGainL
+            let dryR = ((fcR + mcR) * betaSheenR + (scR * sidechainGain + filtPadR) * betaPadGainR + bsR + pulseSub + percR + rainTexR) * dryTransitionGain + beadsR * cloudWet * sidechainGain * betaPadGainR
 
             // Keep sub-bass & close rain sheet mostly out of the reverb tank for crystalline clarity
-            let revInL = ((fcL + mcL + strCleanL * 0.95 + filtPadL * 0.65) * betaModGain + percL * 0.40 + rainTexL * 0.20) * dryTransitionGain + beadsL * (cloudWet * 0.65) * betaModGain
-            let revInR = ((fcR + mcR + strCleanR * 0.95 + filtPadR * 0.65) * betaModGain + percR * 0.40 + rainTexR * 0.20) * dryTransitionGain + beadsR * (cloudWet * 0.65) * betaModGain
+            let revInL = ((fcL + mcL) * betaSheenL + (strCleanL * 0.95 + filtPadL * 0.65) * betaPadGainL + percL * 0.36 + rainTexL * 0.18) * dryTransitionGain + beadsL * (cloudWet * 0.65) * betaPadGainL
+            let revInR = ((fcR + mcR) * betaSheenR + (strCleanR * 0.95 + filtPadR * 0.65) * betaPadGainR + percR * 0.36 + rainTexR * 0.18) * dryTransitionGain + beadsR * (cloudWet * 0.65) * betaPadGainR
             let (wetL, wetR) = space.process(
                 revInL, revInR,
                 preDelayMs: preDelayMs,
@@ -1842,8 +1876,8 @@ private final class FocusRenderState: @unchecked Sendable {
                 sampleRate: sampleRate
             )
 
-            let mixL = dryL + wetL * roomWet * sidechainGain
-            let mixR = dryR + wetR * roomWet * sidechainGain
+            let mixL = dryL + wetL * roomWet * sidechainGain * (mode == .pulse ? betaPadGainL : 1.0)
+            let mixR = dryR + wetR * roomWet * sidechainGain * (mode == .pulse ? betaPadGainR : 1.0)
 
             // 6. Audiophile Master Bus (24dB/oct Elliptical Sub-Monoizer + M/S Air + Tube Polish + RMS Optical Glue + Lookahead Limiter)
             // Mode-matched gain calibration (~ -18.5 to -16.0 dBFS RMS across all 4 modes at 75% volume)

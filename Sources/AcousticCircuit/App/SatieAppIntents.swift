@@ -15,12 +15,12 @@ enum SoundscapeAppEnum: String, AppEnum, CaseIterable, Sendable {
     static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Soundscape")
 
     static let caseDisplayRepresentations: [SoundscapeAppEnum: DisplayRepresentation] = [
-        .focus: DisplayRepresentation(title: "Soft Light", subtitle: "Deep work · A major"),
-        .pulse: DisplayRepresentation(title: "Kinetic Pulse", subtitle: "15 Hz beta AM · D Dorian"),
-        .rain:  DisplayRepresentation(title: "Rain & Glass", subtitle: "Courtyard rain · F Lydian"),
-        .still: DisplayRepresentation(title: "Still", subtitle: "Zero-ego study · C major9"),
-        .dive:  DisplayRepresentation(title: "Deep Dive", subtitle: "Meditation · 5.5 bpm breath"),
-        .drift: DisplayRepresentation(title: "Gymnopédie", subtitle: "Nocturnal · Gmaj7")
+        .focus: DisplayRepresentation(title: "Soft Light", subtitle: "Deep work · felt piano & vibe"),
+        .pulse: DisplayRepresentation(title: "Kinetic Pulse", subtitle: "Flow momentum · silky analog"),
+        .rain:  DisplayRepresentation(title: "Rain & Glass", subtitle: "Kyoto rain · singing glass"),
+        .still: DisplayRepresentation(title: "Still", subtitle: "Deep reading · zero melody"),
+        .dive:  DisplayRepresentation(title: "Deep Dive", subtitle: "Meditation · breath & bowls"),
+        .drift: DisplayRepresentation(title: "Gymnopédie", subtitle: "Late night · piano & cello")
     ]
 
     var soundscape: FocusSoundscape {

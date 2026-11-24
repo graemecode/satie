@@ -297,7 +297,7 @@ public enum SatieScore {
     public static func tempoBPM(for mode: FocusSoundscape) -> Double {
         switch mode {
         case .focus: return 72.0
-        case .pulse: return 104.0
+        case .pulse: return 108.0 // 1.80 beats/s -> exact 8:1 phase-lock with 14.40 Hz beta shimmer
         case .rain:  return 60.0
         case .drift: return 54.0
         case .still, .dive: return 58.0

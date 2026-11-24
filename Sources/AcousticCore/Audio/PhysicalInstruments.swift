@@ -424,11 +424,12 @@ struct AnalogHypnoticVoice: Sendable {
         phaseSaw = rng.nextUnit() * 0.25
         phaseSub = 0
         pwmPhase = rng.nextUnit()
-        fltTau = isPluck ? 0.14 : (0.18 + 0.20 * event.velocity)
-        fltBaseHz = max(140.0, freq * 1.15)
-        fltPeakHz = min(5600.0, freq * (3.2 + 5.0 * event.velocity * filterHorizon))
-        fltQ = 1.45 + 1.35 * resonanceBoost
-        level = Float(event.level) * (isPluck ? 1.08 : 0.92)
+        fltTau = isPluck ? 0.14 : (0.19 + 0.18 * event.velocity)
+        fltBaseHz = max(145.0, freq * 1.12)
+        // Stay strictly below the 3.1 kHz ear-canal fatigue peak for hours-long creamy analog warmth
+        fltPeakHz = min(2750.0, freq * (2.4 + 3.0 * event.velocity * filterHorizon))
+        fltQ = 0.85 + 0.52 * resonanceBoost
+        level = Float(event.level) * (isPluck ? 1.04 : 0.90)
         stepCounter = 0
 
         svf.reset()
@@ -459,35 +460,35 @@ struct AnalogHypnoticVoice: Sendable {
         }
 
         let env: Float
-        if age < 0.004 {
-            env = Float(AudioMath.smoothstep(age / 0.004))
+        if age < 0.011 {
+            env = Float(AudioMath.smoothstep(age / 0.011))
         } else {
-            env = Float(exp(-(age - 0.004) / ampTau))
+            env = Float(exp(-(age - 0.011) / ampTau))
         }
         if env < 0.0002 {
             active = false
             return (0, 0)
         }
 
-        // Alias-free PolyBLEP Saw + subtly detuned warm Sub-Triangle/Pulse
+        // Silky Prophet/Juno blend: warm Triangle + Pure Sine core + gentle PolyBLEP Saw harmonics
         let inc = freq * dt
         phaseSaw += inc
         if phaseSaw >= 1.0 { phaseSaw -= 1.0 }
         let saw = Float((2.0 * phaseSaw - 1.0) - AudioMath.polyBLEP(phase: phaseSaw, dt: inc))
+        let pureSine = TimbreBank.lookup(sineTable, phase01: phaseSaw)
 
-        phaseSub += freq * 0.5005 * dt
+        phaseSub += freq * 0.5 * dt
         if phaseSub >= 1.0 { phaseSub -= 1.0 }
         let tri = Float(1.0 - 4.0 * abs(phaseSub - 0.5))
 
         let raw: Float
         if isPluck {
             // West Coast sine-folded woody pluck
-            let s = TimbreBank.lookup(sineTable, phase01: phaseSaw)
-            raw = sin(s * 1.65) * 0.65 + saw * 0.25 + tri * 0.20
-            let gated = lpg.process(raw, dt: dt, sampleRate: sampleRate) * level * 1.25
+            raw = sin(pureSine * 1.55) * 0.68 + saw * 0.18 + tri * 0.24
+            let gated = lpg.process(raw, dt: dt, sampleRate: sampleRate) * level * 1.20
             return (gated * panL, gated * panR)
         } else {
-            raw = saw * 0.58 + tri * 0.42
+            raw = saw * 0.30 + tri * 0.46 + pureSine * 0.24
             if (stepCounter & 3) == 0 {
                 let fc = fltBaseHz + (fltPeakHz - fltBaseHz) * exp(-age / fltTau)
                 svf.set(cutoffHz: fc, q: fltQ, sampleRate: sampleRate)
@@ -874,9 +875,9 @@ struct HypnoticGrooveEngine: Sendable {
     private var kickPhase: Double = 0
     private var shakerAge: Double = 10.0
     private var shakerPan: Float = 0.0
-    private var shakerFilter = CytomicSVF(cutoffHz: 3200, q: 1.8)
+    private var shakerFilter = CytomicSVF(cutoffHz: 2400, q: 1.5)
     private var lastSubStep: Int = -1
-    private var sidechainEnv: Float = 0 // 0 = dry, 1 = full duck on kick hit
+    private var sidechainEnv: Float = 0 // smooth optical ducking envelope (zero hard click/thump)
 
     mutating func reset() {
         kickAge = 10.0
@@ -886,7 +887,7 @@ struct HypnoticGrooveEngine: Sendable {
         shakerFilter.reset()
     }
 
-    /// Returns `(subMono, percL, percR, sidechainDuckGain)` where `sidechainDuckGain` ∈ [0.64, 1.0]
+    /// Returns `(subMono, percL, percR, sidechainDuckGain)` where `sidechainDuckGain` ∈ [0.84, 1.0]
     @inline(__always)
     mutating func step(
         clockSec: Double,
@@ -907,48 +908,49 @@ struct HypnoticGrooveEngine: Sendable {
         if triggerStep != lastSubStep && triggerStep >= 0 {
             lastSubStep = triggerStep
             let stepInBar = triggerStep % 16
-            // Phase-locked warm sub-pulse on beats 1 and 3 (steps 0 and 8)
+            // Phase-locked soft felt studio pulse on beats 1 and 3 (steps 0 and 8)
             if stepInBar == 0 || stepInBar == 8 {
                 kickAge = 0
                 kickPhase = 0
-                sidechainEnv = 1.0
             }
             // Whisper-quiet organic brushed micro-shaker on swung off-beats (steps 2, 6, 10, 14, plus ghost 15)
             if stepInBar == 2 || stepInBar == 6 || stepInBar == 10 || stepInBar == 14 || stepInBar == 15 {
                 shakerAge = 0
                 let isGhost = (stepInBar == 15)
                 shakerPan = (stepInBar % 4 == 2) ? -0.32 : 0.32
-                let fc = isGhost ? 2400.0 : (3000.0 + rngFreqJitter(noise: &noise))
-                shakerFilter.set(cutoffHz: fc, q: 2.1, sampleRate: sampleRate)
+                let fc = isGhost ? 2000.0 : (2400.0 + rngFreqJitter(noise: &noise))
+                shakerFilter.set(cutoffHz: fc, q: 1.55, sampleRate: sampleRate)
             }
         }
 
-        // 1. Warm analog phase-locked sub-kick (52 Hz fundamental, smooth 108 Hz -> 52 Hz drop)
+        // 1. Round felt-mallet studio kick (60 Hz warm body, 14ms soft attack, zero ear-canal pressure)
         var sub: Float = 0
-        if kickAge < 0.36 {
-            let kFreq = 52.0 + 54.0 * exp(-kickAge * 24.0)
+        if kickAge < 0.28 {
+            let kFreq = 60.0 + 42.0 * exp(-kickAge * 28.0)
             kickPhase += kFreq * dt
             if kickPhase >= 1.0 { kickPhase -= floor(kickPhase) }
-            let kEnv = Float(AudioMath.smoothstep(kickAge / 0.008) * exp(-kickAge * 7.8))
-            sub = TimbreBank.lookup(sineTable, phase01: kickPhase) * kEnv * 0.145
+            let kEnv = Float(AudioMath.smoothstep(kickAge / 0.014) * exp(-kickAge * 10.5))
+            sub = TimbreBank.lookup(sineTable, phase01: kickPhase) * kEnv * 0.086
             kickAge += dt
         }
 
-        // 2. Organic brushed micro-shaker (soft 22 ms decay, zero harshness)
+        // 2. Velvet brushed micro-shaker (soft 18 ms decay, below 3 kHz fatigue band)
         var pL: Float = 0
         var pR: Float = 0
-        if shakerAge < 0.055 {
-            let sEnv = Float(AudioMath.smoothstep(shakerAge / 0.003) * exp(-shakerAge / 0.015))
-            let br = shakerFilter.bandpass(noise.nextBipolar()) * sEnv * 0.028
+        if shakerAge < 0.048 {
+            let sEnv = Float(AudioMath.smoothstep(shakerAge / 0.004) * exp(-shakerAge / 0.014))
+            let br = shakerFilter.bandpass(noise.nextBipolar()) * sEnv * 0.019
             let angle = Float((Double(shakerPan) + 1.0) * 0.25 * Double.pi)
             pL = br * cos(angle)
             pR = br * sin(angle)
             shakerAge += dt
         }
 
-        // 3. Musical sidechain breathing (~140 ms optical recovery -> -3.4 dB gentle groove)
-        sidechainEnv *= Float(exp(-dt / 0.145))
-        let scGain: Float = 1.0 - 0.34 * sidechainEnv
+        // 3. Smooth optical tape-bus breathing (16ms smooth attack + 180ms release -> gentle -1.5 dB max)
+        let targetDuck: Float = (kickAge < 0.045) ? 1.0 : 0.0
+        let coeff: Float = targetDuck > sidechainEnv ? Float(1.0 - exp(-dt / 0.016)) : Float(1.0 - exp(-dt / 0.180))
+        sidechainEnv += (targetDuck - sidechainEnv) * coeff
+        let scGain: Float = 1.0 - 0.16 * sidechainEnv
         return (sub, pL, pR, scGain)
     }
 

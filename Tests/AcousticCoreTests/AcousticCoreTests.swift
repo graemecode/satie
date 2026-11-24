@@ -662,7 +662,7 @@ struct AcousticCoreTests {
         #expect(m.metalActive)
     }
 
-    @Test("Kinetic Pulse embeds measurable 15.0 Hz beta-band rapid acoustic AM in mid-upper harmonics (Woods & Loui 2024)")
+    @Test("Kinetic Pulse embeds silky beat-locked 14.40 Hz beta AM without harsh headphone vibration (Woods & Loui 2024)")
     func pulseBetaBandAmplitudeModulationProof() {
         let sr = 48_000.0
         let sec = 6.0
@@ -671,44 +671,56 @@ struct AcousticCoreTests {
             mode: .pulse, circadian: .afternoon, frames: frames, warmupFrames: 48_000, seed: 42
         )
 
-        // High-pass > 320 Hz to exclude the sub-bass kick and isolate mid-upper harmonic layers,
-        // then compute a 200 Hz decimated smoothed amplitude envelope (1200 points over 6s)
+        // Single-ear mid-upper envelope (> 320 Hz, preserves gentle 36° stereo phase soften) + broadband roughness meter
         let hpAlpha = Float(exp(-2.0 * Double.pi * 320.0 / sr))
         var prevIn: Float = 0, prevOut: Float = 0
         let decimate = 240 // 48000 / 240 = 200 Hz envelope rate (Nyquist = 100 Hz)
         let envN = frames / decimate
         var env = [Double](repeating: 0, count: envN)
+        var bbEnv = [Double](repeating: 0, count: envN)
         for b in 0..<envN {
             var acc = 0.0
+            var bbAcc = 0.0
             let base = b * decimate
             for k in 0..<decimate {
-                let x = 0.5 * (l[base + k] + r[base + k])
+                let x = l[base + k]
                 let y = hpAlpha * (prevOut + x - prevIn)
                 prevIn = x; prevOut = y
                 acc += abs(Double(y))
+                bbAcc += abs(Double(0.5 * (l[base + k] + r[base + k])))
             }
             env[b] = acc / Double(decimate)
+            bbEnv[b] = bbAcc / Double(decimate)
         }
-        // Remove DC mean from envelope
         let mean = env.reduce(0, +) / Double(envN)
-        for i in 0..<envN { env[i] -= mean }
+        let bbMean = bbEnv.reduce(0, +) / Double(envN)
+        for i in 0..<envN {
+            env[i] -= mean
+            bbEnv[i] -= bbMean
+        }
 
-        func envGoertzel(_ freqHz: Double) -> Double {
+        func envGoertzel(_ series: [Double], _ freqHz: Double) -> Double {
             let w = 2.0 * Double.pi * freqHz / 200.0
             let coeff = 2.0 * cos(w)
             var s1 = 0.0, s2 = 0.0
-            for v in env {
+            for v in series {
                 let s0 = v + coeff * s1 - s2
                 s2 = s1; s1 = s0
             }
             return max(1e-18, s1 * s1 + s2 * s2 - coeff * s1 * s2)
         }
 
-        let p15 = envGoertzel(15.0)
-        let pNoiseFloor = 0.5 * (envGoertzel(11.5) + envGoertzel(18.5))
-        let snrDB = 10.0 * log10(p15 / pNoiseFloor)
-        print(String(format: "[BETA-AM] PULSE 15.0 Hz envelope modulation SNR = %+.2f dB over adjacent 11.5/18.5 Hz bands", snrDB))
-        #expect(snrDB > 8.0, "Expected crisp 15.0 Hz beta AM peak in PULSE mid-upper envelope, got \(snrDB) dB")
+        let p144 = envGoertzel(env, 14.40)
+        let pNoiseFloor = 0.5 * (envGoertzel(env, 11.0) + envGoertzel(env, 17.8))
+        let snrDB = 10.0 * log10(p144 / pNoiseFloor)
+
+        // Ear-comfort roughness guard: broadband 14.4 Hz modulation amplitude relative to DC mean must stay silky (< 6%)
+        let bbAmp144 = 2.0 * sqrt(envGoertzel(bbEnv, 14.40)) / Double(envN)
+        let bbModPct = (bbAmp144 / max(1e-9, bbMean)) * 100.0
+
+        print(String(format: "[BETA-AM] PULSE 14.40 Hz (108 BPM 8:1 lock) SNR = %+.2f dB | Broadband Roughness = %.2f%% (silky <6%%)", snrDB, bbModPct))
+        #expect(snrDB > 3.0, "Expected subtle beat-locked 14.40 Hz beta AM presence in PULSE pad/wet halo, got \(snrDB) dB")
+        #expect(bbModPct < 6.0, "PULSE broadband 14.4 Hz modulation too intense (\(bbModPct)%) — would vibrate harshly in headphones")
     }
 
     @Test("BlueNoise64 tile has exact uniform histogram and >25 dB high-pass 2D spectral power")
