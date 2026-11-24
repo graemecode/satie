@@ -134,6 +134,21 @@ final class SatieiOSState: ObservableObject {
         }
     }
 
+    /// Idempotent start for Shortcuts, Action Button, Focus Filters, and Siri (never accidentally toggles off).
+    func startFocusSound(_ mode: FocusSoundscape, durationMinutes: Int? = nil) {
+        if let mins = durationMinutes {
+            setFlowMinutes(mins)
+        }
+        if isFocusPlaying {
+            if focusMode != mode {
+                focusMode = mode
+                syncNowPlaying()
+            }
+            return
+        }
+        toggleFocusSound(mode)
+    }
+
     func toggleFocusSound(_ mode: FocusSoundscape) {
         performHaptic(strong: !isFocusPlaying)
         if isFocusPlaying && focusMode == mode {

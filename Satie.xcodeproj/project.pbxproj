@@ -12,6 +12,7 @@
 		074A3E10A6E0DF5FAE439508 /* GlobalHotKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 399F9D5D17214E97E233F23E /* GlobalHotKeys.swift */; };
 		082699013F74504DC81EF9FA /* FocusSoundEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4FA21DBE3D9F0F3D9E6307C /* FocusSoundEngine.swift */; };
 		08C5191472BEF0EC020B94AC /* libAcousticCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 0333BA3ED9C772EC44D4F50C /* libAcousticCore.a */; };
+		0C9FC705036B5859D64CD2DE /* SatieAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50B6185739CEC5D87D662EC /* SatieAppIntents.swift */; };
 		104149677B130DC0463F7F2E /* HarmonicFactorOracle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C62579D60BAAB6B4EFCB6FBD /* HarmonicFactorOracle.swift */; };
 		1105963129D6B8BA312D5A86 /* SystemOutputMute.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC394FB658764287AB8D2AD /* SystemOutputMute.swift */; };
 		12AE3FF2CA8CA5FE04970097 /* MediaPlayer.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BAB00A878553F903199C632D /* MediaPlayer.framework */; };
@@ -52,6 +53,7 @@
 		6BCC890D383A4C365C2D578D /* SystemOutputMute.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC394FB658764287AB8D2AD /* SystemOutputMute.swift */; };
 		6C2A115B406C284E20140A3B /* AVKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EDC67035BD454BB902EEE81 /* AVKit.framework */; };
 		6C6FC10F0F6FBB01296337B7 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C09B2662313A4B98C2FDB60B /* AudioToolbox.framework */; };
+		6F132D5EDC40C3C1B920EE58 /* SatieAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50B6185739CEC5D87D662EC /* SatieAppIntents.swift */; };
 		785168A5AAD12BF55B6AC5FB /* HarmonicFactorOracle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C62579D60BAAB6B4EFCB6FBD /* HarmonicFactorOracle.swift */; };
 		786F0F0221D310BA3EDA86F3 /* StudioLifecycleMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BEE7BA98A1F7854BC616FB /* StudioLifecycleMachine.swift */; };
 		7AA28113C96613625C528500 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A33A2C51CABCFB6BEF4E27F /* Metal.framework */; };
@@ -81,6 +83,7 @@
 		B89B065AF726B4CC73C9ADFF /* Samples in Resources */ = {isa = PBXBuildFile; fileRef = 207AD2FDDD6C7BB0B3E43E70 /* Samples */; };
 		BD610A83FD38B644F9F19AE0 /* RingBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A19E78A66174C598734FA64 /* RingBuffer.swift */; };
 		C0B58F408CC04DFB3E98A79A /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E54F49B63B355BED408C30E8 /* QuartzCore.framework */; };
+		C1634E9C78BAF524C96402AB /* AppIntents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FAE4363C458D97FB616C5E7D /* AppIntents.framework */; };
 		C488B2DFAFA75BA649EB8376 /* StudioLifecycleMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BEE7BA98A1F7854BC616FB /* StudioLifecycleMachine.swift */; };
 		C4F420D28FD4848C2137D557 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2E99D8026CE501ABDECE5557 /* IOKit.framework */; };
 		C79736F69FBD1903C8BC5098 /* libAcousticCoreiOS.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BC53345179B29CF2DA3DB649 /* libAcousticCoreiOS.a */; };
@@ -93,6 +96,7 @@
 		DB4132EDADD58A7E1792E7FD /* SatieiOSRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2D7570FAF75051B97363F1 /* SatieiOSRootView.swift */; };
 		DC62F69E36A9F79F6D343094 /* PhysicalInstruments.swift in Sources */ = {isa = PBXBuildFile; fileRef = C36E1A9803E13EA8DAD1C9C2 /* PhysicalInstruments.swift */; };
 		DDCC0DDBD2D220AF95BC7A14 /* Samples in Resources */ = {isa = PBXBuildFile; fileRef = 207AD2FDDD6C7BB0B3E43E70 /* Samples */; };
+		E05158BE50AD2C8072729CBF /* AppIntents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FAE4363C458D97FB616C5E7D /* AppIntents.framework */; };
 		E37A650506AFCB8A76C673A8 /* MiniHUDWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEB36770D577E1C7C1D5E764 /* MiniHUDWindow.swift */; };
 		E72EEC7EDBE6345A4319AD03 /* PhysicalInstruments.swift in Sources */ = {isa = PBXBuildFile; fileRef = C36E1A9803E13EA8DAD1C9C2 /* PhysicalInstruments.swift */; };
 		EBEC9B13757FD723B219C7D5 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5933F23D9460CA7B96DC9B /* AppState.swift */; };
@@ -157,6 +161,7 @@
 		9A33A2C51CABCFB6BEF4E27F /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		A2A490AF6FFA4F5D06E03972 /* Assets-iOS.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets-iOS.xcassets"; sourceTree = "<group>"; };
 		A3DA4821A4C1D37DA91900FD /* PopoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverView.swift; sourceTree = "<group>"; };
+		A50B6185739CEC5D87D662EC /* SatieAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SatieAppIntents.swift; sourceTree = "<group>"; };
 		B0620EAF39E3CA03E0C9F707 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
 		B088A28104E37FB1C43B26EA /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
 		B9BEE7BA98A1F7854BC616FB /* StudioLifecycleMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioLifecycleMachine.swift; sourceTree = "<group>"; };
@@ -183,6 +188,7 @@
 		EEB36770D577E1C7C1D5E764 /* MiniHUDWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniHUDWindow.swift; sourceTree = "<group>"; };
 		F11DC059A529B02BC4CB6506 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
 		F3E006F291E4706B32DAC704 /* StudioSampleBank.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioSampleBank.swift; sourceTree = "<group>"; };
+		FAE4363C458D97FB616C5E7D /* AppIntents.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppIntents.framework; path = System/Library/Frameworks/AppIntents.framework; sourceTree = SDKROOT; };
 		FB5933F23D9460CA7B96DC9B /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -211,6 +217,7 @@
 				C79736F69FBD1903C8BC5098 /* libAcousticCoreiOS.a in Frameworks */,
 				548C3AA218C4B0BD2B164437 /* UIKit.framework in Frameworks */,
 				D82D425EBE9CEA06C43783BA /* SwiftUI.framework in Frameworks */,
+				C1634E9C78BAF524C96402AB /* AppIntents.framework in Frameworks */,
 				39D848C2D3F191D1B2107DF0 /* Metal.framework in Frameworks */,
 				F719E3250D00A8557666AE49 /* MetalKit.framework in Frameworks */,
 				810884CA4997D117337944C5 /* QuartzCore.framework in Frameworks */,
@@ -240,6 +247,7 @@
 			files = (
 				08C5191472BEF0EC020B94AC /* libAcousticCore.a in Frameworks */,
 				1D41449803EE15E2F5776E96 /* AppKit.framework in Frameworks */,
+				E05158BE50AD2C8072729CBF /* AppIntents.framework in Frameworks */,
 				7AA28113C96613625C528500 /* Metal.framework in Frameworks */,
 				DAED4C2EA2EB9A543BAD77F0 /* MetalKit.framework in Frameworks */,
 				C0B58F408CC04DFB3E98A79A /* QuartzCore.framework in Frameworks */,
@@ -277,6 +285,7 @@
 				D3FBF69E89938FDEEECD64A8 /* AppDelegate.swift */,
 				FB5933F23D9460CA7B96DC9B /* AppState.swift */,
 				C537788CBA3DD2FB791D233D /* main.swift */,
+				A50B6185739CEC5D87D662EC /* SatieAppIntents.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -373,6 +382,7 @@
 			isa = PBXGroup;
 			children = (
 				21174110F87B50E245729D03 /* Accelerate.framework */,
+				FAE4363C458D97FB616C5E7D /* AppIntents.framework */,
 				81FA047C9BB90CDE3BCB41AA /* AppKit.framework */,
 				C30E774FFF74AD01CB852098 /* ApplicationServices.framework */,
 				C09B2662313A4B98C2FDB60B /* AudioToolbox.framework */,
@@ -413,7 +423,7 @@
 			path = Renderer;
 			sourceTree = "<group>";
 		};
-		"TEMP_A013465D-BBB1-4AC2-B964-5B9BCD50C3A7" /* Resources */ = {
+		"TEMP_D5B73D27-11D0-41E3-A6BE-201683D76CAC" /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -636,6 +646,7 @@
 				F4759CBE84120EB068CD0661 /* MetalVisualizerView.swift in Sources */,
 				E37A650506AFCB8A76C673A8 /* MiniHUDWindow.swift in Sources */,
 				414D266FE2F48BDC9A5138A9 /* PopoverView.swift in Sources */,
+				0C9FC705036B5859D64CD2DE /* SatieAppIntents.swift in Sources */,
 				8463B97894684EF90CC28AC7 /* SchematicOverlayView.swift in Sources */,
 				331C0996E774660614D3B327 /* Shaders.metal in Sources */,
 				3D5920898AAF0757A9524D87 /* SoundscapeGlyphs.swift in Sources */,
@@ -673,6 +684,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6F132D5EDC40C3C1B920EE58 /* SatieAppIntents.swift in Sources */,
 				85B415D7248165AA745467F5 /* SatieiOSApp.swift in Sources */,
 				DB4132EDADD58A7E1792E7FD /* SatieiOSRootView.swift in Sources */,
 				CC179D843B12A33A046A6E21 /* SatieiOSState.swift in Sources */,

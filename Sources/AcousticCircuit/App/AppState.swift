@@ -263,6 +263,21 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Idempotent start for Shortcuts, Focus Filters, and Spotlight actions (never accidentally toggles off).
+    func startFocusSound(_ mode: FocusSoundscape, durationMinutes: Int? = nil) {
+        if let mins = durationMinutes {
+            setFlowMinutes(mins)
+        }
+        if isFocusPlaying {
+            if focusMode != mode {
+                focusMode = mode
+                syncNowPlaying()
+            }
+            return
+        }
+        toggleFocusSound(mode)
+    }
+
     func toggleFocusSound(_ mode: FocusSoundscape) {
         performHaptic()
         if isFocusPlaying && focusMode == mode {

@@ -81,6 +81,20 @@ if [[ -f "$ROOT_DIR/AppStore/PrivacyInfo.xcprivacy" ]]; then
   cp "$ROOT_DIR/AppStore/PrivacyInfo.xcprivacy" "$RES_DIR/PrivacyInfo.xcprivacy"
 fi
 
+if [[ -d "$ROOT_DIR/Satie.xcodeproj" ]] && command -v xcodebuild >/dev/null 2>&1; then
+  echo "==> Extracting AppIntents metadata (Shortcuts, Siri & Apple Focus Filters)..."
+  INTENTS_DD="$BUILD_DIR/xcode-intents"
+  xcodebuild -project "$ROOT_DIR/Satie.xcodeproj" -scheme Satie \
+    -destination 'platform=macOS,arch=arm64' -configuration Release \
+    -derivedDataPath "$INTENTS_DD" CODE_SIGNING_ALLOWED=NO build >/dev/null
+  META_SRC="$INTENTS_DD/Build/Products/Release/Satie.app/Contents/Resources/Metadata.appintents"
+  if [[ -d "$META_SRC" ]]; then
+    cp -R "$META_SRC" "$RES_DIR/Metadata.appintents"
+  else
+    echo "WARNING: Metadata.appintents was not produced by xcodebuild" >&2
+  fi
+fi
+
 echo "==> Writing Info.plist..."
 cat > "$CONTENTS/Info.plist" << EOF
 <?xml version="1.0" encoding="UTF-8"?>

@@ -50,6 +50,7 @@ targets:
     dependencies:
       - target: AcousticCore
       - sdk: AppKit.framework
+      - sdk: AppIntents.framework
       - sdk: Metal.framework
       - sdk: MetalKit.framework
       - sdk: QuartzCore.framework
@@ -127,6 +128,7 @@ targets:
     deploymentTarget: "18.0"
     sources:
       - path: Sources/SatieiOS
+      - path: Sources/AcousticCircuit/App/SatieAppIntents.swift
       - path: Sources/AcousticCircuit/Renderer/Shaders.metal
       - path: Sources/AcousticCircuit/UI/SoundscapeGlyphs.swift
       - path: AppStore/Assets-iOS.xcassets
@@ -138,6 +140,7 @@ targets:
       - target: AcousticCoreiOS
       - sdk: UIKit.framework
       - sdk: SwiftUI.framework
+      - sdk: AppIntents.framework
       - sdk: Metal.framework
       - sdk: MetalKit.framework
       - sdk: QuartzCore.framework
