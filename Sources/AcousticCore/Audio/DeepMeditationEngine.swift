@@ -25,9 +25,15 @@ struct ResonanceBreathPacer: Sendable {
     }
 
     @inline(__always)
-    mutating func step(elapsedSec: Double, dt: Double) -> Double {
+    mutating func step(elapsedSec: Double, dt: Double, targetBPMOverride: Double? = nil) -> Double {
         let descendT = AudioMath.smoothstep(elapsedSec / 600.0) // 10-minute imperceptible deceleration
-        currentBPM = 8.5 - 3.0 * descendT // 8.5 -> 5.5 breaths/min
+        let autoBPM = 8.5 - 3.0 * descendT // 8.5 -> 5.5 breaths/min
+        if let override = targetBPMOverride, override >= 4.2 && override <= 9.0 {
+            let alpha = 1.0 - exp(-dt / 14.0)
+            currentBPM += (override - currentBPM) * alpha
+        } else {
+            currentBPM = autoBPM
+        }
         let cycleSec = 60.0 / currentBPM
         phase += dt / cycleSec
         if phase >= 1.0 { phase -= floor(phase) }
@@ -878,6 +884,7 @@ struct DeepMeditationEngine: @unchecked Sendable {
         circadian: CircadianPhase,
         intensity: SoundIntensity,
         sessionProgress: Float, // < 0 if open-ended, else 0..1
+        biofeedbackBreathBPM: Double? = nil,
         masterScale: Float,
         dt: Double,
         sampleRate: Double,
@@ -889,8 +896,8 @@ struct DeepMeditationEngine: @unchecked Sendable {
             ? AudioMath.smoothstep(Double(sessionProgress - 0.90) / 0.10)
             : 0.0
 
-        // 2. Subconscious Resonance Breath Pacer (8.5 -> 5.5 breaths/min over 10 min)
-        let breath = breathPacer.step(elapsedSec: elapsedSec, dt: dt)
+        // 2. Subconscious Resonance Breath Pacer (8.5 -> 5.5 bpm auto, or Apple Watch HRV closed-loop target)
+        let breath = breathPacer.step(elapsedSec: elapsedSec, dt: dt, targetBPMOverride: biofeedbackBreathBPM)
         currentBreathBPM = breathPacer.currentBPM
 
         // 3. Harmonic Root (circadian-voiced, glacial -1 fourth shift at minute 14..15)

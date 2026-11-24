@@ -920,4 +920,35 @@ struct AcousticCoreTests {
                          Double(climateBCount) / 2.24, maxObservedRun, maxHold, maxBellDensity))
         }
     }
+
+    @Test("HRVResonanceController adapts smoothly from sympathetic arousal to parasympathetic resonance within safe [4.5, 7.8] bpm bounds")
+    func hrvClosedLoopBiofeedbackProof() {
+        var ctrl = HRVResonanceController(initialBPM: 6.2)
+
+        // Elevated sympathetic state (HR 90 bpm, low HRV 22 ms) -> gently rises to comfortable pace (no air hunger)
+        for _ in 0..<8 {
+            _ = ctrl.ingest(heartRateBPM: 90.0, hrvSDNNms: 22.0)
+        }
+        let arousedBPM = ctrl.targetBreathBPM
+        #expect(arousedBPM > 6.8 && arousedBPM <= 7.8, "Expected comfortable elevated pace under stress, got \(arousedBPM)")
+
+        // Deepening parasympathetic calm (HR dropping 90 -> 58 bpm, HRV rising 22 -> 82 ms) -> smoothly settles toward 5.0..5.6 bpm
+        for step in 1...16 {
+            let t = Double(step) / 16.0
+            let bpm = ctrl.ingest(heartRateBPM: 90.0 - 32.0 * t, hrvSDNNms: 22.0 + 60.0 * t)
+            #expect(bpm >= 4.5 && bpm <= 7.8, "Breath target escaped physiological bounds: \(bpm)")
+        }
+        let calmBPM = ctrl.targetBreathBPM
+        #expect(calmBPM < 5.7 && calmBPM >= 4.5, "Expected settling into ~5.0-5.6 bpm RSA resonance, got \(calmBPM)")
+
+        // Verify shared BreathCyclePacer slews gently toward HRV override without phase discontinuities
+        var pacer = BreathCyclePacer(initialBPM: 8.5)
+        for i in 0..<600 {
+            let v = pacer.step(elapsedSec: Double(i) * 0.1, dt: 0.1, targetBPMOverride: calmBPM)
+            #expect(v >= 0.0 && v <= 1.0)
+        }
+        #expect(abs(pacer.currentBPM - calmBPM) < 0.25, "Expected smooth slew convergence toward HRV target \(calmBPM), got \(pacer.currentBPM)")
+        print(String(format: "[HRV-LOOP] Aroused=%.2f bpm -> Calm=%.2f bpm (Calmness=%.2f, PacerConverged=%.2f bpm)",
+                     arousedBPM, calmBPM, ctrl.calmnessIndex, pacer.currentBPM))
+    }
 }

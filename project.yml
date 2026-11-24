@@ -85,8 +85,8 @@ targets:
         DEVELOPMENT_TEAM: 6KM3577ETV
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: AppStore/Satie-AppStore.entitlements
-        MARKETING_VERSION: "3.1.0"
-        CURRENT_PROJECT_VERSION: "18"
+        MARKETING_VERSION: "4.0.0"
+        CURRENT_PROJECT_VERSION: "19"
         SWIFT_VERSION: "6.0"
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APP_STORE"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -145,6 +145,7 @@ targets:
       - sdk: AppIntents.framework
       - sdk: ActivityKit.framework
       - sdk: WidgetKit.framework
+      - sdk: WatchConnectivity.framework
       - sdk: Metal.framework
       - sdk: MetalKit.framework
       - sdk: QuartzCore.framework
@@ -182,8 +183,8 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.strangechances.Satie
         DEVELOPMENT_TEAM: 6KM3577ETV
         CODE_SIGN_STYLE: Automatic
-        MARKETING_VERSION: "3.1.0"
-        CURRENT_PROJECT_VERSION: "18"
+        MARKETING_VERSION: "4.0.0"
+        CURRENT_PROJECT_VERSION: "19"
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_VERSION: "6.0"
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APP_STORE"
@@ -220,12 +221,176 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.strangechances.Satie.Widgets
         DEVELOPMENT_TEAM: 6KM3577ETV
         CODE_SIGN_STYLE: Automatic
-        MARKETING_VERSION: "3.1.0"
-        CURRENT_PROJECT_VERSION: "18"
+        MARKETING_VERSION: "4.0.0"
+        CURRENT_PROJECT_VERSION: "19"
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_VERSION: "6.0"
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APP_STORE SATIE_WIDGET_EXTENSION"
         APPLICATION_EXTENSION_API_ONLY: YES
+      configs:
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: -O
+
+  SatieWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "11.0"
+    sources:
+      - path: Sources/SatieWatch
+      - path: Sources/AcousticCore/Audio/HRVResonanceController.swift
+    dependencies:
+      - sdk: SwiftUI.framework
+      - sdk: WatchKit.framework
+      - sdk: HealthKit.framework
+      - sdk: WatchConnectivity.framework
+    info:
+      path: AppStore/Info-Watch.plist
+      properties:
+        CFBundleDisplayName: Satie
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        WKApplication: true
+        NSHealthShareUsageDescription: "Satie reads your live heart rate and HRV on-device to smoothly tune Deep Dive's breath pacing to your nervous system. Zero data ever leaves your device."
+    settings:
+      base:
+        PRODUCT_NAME: SatieWatch
+        PRODUCT_BUNDLE_IDENTIFIER: com.strangechances.Satie.watchkitapp
+        DEVELOPMENT_TEAM: 6KM3577ETV
+        CODE_SIGN_STYLE: Automatic
+        MARKETING_VERSION: "4.0.0"
+        CURRENT_PROJECT_VERSION: "19"
+        SWIFT_VERSION: "6.0"
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APP_STORE"
+      configs:
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: -O
+
+  AcousticCoreTV:
+    type: library.static
+    platform: tvOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: Sources/AcousticCore
+        excludes:
+          - Resources/Samples/**
+    dependencies:
+      - sdk: AVFoundation.framework
+      - sdk: AudioToolbox.framework
+      - sdk: Accelerate.framework
+      - sdk: MediaPlayer.framework
+      - sdk: UIKit.framework
+    settings:
+      base:
+        PRODUCT_NAME: AcousticCoreTV
+        PRODUCT_MODULE_NAME: AcousticCore
+        SWIFT_VERSION: "6.0"
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APP_STORE"
+      configs:
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: -O
+
+  SatieTV:
+    type: application
+    platform: tvOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: Sources/SatieTV
+      - path: Sources/AcousticCircuit/Renderer/Shaders.metal
+      - path: Sources/AcousticCore/Resources/Samples
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: AcousticCoreTV
+      - sdk: UIKit.framework
+      - sdk: SwiftUI.framework
+      - sdk: Metal.framework
+      - sdk: MetalKit.framework
+      - sdk: QuartzCore.framework
+      - sdk: AVFoundation.framework
+      - sdk: AudioToolbox.framework
+      - sdk: Accelerate.framework
+      - sdk: MediaPlayer.framework
+    info:
+      path: AppStore/Info-tvOS.plist
+      properties:
+        CFBundleDisplayName: Satie
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_NAME: SatieTV
+        PRODUCT_BUNDLE_IDENTIFIER: com.strangechances.Satie.tv
+        DEVELOPMENT_TEAM: 6KM3577ETV
+        CODE_SIGN_STYLE: Automatic
+        MARKETING_VERSION: "4.0.0"
+        CURRENT_PROJECT_VERSION: "19"
+        SWIFT_VERSION: "6.0"
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APP_STORE"
+      configs:
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: -O
+          MTL_OPTIMIZATION_LEVEL: default
+
+  AcousticCoreVision:
+    type: library.static
+    platform: visionOS
+    deploymentTarget: "2.0"
+    sources:
+      - path: Sources/AcousticCore
+        excludes:
+          - Resources/Samples/**
+    dependencies:
+      - sdk: AVFoundation.framework
+      - sdk: AudioToolbox.framework
+      - sdk: Accelerate.framework
+      - sdk: MediaPlayer.framework
+      - sdk: UIKit.framework
+    settings:
+      base:
+        PRODUCT_NAME: AcousticCoreVision
+        PRODUCT_MODULE_NAME: AcousticCore
+        SWIFT_VERSION: "6.0"
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APP_STORE"
+      configs:
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: -O
+
+  SatieVision:
+    type: application
+    platform: visionOS
+    deploymentTarget: "2.0"
+    sources:
+      - path: Sources/SatieVision
+      - path: Sources/AcousticCore/Resources/Samples
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: AcousticCoreVision
+      - sdk: SwiftUI.framework
+      - sdk: AVFoundation.framework
+      - sdk: AudioToolbox.framework
+      - sdk: Accelerate.framework
+      - sdk: MediaPlayer.framework
+    info:
+      path: AppStore/Info-visionOS.plist
+      properties:
+        CFBundleDisplayName: Satie
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        ITSAppUsesNonExemptEncryption: false
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+    settings:
+      base:
+        PRODUCT_NAME: SatieVision
+        PRODUCT_BUNDLE_IDENTIFIER: com.strangechances.Satie.vision
+        DEVELOPMENT_TEAM: 6KM3577ETV
+        CODE_SIGN_STYLE: Automatic
+        MARKETING_VERSION: "4.0.0"
+        CURRENT_PROJECT_VERSION: "19"
+        SWIFT_VERSION: "6.0"
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APP_STORE"
       configs:
         Release:
           SWIFT_OPTIMIZATION_LEVEL: -O

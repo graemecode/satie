@@ -594,7 +594,7 @@ public final class FocusSoundEngine: @unchecked Sendable {
         let changed = (mixWithOthersEnabled != enabled)
         mixWithOthersEnabled = enabled
         let running = isEngineRunning
-        #if os(iOS)
+        #if os(iOS) || os(tvOS) || os(visionOS)
         if changed && running {
             try? configureAndActivateSessionLocked()
         }
@@ -603,7 +603,7 @@ public final class FocusSoundEngine: @unchecked Sendable {
     }
 
     private func installPlatformEngineObservers() {
-        #if os(iOS)
+        #if os(iOS) || os(tvOS) || os(visionOS)
         let nc = NotificationCenter.default
         let cfgObs = nc.addObserver(
             forName: .AVAudioEngineConfigurationChange,
@@ -623,7 +623,7 @@ public final class FocusSoundEngine: @unchecked Sendable {
         #endif
     }
 
-    #if os(iOS)
+    #if os(iOS) || os(tvOS) || os(visionOS)
     private func handleConfigurationChange(fullReset: Bool) {
         lifecycleLock.lock()
         let shouldBePlaying = (renderState.isActiveAtom.load(ordering: .acquiring) != 0)
@@ -716,6 +716,13 @@ public final class FocusSoundEngine: @unchecked Sendable {
     public func setSessionProgress(_ progress: Float?) {
         let val: Float = progress.map { max(0.0, min(1.0, $0)) } ?? -1.0
         renderState.sessionProgressBitsAtom.store(val.bitPattern, ordering: .releasing)
+    }
+
+    /// Pass `nil` to return to Deep Dive's automatic 8.5 -> 5.5 bpm descent, or a closed-loop HRV target
+    /// respiratory frequency (4.5..8.5 bpm) streamed from Apple Watch HealthKit biofeedback.
+    public func setBiofeedbackBreathBPM(_ bpm: Double?) {
+        let val: Float = bpm.map { Float(max(4.5, min(8.5, $0))) } ?? 0.0
+        renderState.biofeedbackBreathBitsAtom.store(val.bitPattern, ordering: .releasing)
     }
 
     /// Smoothly shifts to a fresh deterministic harmonic phrase & seed without interrupting playback.
@@ -824,8 +831,8 @@ public final class FocusSoundEngine: @unchecked Sendable {
         if isEngineRunning && engine.isRunning { return true }
 
         do {
-            #if os(iOS)
-            // Activate iOS audio session BEFORE attaching/connecting graph so output node negotiates cleanly
+            #if os(iOS) || os(tvOS) || os(visionOS)
+            // Activate Apple audio session BEFORE attaching/connecting graph so output node negotiates cleanly
             try configureAndActivateSessionLocked()
             #endif
 
@@ -876,7 +883,7 @@ public final class FocusSoundEngine: @unchecked Sendable {
                 self.engine.pause()
                 self.stopProducerTimerLocked()
                 self.isEngineRunning = false
-                #if os(iOS)
+                #if os(iOS) || os(tvOS) || os(visionOS)
                 self.deactivateSessionIfIdleLocked()
                 #endif
             }
@@ -892,7 +899,7 @@ public final class FocusSoundEngine: @unchecked Sendable {
             engine.stop()
             isEngineRunning = false
         }
-        #if os(iOS)
+        #if os(iOS) || os(tvOS) || os(visionOS)
         deactivateSessionIfIdleLocked()
         #endif
     }
@@ -1007,6 +1014,7 @@ private final class FocusRenderState: @unchecked Sendable {
     let intensityAtom = Atomic<Int>(1)        // 0 = still, 1 = flow, 2 = deep
     let maskingBedAtom = Atomic<Int>(0)       // 0 = off, 1 = rain, 2 = brown
     let sessionProgressBitsAtom = Atomic<UInt32>(Float(-1.0).bitPattern)
+    let biofeedbackBreathBitsAtom = Atomic<UInt32>(Float(0.0).bitPattern)
     let volumeBitsAtom = Atomic<UInt32>(Float(0.65).bitPattern)
     let chimeTriggerAtom = Atomic<Int>(0)
     let wakeResetAtom = Atomic<Int>(0)
@@ -1211,6 +1219,8 @@ private final class FocusRenderState: @unchecked Sendable {
         let maskingBed: MaskingBed = maskingRaw == 1 ? .rain : (maskingRaw == 2 ? .brown : .off)
         let isDeepMeditation = (mode == .dive)
         let sessionProg = Float(bitPattern: sessionProgressBitsAtom.load(ordering: .acquiring))
+        let bioBreathRaw = Float(bitPattern: biofeedbackBreathBitsAtom.load(ordering: .acquiring))
+        let bioBreathOverride: Double? = (bioBreathRaw >= 4.2 && bioBreathRaw <= 9.0) ? Double(bioBreathRaw) : nil
         let targetVol = Float(bitPattern: volumeBitsAtom.load(ordering: .acquiring))
 
         // Session-Arc Audio Choreography: Arrival (0..12%) -> Deep Lock (12..88%) -> Soft Landing (88..100%)
@@ -1409,6 +1419,7 @@ private final class FocusRenderState: @unchecked Sendable {
                     circadian: circadian,
                     intensity: intensity,
                     sessionProgress: sessionProg,
+                    biofeedbackBreathBPM: bioBreathOverride,
                     masterScale: masterEnv * smoothVol * arcGainScale,
                     dt: dt,
                     sampleRate: sampleRate,

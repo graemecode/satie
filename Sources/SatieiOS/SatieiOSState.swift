@@ -109,6 +109,7 @@ final class SatieiOSState: ObservableObject {
 
         configureMediaControls()
         installAudioSessionObservers()
+        SatieWatchBridge.shared.activate()
         lightHaptic.prepare()
         mediumHaptic.prepare()
     }
@@ -207,6 +208,7 @@ final class SatieiOSState: ObservableObject {
             isPlaying: isFocusPlaying,
             endDate: flowEndDate
         )
+        SatieWatchBridge.shared.pushState(mode: focusMode, isPlaying: isFocusPlaying)
     }
 
     func setFlowMinutes(_ minutes: Int) {
