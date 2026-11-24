@@ -31,6 +31,7 @@ final class SatieiOSState: ObservableObject {
             }
             if isFocusPlaying {
                 syncNowPlaying()
+                syncLiveActivity()
             }
         }
     }
@@ -64,6 +65,7 @@ final class SatieiOSState: ObservableObject {
     let focusSound: FocusSoundEngine
     let dsp: AcousticDSP
     let nowPlaying = NowPlayingBridge()
+    private let liveActivity = SatieLiveActivityManager()
 
     private var housekeepingTimer: Timer?
     private var flowEndDate: Date? = nil
@@ -184,6 +186,7 @@ final class SatieiOSState: ObservableObject {
         startHousekeepingIfNeeded()
         updateIdleTimer()
         syncNowPlaying()
+        syncLiveActivity()
     }
 
     func stopFocusSound() {
@@ -195,6 +198,15 @@ final class SatieiOSState: ObservableObject {
         stopHousekeeping()
         updateIdleTimer()
         syncNowPlaying()
+        syncLiveActivity()
+    }
+
+    private func syncLiveActivity() {
+        liveActivity.sync(
+            mode: focusMode,
+            isPlaying: isFocusPlaying,
+            endDate: flowEndDate
+        )
     }
 
     func setFlowMinutes(_ minutes: Int) {
@@ -215,6 +227,7 @@ final class SatieiOSState: ObservableObject {
                 flowEndDate = nil
             }
         }
+        syncLiveActivity()
     }
 
     func cycleFocusMode(forward: Bool = true) {

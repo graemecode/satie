@@ -69,7 +69,7 @@ struct PlaySatieSoundscapeIntent: AudioPlaybackIntent {
         let mode = soundscape.soundscape
         #if os(macOS)
         AppState.shared.startFocusSound(mode, durationMinutes: durationMinutes)
-        #elseif os(iOS)
+        #elseif os(iOS) && !SATIE_WIDGET_EXTENSION
         SatieiOSState.shared.startFocusSound(mode, durationMinutes: durationMinutes)
         #endif
 
@@ -90,7 +90,7 @@ struct PauseSatieIntent: AudioPlaybackIntent {
     func perform() async throws -> some IntentResult & ProvidesDialog {
         #if os(macOS)
         AppState.shared.stopFocusSound()
-        #elseif os(iOS)
+        #elseif os(iOS) && !SATIE_WIDGET_EXTENSION
         SatieiOSState.shared.stopFocusSound()
         #endif
         return .result(dialog: "Paused Satie.")
@@ -109,10 +109,13 @@ struct ToggleSatiePlaybackIntent: AudioPlaybackIntent {
         AppState.shared.togglePlayOrStartFocus()
         let playing = AppState.shared.isFocusPlaying
         let title = AppState.shared.focusMode.title
-        #elseif os(iOS)
+        #elseif os(iOS) && !SATIE_WIDGET_EXTENSION
         SatieiOSState.shared.togglePlayOrPause()
         let playing = SatieiOSState.shared.isFocusPlaying
         let title = SatieiOSState.shared.focusMode.title
+        #else
+        let playing = true
+        let title = "Satie"
         #endif
         return .result(dialog: playing ? "Playing \(title)." : "Paused Satie.")
     }
@@ -172,7 +175,7 @@ struct SatieFocusFilter: SetFocusFilterIntent {
                 }
             }
         }
-        #elseif os(iOS)
+        #elseif os(iOS) && !SATIE_WIDGET_EXTENSION
         let state = SatieiOSState.shared
         if let sc = soundscape {
             if autoPlay {
