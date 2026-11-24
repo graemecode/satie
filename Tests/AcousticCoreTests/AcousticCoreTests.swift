@@ -843,4 +843,81 @@ struct AcousticCoreTests {
         #expect(rEarly > rMid && rMid > rLate && rLate > 1e-6, "Expected smooth unified concert-hall RT60 decay")
         #expect(rLateHall > rLate * 3.0, "Expected decay=0.92 hall tail to be >3x stronger than decay=0.85 at 1.4-1.9s")
     }
+
+    @Test("Factor Oracle + Symbolic Constraint Grammar produces non-repeating, key-pure, stall-free 256-bar multi-hour runs across all scored modes")
+    func factorOracleMultiHourGrammarProof() {
+        // Exact diatonic key pitch-class sets (afternoon shift = 0)
+        let diatonicKeys: [(FocusSoundscape, Set<Int>, Int)] = [
+            (.focus, [9, 11, 1, 2, 4, 6, 8], 2),   // A Major (max hold = 2)
+            (.pulse, [2, 4, 5, 7, 9, 11, 0], 2),   // D Dorian (max hold = 2)
+            (.rain,  [0, 2, 4, 5, 7, 9, 11], 3),   // F Lydian / C Major (max hold = 3)
+            (.still, [0, 2, 4, 5, 7, 9, 11], 3),   // C Major9 (max hold = 3)
+            (.drift, [2, 4, 6, 7, 9, 11, 1], 3),   // D Major / G Lydian (max hold = 3)
+        ]
+
+        for (mode, keyPCs, maxHold) in diatonicKeys {
+            var rngA = SeededRNG(seed: 2027)
+            var navA = ScoreOracleNavigator()
+            let barsA = (0..<256).map {
+                SatieScore.composeBar(mode: mode, barIndex: $0, circadian: .afternoon, rng: &rngA, navigator: &navA)
+            }
+
+            // 1. Exact seed determinism across 256 bars
+            var rngB = SeededRNG(seed: 2027)
+            var navB = ScoreOracleNavigator()
+            let barsB = (0..<256).map {
+                SatieScore.composeBar(mode: mode, barIndex: $0, circadian: .afternoon, rng: &rngB, navigator: &navB)
+            }
+            #expect(barsA == barsB, "\(mode.title) Factor Oracle run must be 100% deterministic for same seed")
+
+            // 2. Pass 0 stays strictly canonical (corpusIndex == 0..<32, zero jumps)
+            for i in 0..<32 {
+                #expect(barsA[i].corpusIndex == i && !barsA[i].didOracleJump)
+            }
+
+            // 3. Multi-hour non-repetition: 7 Pass 1+ 32-bar windows must be distinct harmonic journeys
+            var passSignatures = Set<String>()
+            for p in 1..<8 {
+                let sig = barsA[(p * 32)..<((p + 1) * 32)].map(\.chordName).joined(separator: "-")
+                passSignatures.insert(sig)
+            }
+            #expect(passSignatures.count >= 6, "\(mode.title) degenerated into repeating 32-bar loops (\(passSignatures.count)/7 unique)")
+
+            // 4. Active Factor Oracle jumps + exploration of secondary harmonic climate (>= 32)
+            let pass1Plus = barsA[32..<256]
+            let jumps = pass1Plus.filter(\.didOracleJump).count
+            let climateBCount = pass1Plus.filter { $0.corpusIndex >= 32 }.count
+            #expect(jumps >= 25, "\(mode.title) expected >=25 Factor Oracle suffix jumps over 224 bars, got \(jumps)")
+            #expect(climateBCount >= 40, "\(mode.title) expected rich secondary climate exploration (>=40/224), got \(climateBCount)")
+
+            // 5. Symbolic Constraint Grammar: zero chord stalls > maxHold & 100% diatonic key purity & bounded density
+            var runLen = 0
+            var prevChord = ""
+            var maxObservedRun = 0
+            var maxBellDensity = 0
+            for b in pass1Plus {
+                if b.chordName == prevChord {
+                    runLen += 1
+                } else {
+                    runLen = 1
+                    prevChord = b.chordName
+                }
+                maxObservedRun = max(maxObservedRun, runLen)
+                maxBellDensity = max(maxBellDensity, b.bells.count)
+                for ev in b.bells {
+                    let pc = ((ev.midi % 12) + 12) % 12
+                    #expect(keyPCs.contains(pc), "\(mode.title) bell MIDI \(ev.midi) (pc=\(pc)) left diatonic key on bar \(b.barIndex)")
+                }
+                for sus in b.sustained {
+                    let pc = ((sus.midi % 12) + 12) % 12
+                    #expect(keyPCs.contains(pc), "\(mode.title) sustain MIDI \(sus.midi) (pc=\(pc)) left diatonic key on bar \(b.barIndex)")
+                }
+            }
+            #expect(maxObservedRun <= maxHold, "\(mode.title) violated anti-stall grammar: chord held \(maxObservedRun) bars (max \(maxHold))")
+            #expect(maxBellDensity <= 18, "\(mode.title) exceeded bounded per-bar density: \(maxBellDensity)")
+            print(String(format: "[ORACLE] %-14s UniquePasses=%d/7  Jumps=%d/224  ClimateB=%.1f%%  MaxHold=%d/%d  MaxBells=%d  KeyPurity=100%%",
+                         (mode.title as NSString).utf8String!, passSignatures.count, jumps,
+                         Double(climateBCount) / 2.24, maxObservedRun, maxHold, maxBellDensity))
+        }
+    }
 }

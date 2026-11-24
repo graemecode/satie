@@ -88,6 +88,8 @@ public struct ComposedBar: Sendable, Equatable {
     public let bells: [ScoredBellEvent]
     public let sustained: [ScoredSustainEvent]
     public let didSwapFigure: Bool
+    public let didOracleJump: Bool
+    public let corpusIndex: Int
     public let allowedPitchClasses: Set<Int>
     /// Eno incommensurate prime-length (5, 7, 11, 13 bar) macro evolution curves ∈ [0, 1]
     public let macroFilterHorizon: Double
@@ -95,16 +97,25 @@ public struct ComposedBar: Sendable, Equatable {
     public let macroResonance: Double
 }
 
-/// Pure, deterministic, audio-free score generator for Satie's four work soundscapes.
-/// Inspired directly by Soft Light's two-file score/engine separation: 32-bar harmonic forms,
-/// section fullness/string-swell arcs, Pass 2+ harmony-preserving figure swaps, sparse melody
-/// dropouts & octave lifts, pentatonic water glints, and sleep-safe `stillDue` filtering.
+/// Pure, deterministic, audio-free score generator for Satie's soundscapes.
+/// Pass 0 plays the iconic 32-bar harmonic form; Pass 1+ navigates an O(m) IRCAM Factor Oracle
+/// with a Symbolic Constraint Grammar over curated 64-bar multi-climate corpora so multi-hour
+/// sessions wander with nostalgic callbacks, strict key purity, and zero 32-bar loop fatigue.
 public enum SatieScore {
     public struct ChordDef: Sendable {
         public let name: String
         public let root: Int
         public let figure: [Int]
         public let held: [Int]
+        public let role: HarmonicRole
+
+        public init(name: String, root: Int, figure: [Int], held: [Int], role: HarmonicRole = .tonic) {
+            self.name = name
+            self.root = root
+            self.figure = figure
+            self.held = held
+            self.role = role
+        }
     }
 
     public static let barsPerForm = 32
@@ -112,21 +123,28 @@ public enum SatieScore {
 
     // MARK: - Soft Light (Focus: 32-bar A Major, 72 BPM — exact progression & voicings)
 
-    private static let chordA    = ChordDef(name: "A",    root: 45, figure: [57, 64, 71, 64, 73, 64, 71, 68], held: [57, 64, 68, 73])
-    private static let chordFsm  = ChordDef(name: "F#m",  root: 42, figure: [54, 61, 69, 61, 71, 64, 69, 61], held: [54, 61, 64, 69])
-    private static let chordD    = ChordDef(name: "D",    root: 50, figure: [50, 57, 66, 64, 73, 64, 66, 57], held: [57, 62, 66, 73])
-    private static let chordEsus = ChordDef(name: "Esus", root: 52, figure: [52, 59, 64, 69, 73, 69, 64, 59], held: [59, 64, 69, 73])
-    private static let chordE    = ChordDef(name: "E",    root: 52, figure: [52, 59, 64, 68, 71, 68, 64, 59], held: [59, 64, 68, 71])
-    private static let chordBm   = ChordDef(name: "Bm",   root: 47, figure: [59, 66, 69, 66, 74, 66, 73, 69], held: [59, 62, 66, 73])
-    private static let chordCsm  = ChordDef(name: "C#m",  root: 49, figure: [56, 64, 68, 64, 71, 68, 64, 59], held: [56, 59, 64, 68])
-    private static let chordE6   = ChordDef(name: "E6",   root: 52, figure: [52, 59, 64, 68, 73, 68, 64, 61], held: [59, 64, 68, 73])
-    private static let chordA6   = ChordDef(name: "A6",   root: 45, figure: [57, 64, 69, 64, 73, 66, 69, 64], held: [57, 64, 66, 73])
+    private static let chordA    = ChordDef(name: "A",    root: 45, figure: [57, 64, 71, 64, 73, 64, 71, 68], held: [57, 64, 68, 73], role: .tonic)
+    private static let chordFsm  = ChordDef(name: "F#m",  root: 42, figure: [54, 61, 69, 61, 71, 64, 69, 61], held: [54, 61, 64, 69], role: .mediant)
+    private static let chordD    = ChordDef(name: "D",    root: 50, figure: [50, 57, 66, 64, 73, 64, 66, 57], held: [57, 62, 66, 73], role: .subdominant)
+    private static let chordEsus = ChordDef(name: "Esus", root: 52, figure: [52, 59, 64, 69, 73, 69, 64, 59], held: [59, 64, 69, 73], role: .suspended)
+    private static let chordE    = ChordDef(name: "E",    root: 52, figure: [52, 59, 64, 68, 71, 68, 64, 59], held: [59, 64, 68, 71], role: .dominant)
+    private static let chordBm   = ChordDef(name: "Bm",   root: 47, figure: [59, 66, 69, 66, 74, 66, 73, 69], held: [59, 62, 66, 73], role: .subdominant)
+    private static let chordCsm  = ChordDef(name: "C#m",  root: 49, figure: [56, 64, 68, 64, 71, 68, 64, 59], held: [56, 59, 64, 68], role: .mediant)
+    private static let chordE6   = ChordDef(name: "E6",   root: 52, figure: [52, 59, 64, 68, 73, 68, 64, 61], held: [59, 64, 68, 73], role: .dominant)
+    private static let chordA6   = ChordDef(name: "A6",   root: 45, figure: [57, 64, 69, 64, 73, 66, 69, 64], held: [57, 64, 66, 73], role: .tonic)
 
     private static let softLightForm: [ChordDef] = [
         chordA, chordA, chordFsm, chordFsm, chordD, chordD, chordEsus, chordE,
         chordA, chordA, chordFsm, chordFsm, chordD, chordD, chordEsus, chordE,
         chordBm, chordBm, chordCsm, chordCsm, chordD, chordD, chordE6, chordEsus,
         chordA, chordA, chordFsm, chordFsm, chordD, chordE, chordA6, chordA,
+    ]
+
+    private static let softLightClimateB: [ChordDef] = [
+        chordA6, chordCsm, chordD, chordA, chordBm, chordEsus, chordFsm, chordD,
+        chordA, chordE6, chordFsm, chordCsm, chordD, chordBm, chordEsus, chordA6,
+        chordFsm, chordD, chordA, chordE, chordBm, chordCsm, chordD, chordEsus,
+        chordA6, chordFsm, chordD, chordBm, chordCsm, chordEsus, chordA, chordA6,
     ]
 
     private static let softLightMelody: [[(Double, Int, Double)]] = [
@@ -159,11 +177,11 @@ public enum SatieScore {
 
     // MARK: - Kinetic Pulse (104 BPM D Dorian / F Lydian driving arpeggios)
 
-    private static let chordDm9  = ChordDef(name: "Dm9",   root: 38, figure: [50, 57, 60, 64, 69, 64, 60, 57], held: [50, 57, 60, 64])
-    private static let chordFmaj = ChordDef(name: "Fmaj7", root: 41, figure: [53, 60, 64, 67, 72, 67, 64, 60], held: [53, 57, 60, 64])
-    private static let chordCadd = ChordDef(name: "Cadd9", root: 48, figure: [55, 60, 62, 67, 72, 67, 62, 60], held: [55, 60, 62, 67])
-    private static let chordG6   = ChordDef(name: "G6",    root: 43, figure: [55, 59, 62, 64, 67, 64, 62, 59], held: [55, 59, 62, 64])
-    private static let chordAm7  = ChordDef(name: "Am7",   root: 45, figure: [57, 60, 64, 67, 72, 67, 64, 60], held: [57, 60, 64, 67])
+    private static let chordDm9  = ChordDef(name: "Dm9",   root: 38, figure: [50, 57, 60, 64, 69, 64, 60, 57], held: [50, 57, 60, 64], role: .tonic)
+    private static let chordFmaj = ChordDef(name: "Fmaj7", root: 41, figure: [53, 60, 64, 67, 72, 67, 64, 60], held: [53, 57, 60, 64], role: .mediant)
+    private static let chordCadd = ChordDef(name: "Cadd9", root: 48, figure: [55, 60, 62, 67, 72, 67, 62, 60], held: [55, 60, 62, 67], role: .suspended)
+    private static let chordG6   = ChordDef(name: "G6",    root: 43, figure: [55, 59, 62, 64, 67, 64, 62, 59], held: [55, 59, 62, 64], role: .subdominant)
+    private static let chordAm7  = ChordDef(name: "Am7",   root: 45, figure: [57, 60, 64, 67, 72, 67, 64, 60], held: [57, 60, 64, 67], role: .mediant)
 
     private static let pulseForm: [ChordDef] = [
         chordDm9, chordDm9, chordFmaj, chordFmaj, chordCadd, chordCadd, chordG6, chordG6,
@@ -171,14 +189,20 @@ public enum SatieScore {
         chordFmaj, chordFmaj, chordG6, chordG6, chordAm7, chordAm7, chordCadd, chordG6,
         chordDm9, chordDm9, chordFmaj, chordCadd, chordG6, chordAm7, chordDm9, chordDm9,
     ]
+    private static let pulseClimateB: [ChordDef] = [
+        chordAm7, chordG6, chordFmaj, chordDm9, chordCadd, chordG6, chordAm7, chordFmaj,
+        chordDm9, chordCadd, chordG6, chordFmaj, chordAm7, chordCadd, chordDm9, chordG6,
+        chordFmaj, chordAm7, chordCadd, chordDm9, chordG6, chordFmaj, chordAm7, chordCadd,
+        chordDm9, chordFmaj, chordG6, chordAm7, chordCadd, chordFmaj, chordG6, chordDm9,
+    ]
     private static let dorianGlints: [Int] = [81, 84, 86, 88, 91, 93]
 
     // MARK: - Rain & Glass (60 BPM Hiroshi Yoshimura 'Green' F Lydian / C Major9 kankyō ongaku)
 
-    private static let chordFmaj9 = ChordDef(name: "Fmaj7", root: 41, figure: [53, 60, 64, 67, 72, 69, 64, 60], held: [53, 60, 64, 67])
-    private static let chordCmaj9 = ChordDef(name: "Cadd9", root: 48, figure: [55, 60, 62, 67, 71, 67, 64, 60], held: [55, 60, 62, 67])
-    private static let chordDm11  = ChordDef(name: "Dm9",   root: 38, figure: [50, 57, 60, 64, 67, 64, 60, 57], held: [50, 57, 60, 64])
-    private static let chordAm9   = ChordDef(name: "Am7",   root: 45, figure: [57, 60, 64, 67, 71, 67, 64, 60], held: [57, 60, 64, 67])
+    private static let chordFmaj9 = ChordDef(name: "Fmaj7", root: 41, figure: [53, 60, 64, 67, 72, 69, 64, 60], held: [53, 60, 64, 67], role: .tonic)
+    private static let chordCmaj9 = ChordDef(name: "Cadd9", root: 48, figure: [55, 60, 62, 67, 71, 67, 64, 60], held: [55, 60, 62, 67], role: .suspended)
+    private static let chordDm11  = ChordDef(name: "Dm9",   root: 38, figure: [50, 57, 60, 64, 67, 64, 60, 57], held: [50, 57, 60, 64], role: .subdominant)
+    private static let chordAm9   = ChordDef(name: "Am7",   root: 45, figure: [57, 60, 64, 67, 71, 67, 64, 60], held: [57, 60, 64, 67], role: .mediant)
 
     private static let rainForm: [ChordDef] = [
         chordFmaj9, chordFmaj9, chordCmaj9, chordCmaj9, chordFmaj9, chordFmaj9, chordAm9, chordAm9,
@@ -186,20 +210,32 @@ public enum SatieScore {
         chordAm9, chordAm9, chordFmaj9, chordFmaj9, chordDm11, chordDm11, chordCmaj9, chordCmaj9,
         chordFmaj9, chordFmaj9, chordAm9, chordAm9, chordDm11, chordCmaj9, chordFmaj9, chordFmaj9,
     ]
+    private static let rainClimateB: [ChordDef] = [
+        chordDm11, chordDm11, chordFmaj9, chordFmaj9, chordAm9, chordAm9, chordCmaj9, chordCmaj9,
+        chordFmaj9, chordAm9, chordDm11, chordCmaj9, chordFmaj9, chordFmaj9, chordDm11, chordCmaj9,
+        chordAm9, chordCmaj9, chordFmaj9, chordDm11, chordAm9, chordFmaj9, chordCmaj9, chordDm11,
+        chordFmaj9, chordCmaj9, chordAm9, chordDm11, chordFmaj9, chordAm9, chordCmaj9, chordFmaj9,
+    ]
     private static let rainGlints: [Int] = [79, 81, 84, 86, 88, 91]
 
     // MARK: - Gymnopédie / Drift (54 BPM Gmaj7 <-> Dmaj7 nocturnal spaciousness)
 
-    private static let chordGmaj7 = ChordDef(name: "Gmaj7", root: 43, figure: [55, 59, 62, 66, 71, 66, 62, 59], held: [55, 59, 62, 66])
-    private static let chordDmaj7 = ChordDef(name: "Dmaj7", root: 38, figure: [50, 57, 61, 66, 69, 66, 61, 57], held: [50, 57, 61, 66])
-    private static let chordEm9   = ChordDef(name: "Em9",   root: 40, figure: [52, 59, 62, 66, 71, 66, 62, 59], held: [52, 59, 62, 66])
-    private static let chordA9sus = ChordDef(name: "A9sus", root: 45, figure: [57, 62, 64, 67, 71, 67, 64, 62], held: [57, 62, 64, 67])
+    private static let chordGmaj7 = ChordDef(name: "Gmaj7", root: 43, figure: [55, 59, 62, 66, 71, 66, 62, 59], held: [55, 59, 62, 66], role: .tonic)
+    private static let chordDmaj7 = ChordDef(name: "Dmaj7", root: 38, figure: [50, 57, 61, 66, 69, 66, 61, 57], held: [50, 57, 61, 66], role: .subdominant)
+    private static let chordEm9   = ChordDef(name: "Em9",   root: 40, figure: [52, 59, 62, 66, 71, 66, 62, 59], held: [52, 59, 62, 66], role: .mediant)
+    private static let chordA9sus = ChordDef(name: "A9sus", root: 45, figure: [57, 62, 64, 67, 71, 67, 64, 62], held: [57, 62, 64, 67], role: .suspended)
 
     private static let driftForm: [ChordDef] = [
         chordGmaj7, chordGmaj7, chordDmaj7, chordDmaj7, chordGmaj7, chordGmaj7, chordDmaj7, chordDmaj7,
         chordEm9, chordEm9, chordA9sus, chordA9sus, chordDmaj7, chordDmaj7, chordGmaj7, chordGmaj7,
         chordEm9, chordEm9, chordGmaj7, chordGmaj7, chordA9sus, chordA9sus, chordDmaj7, chordDmaj7,
         chordGmaj7, chordGmaj7, chordDmaj7, chordDmaj7, chordEm9, chordA9sus, chordGmaj7, chordDmaj7,
+    ]
+    private static let driftClimateB: [ChordDef] = [
+        chordEm9, chordEm9, chordDmaj7, chordDmaj7, chordGmaj7, chordA9sus, chordEm9, chordDmaj7,
+        chordGmaj7, chordGmaj7, chordEm9, chordA9sus, chordDmaj7, chordGmaj7, chordEm9, chordDmaj7,
+        chordA9sus, chordGmaj7, chordDmaj7, chordEm9, chordGmaj7, chordA9sus, chordDmaj7, chordDmaj7,
+        chordEm9, chordGmaj7, chordA9sus, chordDmaj7, chordGmaj7, chordEm9, chordDmaj7, chordGmaj7,
     ]
     private static let driftGlints: [Int] = [83, 86, 88, 90, 93, 95]
 
@@ -211,7 +247,50 @@ public enum SatieScore {
         chordFmaj9, chordFmaj9, chordCmaj9, chordCmaj9, chordAm9, chordAm9, chordG6, chordG6,
         chordDm11, chordDm11, chordFmaj9, chordFmaj9, chordCmaj9, chordCmaj9, chordG6, chordCmaj9,
     ]
+    private static let stillClimateB: [ChordDef] = [
+        chordAm9, chordAm9, chordFmaj9, chordFmaj9, chordCmaj9, chordCmaj9, chordG6, chordDm11,
+        chordFmaj9, chordCmaj9, chordAm9, chordG6, chordDm11, chordAm9, chordFmaj9, chordCmaj9,
+        chordG6, chordFmaj9, chordAm9, chordDm11, chordCmaj9, chordG6, chordFmaj9, chordAm9,
+        chordDm11, chordCmaj9, chordG6, chordFmaj9, chordAm9, chordDm11, chordCmaj9, chordG6,
+    ]
     private static let stillGlints: [Int] = [72, 74, 76, 79, 81, 84]
+
+    // MARK: - Precomputed Multi-Climate Factor Oracles (64-bar corpus per world, built once in O(m))
+
+    private struct ModeOraclePack: Sendable {
+        let corpus: [ChordDef]
+        let roles: [HarmonicRole]
+        let oracle: HarmonicFactorOracle
+        let glints: [Int]
+
+        init(primary: [ChordDef], secondary: [ChordDef], glints: [Int]) {
+            let full = primary + secondary
+            self.corpus = full
+            self.roles = full.map(\.role)
+            self.oracle = HarmonicFactorOracle(symbols: full.map(\.name))
+            self.glints = glints
+        }
+    }
+
+    private static let focusPack = ModeOraclePack(primary: softLightForm, secondary: softLightClimateB, glints: softLightGlints)
+    private static let pulsePack = ModeOraclePack(primary: pulseForm, secondary: pulseClimateB, glints: dorianGlints)
+    private static let rainPack  = ModeOraclePack(primary: rainForm, secondary: rainClimateB, glints: rainGlints)
+    private static let driftPack = ModeOraclePack(primary: driftForm, secondary: driftClimateB, glints: driftGlints)
+    private static let stillPack = ModeOraclePack(primary: stillForm, secondary: stillClimateB, glints: stillGlints)
+
+    private static func oraclePack(for mode: FocusSoundscape) -> ModeOraclePack {
+        switch mode {
+        case .focus: return focusPack
+        case .pulse: return pulsePack
+        case .rain:  return rainPack
+        case .drift: return driftPack
+        case .still, .dive: return stillPack
+        }
+    }
+
+    public static func factorOracle(for mode: FocusSoundscape) -> HarmonicFactorOracle {
+        oraclePack(for: mode).oracle
+    }
 
     // MARK: - Timing
 
@@ -264,6 +343,48 @@ public enum SatieScore {
         intensity: SoundIntensity = .flow,
         rng: inout SeededRNG
     ) -> ComposedBar {
+        var transientNav: ScoreOracleNavigator? = nil
+        return composeBarInternal(
+            mode: mode,
+            barIndex: barIndex,
+            circadian: circadian,
+            intensity: intensity,
+            rng: &rng,
+            navigator: &transientNav
+        )
+    }
+
+    public static func composeBar(
+        mode: FocusSoundscape,
+        barIndex: Int,
+        circadian: CircadianPhase = .afternoon,
+        intensity: SoundIntensity = .flow,
+        rng: inout SeededRNG,
+        navigator: inout ScoreOracleNavigator
+    ) -> ComposedBar {
+        var optNav: ScoreOracleNavigator? = navigator
+        let result = composeBarInternal(
+            mode: mode,
+            barIndex: barIndex,
+            circadian: circadian,
+            intensity: intensity,
+            rng: &rng,
+            navigator: &optNav
+        )
+        if let updated = optNav {
+            navigator = updated
+        }
+        return result
+    }
+
+    private static func composeBarInternal(
+        mode: FocusSoundscape,
+        barIndex: Int,
+        circadian: CircadianPhase,
+        intensity: SoundIntensity,
+        rng: inout SeededRNG,
+        navigator: inout ScoreOracleNavigator?
+    ) -> ComposedBar {
         let bar = ((barIndex % barsPerForm) + barsPerForm) % barsPerForm
         let pass = max(0, barIndex / barsPerForm)
         let section = bar / 8
@@ -271,24 +392,38 @@ public enum SatieScore {
         let barLen = 4.0 * spb
         let shift = circadianShift(mode: mode, phase: circadian)
 
-        let form: [ChordDef]
-        let glints: [Int]
-        switch mode {
-        case .focus:
-            form = softLightForm
-            glints = softLightGlints
-        case .pulse:
-            form = pulseForm
-            glints = dorianGlints
-        case .rain:
-            form = rainForm
-            glints = rainGlints
-        case .drift:
-            form = driftForm
-            glints = driftGlints
-        case .still, .dive:
-            form = stillForm
-            glints = stillGlints
+        let pack = oraclePack(for: mode)
+        let corpus = pack.corpus
+        let glints = pack.glints
+
+        // Resolve corpus bar via Factor Oracle + Symbolic Constraint Grammar on Pass 1+
+        let corpusIdx: Int
+        let didOracleJump: Bool
+        if var nav = navigator {
+            let step = nav.nextCorpusIndex(
+                mode: mode,
+                barIndex: barIndex,
+                oracle: pack.oracle,
+                roles: pack.roles,
+                rng: &rng
+            )
+            navigator = nav
+            corpusIdx = step.corpusIndex
+            didOracleJump = step.didJump
+        } else if pass == 0 {
+            corpusIdx = bar
+            didOracleJump = false
+        } else {
+            // Stateless Pass 1+ callers still traverse deterministic Factor Oracle suffix links
+            let baseIdx = ((barIndex % corpus.count) + corpus.count) % corpus.count
+            let targets = pack.oracle.recombinationTargets(from: baseIdx)
+            if !targets.isEmpty && (barIndex % 2 == 0) && rng.nextUnit() < 0.42 {
+                corpusIdx = targets[rng.nextInt(targets.count)]
+                didOracleJump = (corpusIdx != baseIdx)
+            } else {
+                corpusIdx = baseIdx
+                didOracleJump = false
+            }
         }
 
         // Brian Eno incommensurate prime-length macro cycles (5, 7, 11, 13 bars -> 5,005-bar non-repeating arc)
@@ -302,9 +437,10 @@ public enum SatieScore {
         let macroResonance     = 0.25 + 0.75 * (0.5 * cyc11 + 0.5 * cyc5)
         let maSilenceWindow    = (barIndex > 1 && cyc11 > 0.88) // Authentic Japanese Ma (間) breathing rest
 
-        let chord = form[bar]
+        let chord = corpus[corpusIdx]
         let fullness = softLightFullness[bar]
-        let partner = form[bar % 2 == 0 ? min(bar + 1, barsPerForm - 1) : max(bar - 1, 0)]
+        let partnerIdx = (corpusIdx % 2 == 0) ? min(corpusIdx + 1, corpus.count - 1) : max(corpusIdx - 1, 0)
+        let partner = corpus[partnerIdx]
         let pairChanges = partner.held != chord.held
 
         var allowed = Set<Int>()
@@ -381,10 +517,32 @@ public enum SatieScore {
                 }
             }
 
-            // Sparse lyrical melody (20% dropout and 12% octave lift on Pass 2+)
+            // Sparse lyrical melody (20% dropout, 12% octave lift, and Factor Oracle chord-tone harmonization on Pass 1+)
             if pass == 0 || rng.nextUnit() >= 0.20 {
-                for (beat, written, beats) in softLightMelody[bar] {
-                    let lifted = (pass > 0 && written < 80 && rng.nextUnit() < 0.12) ? written + 12 : written
+                let melodySlot = corpusIdx % barsPerForm
+                let chordPcs = Set(chord.figure.map { (($0 % 12) + 12) % 12 } + chord.held.map { (($0 % 12) + 12) % 12 })
+                for (beat, written, beats) in softLightMelody[melodySlot] {
+                    var melodicNote = written
+                    if pass > 0 && corpusIdx != bar {
+                        let wPc = ((written % 12) + 12) % 12
+                        if !chordPcs.contains(wPc) {
+                            // Snap smoothly to nearest chord/figure tone within the same register for seamless voice-leading
+                            var best = written
+                            var bestDist = 99
+                            for candidateBase in chord.figure {
+                                for oct in [-12, 0, 12, 24] {
+                                    let cand = candidateBase + oct
+                                    let dist = abs(cand - written)
+                                    if dist < bestDist {
+                                        bestDist = dist
+                                        best = cand
+                                    }
+                                }
+                            }
+                            melodicNote = best
+                        }
+                    }
+                    let lifted = (pass > 0 && melodicNote < 80 && rng.nextUnit() < 0.12) ? melodicNote + 12 : melodicNote
                     let midi = lifted + shift
                     allowed.insert(((midi % 12) + 12) % 12)
                     let velocity = rng.between(0.88, 1.0)
@@ -623,6 +781,8 @@ public enum SatieScore {
             bells: bells,
             sustained: sustained,
             didSwapFigure: didSwap,
+            didOracleJump: didOracleJump,
+            corpusIndex: corpusIdx,
             allowedPitchClasses: allowed,
             macroFilterHorizon: macroFilterHorizon,
             macroSpaceBloom: macroSpaceBloom,
@@ -646,6 +806,8 @@ public enum SatieScore {
                 bells: [],
                 sustained: [],
                 didSwapFigure: bar.didSwapFigure,
+                didOracleJump: bar.didOracleJump,
+                corpusIndex: bar.corpusIndex,
                 allowedPitchClasses: bar.allowedPitchClasses,
                 macroFilterHorizon: bar.macroFilterHorizon,
                 macroSpaceBloom: bar.macroSpaceBloom,
@@ -678,6 +840,8 @@ public enum SatieScore {
             bells: keptBells,
             sustained: keptSustained,
             didSwapFigure: bar.didSwapFigure,
+            didOracleJump: bar.didOracleJump,
+            corpusIndex: bar.corpusIndex,
             allowedPitchClasses: bar.allowedPitchClasses,
             macroFilterHorizon: bar.macroFilterHorizon,
             macroSpaceBloom: bar.macroSpaceBloom,

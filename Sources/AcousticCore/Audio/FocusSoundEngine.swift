@@ -527,6 +527,7 @@ public final class FocusSoundEngine: @unchecked Sendable {
     private let producerQueue = DispatchQueue(label: "com.strangechances.satie.score-producer", qos: .utility)
     private var producerTimer: DispatchSourceTimer?
     private var producerRNG = SeededRNG(seed: 42)
+    private var producerOracle = ScoreOracleNavigator()
     private var producerSeed: UInt32 = 42
     private var producerNextBarIndex: Int = 0
     private var producerMode: FocusSoundscape = .focus
@@ -744,7 +745,10 @@ public final class FocusSoundEngine: @unchecked Sendable {
             producerCircadian = circadian
             if let intensity { producerIntensity = intensity }
             producerSeed = seed
-            if let startBar { producerNextBarIndex = startBar }
+            if let startBar {
+                producerNextBarIndex = startBar
+                producerOracle.reset(mode: mode)
+            }
             producerRNG = SeededRNG(seed: seed)
             renderState.barQueue.clearProducerSide()
             for _ in 0..<10 {
@@ -753,7 +757,8 @@ public final class FocusSoundEngine: @unchecked Sendable {
                     barIndex: producerNextBarIndex,
                     circadian: producerCircadian,
                     intensity: producerIntensity,
-                    rng: &producerRNG
+                    rng: &producerRNG,
+                    navigator: &producerOracle
                 )
                 if renderState.barQueue.enqueue(composed) {
                     producerNextBarIndex += 1
@@ -774,7 +779,8 @@ public final class FocusSoundEngine: @unchecked Sendable {
                     barIndex: self.producerNextBarIndex,
                     circadian: self.producerCircadian,
                     intensity: self.producerIntensity,
-                    rng: &self.producerRNG
+                    rng: &self.producerRNG,
+                    navigator: &self.producerOracle
                 )
                 if self.renderState.barQueue.enqueue(composed) {
                     self.producerNextBarIndex += 1
@@ -1016,6 +1022,7 @@ private final class FocusRenderState: @unchecked Sendable {
     private let sampleBank = StudioSampleBank.shared
     private var noiseRNG: FastNoiseRNG
     private var offlineScoreRNG: SeededRNG
+    private var offlineOracle = ScoreOracleNavigator()
     private var offlineNextBarIndex: Int = 0
 
     // Pre-allocated instrument voice pools (zero heap allocations during rendering)
@@ -1174,7 +1181,8 @@ private final class FocusRenderState: @unchecked Sendable {
                 mode: mode,
                 barIndex: offlineNextBarIndex,
                 circadian: circadian,
-                rng: &offlineScoreRNG
+                rng: &offlineScoreRNG,
+                navigator: &offlineOracle
             )
             offlineNextBarIndex += 1
             currentBar.populate(from: composed)
