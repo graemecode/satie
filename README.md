@@ -2,12 +2,12 @@
 
 Named after **Erik Satie**, who invented *musique d'ameublement* ("furniture music") in 1917 — sound meant to inhabit a room without demanding attention.
 
-**Satie** is a native macOS **generative focus soundscape instrument** and **120Hz Metal visualizer** living quietly in your menu bar. Zero permissions required, zero subscriptions, zero cloud requests, zero third-party packages — **10 MB** native Swift 6 + Metal app with **46 studio-recorded CC0 acoustic samples** and real-time physical & granular synthesis, **Apple Developer ID signed & notarized**.
+**Satie v4.0** is a native **Swift 6 + Metal** generative focus & meditation instrument and **120 Hz Apple EDR visualizer** living quietly in your macOS menu bar (with shared-core iPhone/iPad, Dynamic Island, StandBy, Apple Watch, Apple TV, and Vision Pro targets). Zero macOS permissions, zero subscriptions, zero network requests, zero third-party packages — **10 MB** Developer ID signed & Apple notarized `.dmg`.
 
-**Website & live preview:** [strangechances.com/satie](https://strangechances.com/satie/)
+**Website & live 6-world browser preview:** [strangechances.com/satie](https://strangechances.com/satie/)
 
 <p align="center">
-  <img src="docs/hero-menubar.jpg" alt="Satie — Native macOS Menu Bar Floating Panel" width="100%">
+  <img src="docs/hero-menubar.jpg" alt="Satie v4.0 — Native macOS Menu Bar Floating Panel with 6 worlds and 06 Oculus" width="100%">
 </p>
 
 ## Install
@@ -18,95 +18,111 @@ brew install --cask graemecode/tap/satie
 ```
 
 ### Direct Download
-Download the notarized [Satie-3.1.0.dmg](https://github.com/graemecode/satie/releases/latest/download/Satie-3.1.0.dmg) (macOS 15 Sequoia or later, Apple Silicon), drag **Satie** to **Applications**, and launch. No macOS privacy prompts, no virtual audio drivers, no background daemons.
+Download the Apple-notarized [Satie-4.0.0.dmg](https://github.com/graemecode/satie/releases/latest/download/Satie-4.0.0.dmg) (macOS 15 Sequoia or later, Apple Silicon, 10 MB), drag **Satie** to **Applications**, and launch. No macOS privacy prompts, no virtual audio drivers, no background daemons.
 
 ---
 
-## Five Curated Soundscapes
+## Six Generative Soundscapes
 
-Every mode runs 100% offline at **48 kHz stereo** on a lock-free, zero-allocation Core Audio render thread (`~3.6%` of one Apple Silicon core), evolving continuously over **Eno prime-length (5, 7, 11, 13-bar)** macro cycles with room-preserving reverb crossfades when switching modes:
+Every world synthesizes 100% offline at **48 kHz stereo** on a lock-free, zero-allocation Core Audio render thread (`1.4%–9.9%` measured single-core peak across all modes), evolving without audible loops via a linear-time **IRCAM Factor Oracle + Symbolic Constraint Grammar** and **Eno prime-length (5, 7, 11, 13-bar)** cycles:
 
-| Mode | Title | Acoustic Palette |
-| :--- | :--- | :--- |
-| **FOCUS** | **Soft Light** | Felt upright piano, soft-mallet vibraphone, concert harp glints, bowed cello, live shimmer granular halo, tape echo, and an 8×8 modulated cedar chamber. |
-| **PULSE** | **Kinetic Pulse** | 104 BPM D Dorian hypnotic analog synth (PolyBLEP ZDF filter sweeps), 56-mode physical modal resonators in 3D binaural orbit, phase-locked sub-kick, brushed micro-swung percussion. |
-| **RAIN** | **Rain & Glass** | Real 48 kHz studio light-rain recording (3-second live equal-power crossfade loop) with friction-bowed wine glasses, soft vibraphone, and concert harp in F Lydian. |
-| **STILL** | **Still** | Zero-melody suspended ambient pad and warm filtered noise cocoon designed for reading, writing, and long uninterrupted sessions. |
-| **NIGHT** | **Gymnopédie** | Slow 54 BPM nocturnal felt piano, Just-Intonation bowed cello swells, reverse-piano granular cloud, and generous *ma* negative space. |
+| Mode | Title | Paired Visual | Acoustic Architecture |
+| :--- | :--- | :--- | :--- |
+| **FOCUS** | **Soft Light** | `01 The Circuit` | 72 BPM A major *kankyō ongaku*: studio felt upright piano, soft-mallet vibraphone, concert harp glints, bowed cello, shimmer granular halo, tape echo, and a Velvet-Noise FDN cedar chamber. |
+| **PULSE** | **Kinetic Pulse** | `03 Phosphor Scope` | 108 BPM D Dorian flow momentum: creamy PolyBLEP ZDF sweeps (`< 2.75 kHz`) fused with CC0 vibraphone, beat-locked `14.40 Hz` beta shimmer (`+11.26 dB` SNR, `2.82%` silky roughness), `16 ms` optical sidechain (`-1.4 dB`), and a soft `60 Hz` felt kick. |
+| **RAIN** | **Rain & Glass** | `02 Ecology Wall` | F Lydian Kyoto courtyard garden: non-repeating `StochasticRainField` (`8.2×` lower 10 s autocorrelation than a loop, `r = 0.074`) with friction-bowed wine glasses, soft vibraphone, and concert harp. |
+| **STILL** | **Still** | `05 Horizon` | Zero-melody suspended A sus9 pad and warm velvet brown-noise cocoon built for dense reading and writing. |
+| **DIVE** | **Deep Dive** | `06 Oculus` | Evidence-based meditation engine: `8.5 → 5.5 bpm` vagal breath descent (`42%` inhale / `58%` exhale), bowed acoustic cello drone (`D2 + A2`), non-repeating rain, resonant bronze singing bowls, and subtle post-matrix binaural depth cue. |
+| **NIGHT** | **Gymnopédie** | `04 Nocturne Silk` | 54 BPM nocturnal felt piano, Just-Intonation bowed cello swells, reverse-piano granular cloud, and generous *ma* negative space. |
 
-Inside the single **Options** drawer (`≡`), you can set a fade-out **Timer** (`∞ · 15m · 25m · 45m · 60m · 90m`) or layer gentle **Rain** or **Brown Noise** underneath any soundscape.
+Inside the single **Options** drawer (`≡`), set a fade-out **Timer** (`∞ · 15m · 25m · 45m · 60m · 90m`), optionally layer **Rain** or **Brown Noise** underneath any world (off by default), or pin any of the six visualizations.
 
 ---
 
-## Four 120Hz Metal Visualizations
+## Six 120 Hz Apple EDR Visualizations
 
-Hover over the visual canvas in the menu bar panel to glide between **Circuit · Ecology · Scope · Liquid**, tap the canvas to cycle, or press **`1`–`4`** in the Studio Window / Fullscreen Wall.
+Every shader renders natively in **16-bit half-float Apple EDR** (`rgba16Float` + `extendedLinearDisplayP3`) with **`64×64` Ulichney Void-and-Cluster spatiotemporal blue-noise dithering** (`+44.44 dB` high-pass DFT) for zero OLED dark-gradient banding. After **20:00 local time**, all six visuals automatically shift into a **low-melanopic 2200 K ember spectrum** (`−90.4%` blue emission in `06 Oculus`, targeting CIE `< 10` mEDI).
 
-| 01 The Circuit | 02 Ecology Wall |
+<p align="center">
+  <img src="docs/vis-oculus-circadian.jpg" alt="06 Oculus Circadian Photobiology — Day vs Night (-90.4% blue)" width="100%">
+</p>
+
+| 06 Oculus | 01 The Circuit |
 | :---: | :---: |
-| ![01 The Circuit](docs/vis-circuit.jpg) | ![02 Ecology Wall](docs/vis-ecology.jpg) |
-| 240-strand 3D curl-turbulence connectome + 3,200 neural spikes, 24-band sensor mosaic, curved Bézier impulse wires, and 4096-pt Circle of Fifths chromagram. | 5,000 stippled GPU colony agents across five frequency territories, with `FULL VIEW` minimap, `ACOUSTIC ANALYTICS`, scrolling thermal `SPECTRAL HEATMAP`, and `SIGNAL EVENT LOG`. |
+| ![06 Oculus](docs/vis-oculus.jpg) | ![01 The Circuit](docs/vis-circuit.jpg) |
+| James Turrell *Aten Reign* skyspace breathing at `5.5 bpm` with Faraday bowl caustics and automatic post-20:00 ember shift. | 240-strand 3D optical-fiber connectome + 3,200 spikes, 24-band sensor mosaic, curved Bézier impulse wires, and 4096-pt Circle of Fifths chromagram. |
 
-| 03 Phosphor Scope | 04 Liquid Warp |
+| 02 Ecology Wall | 03 Phosphor Scope |
 | :---: | :---: |
-| ![03 Phosphor Scope](docs/vis-scope.jpg) | ![04 Liquid Warp](docs/vis-liquid.jpg) |
-| True `RGBA16Float` ping-pong CRT Lissajous electron beam with velocity-modulated dwell glow, hairline graticule, and **P31 Emerald / P39 Amber** toggle. | 16-bit half-float ping-pong curl-noise HDR advection with bass-driven radial zoom, RGB chromatic dispersion, and ACES filmic tonemapping. |
+| ![02 Ecology Wall](docs/vis-ecology.jpg) | ![03 Phosphor Scope](docs/vis-scope.jpg) |
+| Kyoto courtyard rain ripples + 5,000 stippled GPU colony agents with minimap, acoustic analytics, thermal spectrogram, and signal event log. | Smooth 255-segment `RGBA16Float` ping-pong CRT Lissajous beam with velocity-modulated dwell glow and **P31 Emerald / P39 Amber** toggle. |
+
+| 04 Nocturne Silk | 05 Horizon |
+| :---: | :---: |
+| ![04 Nocturne Silk](docs/vis-nocturne.jpg) | ![05 Horizon](docs/vis-horizon.jpg) |
+| Candlelit amber gold and moon-silver sumi-e ink rings triggered by live piano & cello notes over dark mirrored water. | Sugimoto / Rothko nocturnal horizon line, calm lunar dome, and perspective moonlight water caustics. |
 
 ---
 
-## How It's Built
+## Architecture & Formal Verification
 
-Satie is ~8,100 lines of **Swift 6** and **503 lines of Metal** (`Shaders.metal`) with **zero external dependencies** — built directly on `AVFoundation`, `Accelerate (vDSP)`, `Metal`, `MetalKit`, `MediaPlayer`, `Carbon`, `AppKit`, and `SwiftUI`.
+Satie is ~15,500 lines of **Swift 6** and **1,133 lines of Metal** (`Shaders.metal`, **11 compiled pipelines**) with **zero external packages**:
 
 ```
 Sources/
-├── AcousticCore/                         # Pure Swift 6 audio engine & real-time DSP (no UI)
+├── AcousticCore/                         # Shared Swift 6 audio, DSP, formal state & math (zero UI)
 │   ├── Audio/
-│   │   ├── SatieScore.swift              # Deterministic 32-bar composer + prime-length macro cycles
+│   │   ├── HarmonicFactorOracle.swift    # O(m) IRCAM Factor Oracle + Symbolic Constraint Grammar
+│   │   ├── SatieScore.swift              # Curated harmonic DNA + Eno 5/7/11/13-bar prime cycles
+│   │   ├── DeepMeditationEngine.swift    # Vagal breath descent, stochastic rain, bowls, cello drone
+│   │   ├── HRVResonanceController.swift  # Closed-loop on-device HRV breathing resonance controller
 │   │   ├── FocusSoundEngine.swift        # Lock-free AVAudioSourceNode + 16-bar SPSC event queue
-│   │   ├── StudioSampleBank.swift        # Parallel 48 kHz decoder for 46 CC0 samples + 4-pt Hermite sampler
-│   │   ├── PhysicalInstruments.swift     # Felt piano, vactrol bells, analog ZDF synth, strings, groove engine
-│   │   ├── ModularAlchemy.swift          # 56-mode modal resonator bank, 14-grain Beads cloud, 3D binaural bus
-│   │   ├── DSPPrimitives.swift           # Cytomic SVF, RE-201 tape echo, 8×8 Hadamard FDN, vinyl mastering bus
-│   │   ├── AcousticDSP.swift             # 4096-pt vDSP Hann FFT, 24 log bands, Krumhansl-Schmuckler key detector
-│   │   ├── RingBuffer.swift              # Lock-free SPSC stereo ring buffer (audio -> Metal thread)
-│   │   └── SystemOutputMute.swift        # Zero-permission read-only macOS output mute check
-│   ├── HotKeys/GlobalHotKeys.swift       # Zero-permission Carbon global hotkeys (⌥⌘S, ⌥⌘Space, ⌥⌘], ⌥⌘M)
-│   ├── Media/NowPlayingBridge.swift      # Control Center & AirPods media key integration (zero permissions)
-│   └── Resources/Samples/                # 45 CC0-1.0 acoustic multi-samples + CC0 48 kHz studio rain bed
-└── AcousticCircuit/                      # Native macOS app & 120Hz Metal renderer
-    ├── Renderer/
-    │   ├── Shaders.metal                 # 9 compiled Metal render pipelines (bgra8Unorm + rgba16Float ping-pong)
-    │   ├── MetalVisualizerView.swift     # Triple-buffered MTKView (zero-copy Apple Silicon shared buffers)
-    │   └── SchematicOverlayView.swift    # Retina CoreGraphics HUD layered over Metal in Studio/Fullscreen
-    └── UI/
-        ├── PopoverView.swift             # Notch-safe floating panel + hover-revealed frosted visual switcher
-        ├── SoundscapeGlyphs.swift        # 5 custom 1px geometric vector emblems
-        ├── StudioWindowController.swift  # Resizable Studio Window + Fullscreen Wall (⌘F)
-        ├── MiniHUDWindow.swift           # Floating borderless corner monitor (⌘M)
-        └── MenuBarIconView.swift         # Compact 22pt reactive menu bar meter
+│   │   ├── DSPPrimitives.swift           # 32-tap Velvet-Noise ER + colorless 8×8 FDN + mastering bus
+│   │   ├── StudioSampleBank.swift        # Parallel 48 kHz decoder (46 CC0 files) + 4-pt Hermite sampler
+│   │   ├── PhysicalInstruments.swift     # Felt piano, PolyBLEP ZDF synth, 14.4 Hz shimmer, strings
+│   │   ├── ModularAlchemy.swift          # 56-mode modal resonator bank, 14-grain Beads cloud, 3D binaural
+│   │   ├── AcousticDSP.swift             # 4096-pt vDSP Hann FFT, 24 log bands, Krumhansl key detector
+│   │   └── RingBuffer.swift              # Lock-free SPSC stereo ring buffer (audio -> Metal thread)
+│   ├── BlueNoise64.swift                 # 64×64 Ulichney Void-and-Cluster spatiotemporal blue noise
+│   ├── StudioLifecycleMachine.swift      # TLA+/TLC formally verified Studio MTKView state machine
+│   ├── GlobalHotKeys.swift               # Zero-permission Carbon hotkeys (⌥⌘S, ⌥⌘Space, ⌥⌘], ⌥⌘M)
+│   └── Media/NowPlayingBridge.swift      # Control Center & AirPods media keys (zero permissions)
+├── AcousticCircuit/                      # Native macOS app & 120 Hz Apple EDR Metal renderer
+│   ├── App/SatieAppIntents.swift         # Native Apple Shortcuts, Siri, Spotlight & Focus Filters
+│   ├── Renderer/Shaders.metal            # 11 compiled Metal pipelines (rgba16Float EDR + blue noise)
+│   ├── Renderer/MetalVisualizerView.swift# Triple-buffered zero-copy Apple Silicon MTKView
+│   ├── Renderer/SchematicOverlayView.swift# Retina CoreGraphics HUD layered over Metal
+│   └── UI/                               # PopoverView (6 geometric glyphs), Studio, MiniHUD, MenuBarIcon
+├── SatieiOS/ & SatieWidgets/             # iOS 18+ app, Dynamic Island Live Activities & OLED StandBy
+├── SatieWatch/                           # watchOS 11+ Taptic Breath & on-device HealthKit HRV biofeedback
+├── SatieTV/                              # tvOS 18+ 4K EDR living-room skyspace
+└── SatieVision/                          # visionOS 2+ spatial sanctuary
 ```
 
-### Key Engineering Decisions
-- **Real-time audio safety:** Zero heap allocations, zero locks, and zero Objective-C/Swift runtime dispatches on the Core Audio render thread. A producer fills a lock-free 16-bar SPSC ring queue (`LockFreeBarQueue`); the audio thread only consumes pre-composed bar events and reads `Synchronization.Atomic` parameters.
-- **Studio-grade hybrid acoustics:** 45 CC0-1.0 multi-sampled zones (Versilian Studios VSCO-2 CE / VCSL felt upright piano, vibraphone, harp, cello, bowed wine glasses) + 1 mastered CC0 rain recording are decoded in parallel into 48 kHz `Float` arrays and played with 4-point Hermite cubic interpolation alongside physical modal resonators (56 parallel 2nd-order eigenmodes) and a 14-grain Hann-windowed granular cloud.
-- **Mastering bus & room-preserving transitions:** Every soundscape runs through an 8×8 LFO-modulated Walsh-Hadamard FDN reverb and a 24 dB/oct elliptical vinyl-mastering bus (high-passing only the Side channel below 185 Hz for strict mono sub-bass, RMS optical glue, and a 2.5 ms lookahead true-peak limiter). Switching soundscapes dips only dry excitation for ~220 ms while preserving the FDN reverb tail and granular cloud so one room dissolves smoothly into the next.
-- **Zero-copy Apple Silicon Metal rendering:** `AcousticMetalView` triple-buffers `AcousticUniforms` and 256-sample stereo waveform snapshots in `.storageModeShared` unified memory, driving 4 distinct GPU shader pipelines (`circuit`, `ecology`, `phosphor`, `liquid`) up to 120 Hz on ProMotion displays.
-- **Zero macOS permissions:** Sandboxed with only `com.apple.security.app-sandbox`. No microphone, no system audio recording, no Accessibility, no AppleScript, and no network access.
+### Key Engineering & Verification Highlights
+- **Real-time audio safety:** Zero heap allocations, zero locks, and zero runtime dispatches on the Core Audio render thread (`LockFreeBarQueue` + Swift 6 `Synchronization.Atomic`).
+- **Colorless Velvet-Noise acoustics:** 32-tap zero-DC Optimal Velvet-Noise early-reflection diffuser (`19.5%` echo density, `-0.014` early stereo correlation) feeding a delay-proportional colorless 8×8 orthogonal FDN (`DC = 0.000003`, `0.761` tail flatness) and 24 dB/oct elliptical vinyl-mastering bus.
+- **Infinite non-repeating form:** Linear-time *O(m)* IRCAM Factor Oracle + Symbolic Constraint Grammar verified across 256-bar runs (`7/7` unique 32-bar passes, `100%` key purity).
+- **Formally verified rendering lifecycle:** `StudioLifecycleMachine` was modeled in **TLA+** and checked exhaustively with **TLC** (`0` violations across `6` safety/liveness invariants), eliminating frozen Studio `MTKView` display links across Space switches and system wake.
+- **Zero macOS permissions:** Sandboxed with only `com.apple.security.app-sandbox`. No microphone, no audio capture, no Accessibility, and no network access.
 
 ---
 
-## Controls & Shortcuts
-- **Global Hotkeys (zero permissions):** `⌥⌘S` summon/dismiss panel · `⌥⌘Space` play/pause · `⌥⌘]` next soundscape · `⌥⌘M` mute Mac output.
-- **Hardware Media Keys & AirPods:** Play/pause or skip soundscapes via macOS Control Center (`MPNowPlayingInfoCenter`).
-- **Studio & Fullscreen:** `1`–`4` switch visualizations · `Space` play/pause · `⌘F` fullscreen · `⌘M` floating Mini HUD · `⌘W` close back to menu bar.
+## Controls & Automation
+- **Global Hotkeys (zero permissions):** `⌥⌘S` summon/dismiss panel · `⌥⌘Space` play/pause · `⌥⌘]` next world · `⌥⌘M` mute Mac output.
+- **Apple Shortcuts, Siri & Focus Filters:** Native `AppIntents` (`Start Soundscape`, `Pause Satie`, `Focus Filter` automatic soundscape pairing).
+- **Hardware Media Keys & AirPods:** Play/pause or skip worlds via macOS Control Center (`MPNowPlayingInfoCenter`).
+- **Studio & Fullscreen:** `1`–`6` switch visualizations · `Space` play/pause · `⌘F` fullscreen · `⌘M` floating Mini HUD · `⌘W` close back to menu bar.
 
 ---
 
-## Build from Source
+## Build & Verify from Source
 
 ```bash
-# Run Swift Testing suite + build release .app
+# Run all 21 release DSP / Factor Oracle / TLA+ tests
+swift test -c release
+
+# Build release .app bundle
 ./scripts/build-app.sh
 
 # Build, sign, install to /Applications, and launch
