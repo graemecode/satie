@@ -710,4 +710,44 @@ struct AcousticCoreTests {
         print(String(format: "[BETA-AM] PULSE 15.0 Hz envelope modulation SNR = %+.2f dB over adjacent 11.5/18.5 Hz bands", snrDB))
         #expect(snrDB > 8.0, "Expected crisp 15.0 Hz beta AM peak in PULSE mid-upper envelope, got \(snrDB) dB")
     }
+
+    @Test("BlueNoise64 tile has exact uniform histogram and >25 dB high-pass 2D spectral power")
+    func blueNoise64SpectrumAndUniformity() {
+        let n = BlueNoise64.dimension
+        #expect(n == 64)
+        #expect(BlueNoise64.bytes.count == n * n)
+
+        var hist = [Int](repeating: 0, count: 256)
+        var mean = 0.0
+        for b in BlueNoise64.bytes {
+            hist[Int(b)] += 1
+            mean += Double(b) / 255.0
+        }
+        mean /= Double(n * n)
+        for level in 0..<256 {
+            #expect(hist[level] == 16, "Level \(level) count was \(hist[level]), expected 16")
+        }
+
+        // Measure 2D DFT power at representative low vs high spatial frequencies (toroidal)
+        func power2D(kx: Int, ky: Int) -> Double {
+            var re = 0.0, im = 0.0
+            let twoPiOverN = 2.0 * Double.pi / Double(n)
+            for y in 0..<n {
+                for x in 0..<n {
+                    let v = Double(BlueNoise64.bytes[y * n + x]) / 255.0 - mean
+                    let ang = twoPiOverN * Double(kx * x + ky * y)
+                    re += v * cos(ang)
+                    im -= v * sin(ang)
+                }
+            }
+            return re * re + im * im
+        }
+        let lowPairs = [(1, 0), (0, 1), (2, 1), (1, 2), (3, 2), (2, 3), (4, 0), (0, 4)]
+        let highPairs = [(24, 24), (28, 12), (12, 28), (30, 18), (18, 30), (31, 31), (26, 20), (20, 26)]
+        let lowAvg = lowPairs.map { power2D(kx: $0.0, ky: $0.1) }.reduce(0, +) / Double(lowPairs.count)
+        let highAvg = highPairs.map { power2D(kx: $0.0, ky: $0.1) }.reduce(0, +) / Double(highPairs.count)
+        let ratioDB = 10.0 * log10(highAvg / max(lowAvg, 1e-12))
+        print(String(format: "[BLUE-NOISE] 64x64 tile: lowAvg=%.4f highAvg=%.2f High/Low=+%.2f dB", lowAvg, highAvg, ratioDB))
+        #expect(ratioDB > 25.0, "Expected genuine blue-noise >25 dB high-pass ratio, got \(ratioDB) dB")
+    }
 }

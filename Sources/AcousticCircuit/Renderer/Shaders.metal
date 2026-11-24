@@ -24,7 +24,8 @@ struct AcousticUniforms {
     float4 impulses[6];    // 24 per-band transient impulses
     float4 noteA[12];      // Live note events: (pitchNorm, pan, velocity, ageSec)
     float4 noteKinds[3];   // 12 note kind codes (0=figure, 1=melody, 2=glint, 3=sustain)
-    float4 breathDepth;    // (breath01, depth01, binauralDeltaHz, isDeepDive)
+    float4 breathDepth;    // (breath01, depth01, isNight01, isDeepDive)
+    float4 edrParams;      // (edrLinearP3Enabled, edrHeadroom, frameIndex, reserved)
 };
 
 static inline float getBand(constant AcousticUniforms& u, int idx) {
@@ -56,14 +57,8 @@ vertex FullscreenOut fullscreenVertex(uint vid [[vertex_id]]) {
 }
 
 // ============================================================================
-// UTILITY: HASH, NOISE, SEGMENT DISTANCE, PALETTE
+// UTILITY: HASH, NOISE, SEGMENT DISTANCE
 // ============================================================================
-static inline float hash12(float2 p) {
-    float3 p3 = fract(float3(p.xyx) * 0.1031);
-    p3 += dot(p3, p3.yzx + 33.33);
-    return fract((p3.x + p3.y) * p3.z);
-}
-
 static inline float2 hash22(float2 p) {
     p = float2(dot(p, float2(127.1, 311.7)), dot(p, float2(269.5, 183.3)));
     return -1.0 + 2.0 * fract(sin(p) * 43758.5453123);
@@ -94,10 +89,75 @@ static inline float2 minDimCoord(float2 uv, float2 center, float aspect) {
 }
 
 // ============================================================================
+// APPLE EDR (EXTENDED LINEAR DISPLAY P3) + 64x64 SPATIOTEMPORAL BLUE NOISE
+// ============================================================================
+static inline float3 srgbToLinear(float3 c) {
+    float3 x = max(c, float3(0.0));
+    float3 lo = x / 12.92;
+    float3 hi = pow((x + 0.055) / 1.055, float3(2.4));
+    return select(hi, lo, x <= 0.04045);
+}
+
+static inline float3 linearSRGBToLinearP3(float3 c) {
+    // Exact D65 Rec.709 / sRGB linear -> Display P3 linear transform
+    return float3(
+        0.8224621 * c.r + 0.1775380 * c.g,
+        0.0331942 * c.r + 0.9668058 * c.g,
+        0.0170826 * c.r + 0.0723974 * c.g + 0.9105200 * c.b
+    );
+}
+
+static inline float3 additiveColorToTarget(float3 srgbCol, float alpha, float edrBoost, constant AcousticUniforms& u) {
+    float3 premul = srgbCol * alpha;
+    if (u.edrParams.x > 0.5) {
+        float3 linP3 = linearSRGBToLinearP3(srgbToLinear(premul));
+        float edrSpare = clamp(u.edrParams.y - 1.0, 0.0, 0.85);
+        float circadianCap = mix(1.0, 0.25, clamp(u.breathDepth.z, 0.0, 1.0));
+        return linP3 * (1.0 + clamp(edrBoost, 0.0, 1.0) * edrSpare * circadianCap);
+    }
+    return premul;
+}
+
+static inline float blueNoiseTPDF(texture2d<float> bnTex, float2 pixelPos, float frameIdx) {
+    uint f = uint(max(0.0, frameIdx));
+    // Coprime toroidal offsets mod 64 preserve the exact 2D FFT blue-noise spectrum every frame
+    uint2 p1 = (uint2(pixelPos) + uint2(f * 23u, f * 37u)) & 63u;
+    uint2 p2 = (uint2(pixelPos) + uint2(f * 23u + 31u, f * 37u + 17u)) & 63u;
+    float b1 = bnTex.read(p1).r;
+    float b2 = bnTex.read(p2).r;
+    return b1 - b2; // Exact zero-mean triangular PDF in [-1, +1]
+}
+
+static inline float4 finalizeDisplayColor(float3 srgbCol,
+                                          float edrBoostMask,
+                                          float ditherAmp,
+                                          float2 pixelPos,
+                                          constant AcousticUniforms& u,
+                                          texture2d<float> bnTex) {
+    float bn = blueNoiseTPDF(bnTex, pixelPos, u.edrParams.z);
+    // Luminance-modulated perceptual blue-noise dither eliminates 8-bit/10-bit OLED shadow banding
+    float lum = dot(max(srgbCol, float3(0.0)), float3(0.2126, 0.7152, 0.0722));
+    float darkMask = mix(1.0, 0.45, smoothstep(0.02, 0.45, lum));
+    float modeScale = (u.edrParams.x > 0.5) ? 0.62 : 1.0;
+    float3 dithered = max(srgbCol + bn * ditherAmp * darkMask * modeScale, float3(0.0));
+
+    if (u.edrParams.x > 0.5) {
+        float3 linP3 = linearSRGBToLinearP3(srgbToLinear(dithered));
+        float edrSpare = clamp(u.edrParams.y - 1.0, 0.0, 0.85);
+        // Protect evening melatonin: nocturnal low-melanopic mode caps EDR peak boost gently
+        float circadianCap = mix(1.0, 0.25, clamp(u.breathDepth.z, 0.0, 1.0));
+        float gain = 1.0 + clamp(edrBoostMask, 0.0, 1.0) * edrSpare * circadianCap;
+        return float4(linP3 * gain, 1.0);
+    }
+    return float4(dithered, 1.0);
+}
+
+// ============================================================================
 // PRESET 01: THE CIRCUIT — NOTE-PLUCKED 3D FILAMENT HARP & CHORD HALO
 // ============================================================================
 fragment float4 circuitBackgroundFragment(FullscreenOut in [[stage_in]],
-                                          constant AcousticUniforms& u [[buffer(0)]]) {
+                                          constant AcousticUniforms& u [[buffer(0)]],
+                                          texture2d<float> blueNoiseTex [[texture(1)]]) {
     float aspectVal = u.resolution.x / max(1.0, u.resolution.y);
     float2 d = minDimCoord(in.uv, u.coreCenter, aspectVal);
     float dist = length(d);
@@ -134,9 +194,9 @@ fragment float4 circuitBackgroundFragment(FullscreenOut in [[stage_in]],
         }
     }
 
-    // Subtle film dither so 10-bit / OLED dark slate never bands
-    float grain = (hash12(in.position.xy + fract(u.time)) - 0.5) * 0.012;
-    return float4(max(col + grain, 0.0), 1.0);
+    // Spatiotemporal 64x64 blue-noise dither + linear Display P3 EDR output
+    float edrMask = clamp(halo * (0.25 + chordBloom * 0.45), 0.0, 0.45);
+    return finalizeDisplayColor(col, edrMask, 0.0065, in.position.xy, u, blueNoiseTex);
 }
 
 struct RibbonVertOut {
@@ -254,7 +314,8 @@ vertex RibbonVertOut circuitRibbonVertex(uint vid [[vertex_id]],
 
     RibbonVertOut out;
     out.position = float4(pos, 0.0, 1.0);
-    out.color = float4(col * alpha, alpha);
+    float ribbonBoost = clamp(noteExcite * 0.65 + imp * 0.35, 0.0, 1.0);
+    out.color = float4(additiveColorToTarget(col, alpha, ribbonBoost * 0.55, u), alpha);
     return out;
 }
 
@@ -323,7 +384,7 @@ vertex SpikeVertOut circuitSpikeVertex(uint vid [[vertex_id]],
     out.position = float4(pos, 0.0, 1.0);
     out.pointSize = (1.4 + bv * 2.2 + noteSpark * 3.6) * persp * (u.isCompact > 0.5 ? 0.82 : 1.0);
     float3 col = mix(float3(0.92, 0.96, 1.0), float3(1.0, 0.94, 0.82), clamp(noteSpark * 0.7, 0.0, 0.85));
-    out.color = float4(col * alpha, alpha);
+    out.color = float4(additiveColorToTarget(col, alpha, clamp(noteSpark * 0.6, 0.0, 0.75), u), alpha);
     return out;
 }
 
@@ -354,7 +415,8 @@ static inline float3 colonyColor(int idx) {
 }
 
 fragment float4 ecologyFieldFragment(FullscreenOut in [[stage_in]],
-                                     constant AcousticUniforms& u [[buffer(0)]]) {
+                                     constant AcousticUniforms& u [[buffer(0)]],
+                                     texture2d<float> blueNoiseTex [[texture(1)]]) {
     // Deep charcoal courtyard backdrop
     float3 col = float3(0.045, 0.056, 0.074);
 
@@ -419,8 +481,9 @@ fragment float4 ecologyFieldFragment(FullscreenOut in [[stage_in]],
         }
     }
 
-    float grain = (hash12(in.position.xy + fract(u.time)) - 0.5) * 0.010;
-    return float4(max(col + grain, 0.0), 1.0);
+    float peak = max(col.r, max(col.g, col.b));
+    float edrMask = smoothstep(0.28, 0.85, peak) * 0.55;
+    return finalizeDisplayColor(col, edrMask, 0.0055, in.position.xy, u, blueNoiseTex);
 }
 
 vertex SpikeVertOut ecologyAgentVertex(uint vid [[vertex_id]],
@@ -487,7 +550,7 @@ vertex SpikeVertOut ecologyAgentVertex(uint vid [[vertex_id]],
     SpikeVertOut out;
     out.position = float4(ndc, 0.0, 1.0);
     out.pointSize = (1.8 + bv * 2.2 + fract(fi * 0.13) * 1.2) * (u.isCompact > 0.5 ? 0.85 : 1.0);
-    out.color = float4(cc * alpha, alpha);
+    out.color = float4(additiveColorToTarget(cc, alpha, clamp(alpha * 0.55, 0.0, 0.55), u), alpha);
     return out;
 }
 
@@ -567,6 +630,7 @@ fragment float4 phosphorUpdateFragment(FullscreenOut in [[stage_in]],
 
 fragment float4 phosphorDisplayFragment(FullscreenOut in [[stage_in]],
                                         texture2d<float> scopeTex [[texture(0)]],
+                                        texture2d<float> blueNoiseTex [[texture(1)]],
                                         constant AcousticUniforms& u [[buffer(0)]]) {
     constexpr sampler s(filter::linear, address::clamp_to_edge);
     float3 beam = scopeTex.sample(s, in.uv).rgb;
@@ -589,11 +653,13 @@ fragment float4 phosphorDisplayFragment(FullscreenOut in [[stage_in]],
 
     float3 col = bg + grCol * (gridLine * 0.055 + centerAxis * 0.14) + beam;
 
-    // Gentle CRT glass vignette + filmic curve
+    // Gentle CRT glass vignette + filmic curve + EDR phosphor core bloom
     float vig = smoothstep(1.3, 0.25, length((in.uv - center) * 1.45));
     col *= mix(0.75, 1.0, vig);
+    float beamPeak = max(beam.r, max(beam.g, beam.b));
     col = col / (1.0 + col * 0.35);
-    return float4(col, 1.0);
+    float edrMask = smoothstep(0.42, 1.65, beamPeak) * 0.92;
+    return finalizeDisplayColor(col, edrMask, 0.0055, in.position.xy, u, blueNoiseTex);
 }
 
 static inline float3 nocturnePalette(float t) {
@@ -700,14 +766,18 @@ fragment float4 liquidUpdateFragment(FullscreenOut in [[stage_in]],
 }
 
 fragment float4 liquidDisplayFragment(FullscreenOut in [[stage_in]],
-                                      texture2d<float> tex [[texture(0)]]) {
+                                      texture2d<float> tex [[texture(0)]],
+                                      texture2d<float> blueNoiseTex [[texture(1)]],
+                                      constant AcousticUniforms& u [[buffer(0)]]) {
     constexpr sampler s(filter::linear, address::clamp_to_edge);
-    float3 c = tex.sample(s, in.uv).rgb;
+    float3 raw = tex.sample(s, in.uv).rgb;
+    float rawPeak = max(raw.r, max(raw.g, raw.b));
     // ACES filmic HDR tonemapping into deep midnight obsidian
-    c = (c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14);
+    float3 c = (raw * (2.51 * raw + 0.03)) / (raw * (2.43 * raw + 0.59) + 0.14);
     c = pow(max(c, 0.0), float3(0.96));
     c = mix(float3(0.018, 0.023, 0.040), c, smoothstep(0.0, 0.09, length(c)));
-    return float4(c, 1.0);
+    float edrMask = smoothstep(0.45, 1.40, rawPeak) * 0.65;
+    return finalizeDisplayColor(c, edrMask, 0.0060, in.position.xy, u, blueNoiseTex);
 }
 
 // ============================================================================
@@ -715,7 +785,8 @@ fragment float4 liquidDisplayFragment(FullscreenOut in [[stage_in]],
 // ============================================================================
 fragment float4 horizonFragment(FullscreenOut in [[stage_in]],
                                 constant AcousticUniforms& u [[buffer(0)]],
-                                constant float2* waveLR [[buffer(1)]]) {
+                                constant float2* waveLR [[buffer(1)]],
+                                texture2d<float> blueNoiseTex [[texture(1)]]) {
     float aspect = u.resolution.x / max(1.0, u.resolution.y);
     float2 center = (aspect < 1.0) ? u.coreCenter : float2(0.5, 0.50);
     float2 p = minDimCoord(in.uv, center, aspect);
@@ -775,9 +846,9 @@ fragment float4 horizonFragment(FullscreenOut in [[stage_in]],
     col += warmCol * refl * (0.14 + u.bass * 0.22);
     col += lineCol * horizonLine * (0.45 + u.treble * 0.30 + chordWarm * 0.12);
 
-    // Subtle film dither so 10-bit OLED / Retina gradients never band
-    float grain = (hash12(in.position.xy + fract(u.time)) - 0.5) * 0.012;
-    return float4(max(col + grain, 0.0), 1.0);
+    // Spatiotemporal 64x64 blue-noise dither + localized EDR lift on horizon filament and dome rim
+    float edrMask = clamp(horizonLine * 0.72 + domeRim * 0.55 + bandCore * 0.18, 0.0, 0.85);
+    return finalizeDisplayColor(col, edrMask, 0.0065, in.position.xy, u, blueNoiseTex);
 }
 
 // ============================================================================
@@ -800,7 +871,8 @@ static inline float3 turrellMix3(float3 a, float3 b, float3 c, float t) {
 
 fragment float4 oculusFragment(FullscreenOut in [[stage_in]],
                                constant AcousticUniforms& u [[buffer(0)]],
-                               device const float* wave [[buffer(1)]]) {
+                               device const float* wave [[buffer(1)]],
+                               texture2d<float> blueNoiseTex [[texture(1)]]) {
     float2 uv = in.uv;
     float aspect = u.resolution.x / max(1.0, u.resolution.y);
     float playing = u.isPlaying;
@@ -960,6 +1032,7 @@ fragment float4 oculusFragment(FullscreenOut in [[stage_in]],
     col = mix(col, skyCol, m4) + cSky * edge4;
 
     // Live Multi-Bowl Faraday Water-Caustic Resonance (100% silence-respectful during Ma gaps!)
+    float causticEdr = 0.0;
     if (playing > 0.5) {
         float causticAccum = 0.0;
         float ringAccum = 0.0;
@@ -992,7 +1065,9 @@ fragment float4 oculusFragment(FullscreenOut in [[stage_in]],
         if (causticAccum > 0.0005 || ringAccum > 0.0005) {
             float3 lightTint = mix(cSky * 1.18, float3(1.0, 0.97, 0.92), 0.52);
             float tierReach = 0.22 + 0.78 * m1;
-            col += lightTint * (min(1.0, causticAccum) * 0.26 + min(1.0, ringAccum) * 0.13) * tierReach;
+            float cMix = min(1.0, causticAccum) * 0.26 + min(1.0, ringAccum) * 0.13;
+            col += lightTint * cMix * tierReach;
+            causticEdr = clamp(cMix * 2.2 * tierReach, 0.0, 0.65);
         }
     }
 
@@ -1005,8 +1080,8 @@ fragment float4 oculusFragment(FullscreenOut in [[stage_in]],
     float dockContrast = 1.0 - 0.24 * smoothstep(0.76, 1.0, uv.y) - 0.14 * smoothstep(0.18, 0.0, uv.y);
     col = (col + grainFine) * edgeDark * dockContrast;
 
-    // Filmic highlight rolloff + 10-bit OLED dither (zero banding on Apple XDR / OLED)
+    // Filmic highlight rolloff + localized Apple EDR skylight aperture & Faraday caustic glow + 64x64 Blue Noise
     col = col / (1.0 + col * 0.16);
-    float dither = (hash12(in.position.xy + fract(u.time)) - 0.5) * 0.011;
-    return float4(max(col + dither, 0.0), 1.0);
+    float oculusEdr = clamp(m4 * (0.28 + 0.24 * breath01) * skyRim + edge4 * 1.1 + causticEdr, 0.0, 0.85) * playing;
+    return finalizeDisplayColor(col, oculusEdr, 0.0062, in.position.xy, u, blueNoiseTex);
 }

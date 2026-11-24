@@ -40,6 +40,7 @@ struct AcousticUniforms {
     )
     var noteKinds: (SIMD4<Float>, SIMD4<Float>, SIMD4<Float>) = (.zero, .zero, .zero)
     var breathDepth: SIMD4<Float> = SIMD4<Float>(0.5, 0.0, 0.0, 0.0)
+    var edrParams: SIMD4<Float> = SIMD4<Float>(1.0, 1.0, 0.0, 1.0)
 }
 
 @MainActor
@@ -48,6 +49,8 @@ final class SharediOSMetalPipelines {
 
     let device: MTLDevice
     let commandQueue: MTLCommandQueue
+    let blueNoiseTexture: MTLTexture
+    let displayColorSpace: CGColorSpace?
 
     let circuitBgPipeline: MTLRenderPipelineState
     let circuitRibbonPipeline: MTLRenderPipelineState
@@ -68,12 +71,34 @@ final class SharediOSMetalPipelines {
         }
         self.device = dev
         self.commandQueue = queue
+        self.displayColorSpace = CGColorSpace(name: CGColorSpace.extendedLinearDisplayP3)
+
+        let bnDesc = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .r8Unorm,
+            width: BlueNoise64.dimension,
+            height: BlueNoise64.dimension,
+            mipmapped: false
+        )
+        bnDesc.usage = .shaderRead
+        bnDesc.storageMode = .shared
+        guard let bnTex = dev.makeTexture(descriptor: bnDesc) else {
+            fatalError("Could not allocate 64x64 BlueNoise texture.")
+        }
+        BlueNoise64.bytes.withUnsafeBytes { raw in
+            bnTex.replace(
+                region: MTLRegionMake2D(0, 0, BlueNoise64.dimension, BlueNoise64.dimension),
+                mipmapLevel: 0,
+                withBytes: raw.baseAddress!,
+                bytesPerRow: BlueNoise64.dimension
+            )
+        }
+        self.blueNoiseTexture = bnTex
 
         guard let library = dev.makeDefaultLibrary() else {
             fatalError("Could not load default Metal library.")
         }
 
-        func makePipeline(vertex: String, fragment: String, pixelFormat: MTLPixelFormat = .bgra8Unorm, additive: Bool = false) -> MTLRenderPipelineState {
+        func makePipeline(vertex: String, fragment: String, pixelFormat: MTLPixelFormat = .rgba16Float, additive: Bool = false) -> MTLRenderPipelineState {
             let desc = MTLRenderPipelineDescriptor()
             desc.vertexFunction = library.makeFunction(name: vertex)
             desc.fragmentFunction = library.makeFunction(name: fragment)
@@ -129,13 +154,22 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
             p.device.makeBuffer(length: MemoryLayout<SIMD2<Float>>.stride * 256, options: .storageModeShared)!
         }
         super.init(frame: frame, device: p.device)
-        self.colorPixelFormat = .bgra8Unorm
-        self.clearColor = MTLClearColor(red: 0.027, green: 0.043, blue: 0.071, alpha: 1.0)
+        self.colorPixelFormat = .rgba16Float
+        self.clearColor = MTLClearColor(red: 0.0021, green: 0.0033, blue: 0.0061, alpha: 1.0)
         self.framebufferOnly = true
         self.preferredFramesPerSecond = 60
         self.enableSetNeedsDisplay = false
         self.isPaused = false
         self.delegate = self
+        configureEDRLayer()
+    }
+
+    private func configureEDRLayer() {
+        if let metalLayer = self.layer as? CAMetalLayer {
+            metalLayer.pixelFormat = .rgba16Float
+            metalLayer.wantsExtendedDynamicRangeContent = true
+            metalLayer.colorspace = pipelines.displayColorSpace
+        }
     }
 
     @available(*, unavailable)
@@ -152,6 +186,7 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
+        configureEDRLayer()
         let active = SatieiOSState.shared.isForeground && (window != nil)
         isPaused = !active
     }
@@ -313,6 +348,8 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
             CircadianPhase.current() == .night ? 1.0 : 0.0,
             music.isDeepDive ? 1.0 : 0.0
         )
+        let liveHeadroom = Float(max(1.0, window?.screen.currentEDRHeadroom ?? 1.0))
+        uniforms.edrParams = SIMD4<Float>(1.0, liveHeadroom, Float(frameSlot & 4095), 1.0)
 
         let uBuf = uniformBuffers[slot]
         memcpy(uBuf.contents(), &uniforms, MemoryLayout<AcousticUniforms>.stride)
@@ -330,6 +367,7 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
             if let enc = cmd.makeRenderCommandEncoder(descriptor: renderPassDesc) {
                 enc.setRenderPipelineState(pipelines.circuitBgPipeline)
                 enc.setFragmentBuffer(uBuf, offset: 0, index: 0)
+                enc.setFragmentTexture(pipelines.blueNoiseTexture, index: 1)
                 enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
 
                 enc.setRenderPipelineState(pipelines.circuitRibbonPipeline)
@@ -346,6 +384,7 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
             if let enc = cmd.makeRenderCommandEncoder(descriptor: renderPassDesc) {
                 enc.setRenderPipelineState(pipelines.ecologyFieldPipeline)
                 enc.setFragmentBuffer(uBuf, offset: 0, index: 0)
+                enc.setFragmentTexture(pipelines.blueNoiseTexture, index: 1)
                 enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
 
                 enc.setRenderPipelineState(pipelines.ecologyAgentPipeline)
@@ -375,6 +414,7 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
                 if let enc = cmd.makeRenderCommandEncoder(descriptor: renderPassDesc) {
                     enc.setRenderPipelineState(preset == .phosphor ? pipelines.phosphorDisplayPipeline : pipelines.liquidDisplayPipeline)
                     enc.setFragmentTexture(dstTex, index: 0)
+                    enc.setFragmentTexture(pipelines.blueNoiseTexture, index: 1)
                     enc.setFragmentBuffer(uBuf, offset: 0, index: 0)
                     enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
                     enc.endEncoding()
@@ -387,6 +427,7 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
                 enc.setRenderPipelineState(preset == .horizon ? pipelines.horizonPipeline : pipelines.oculusPipeline)
                 enc.setFragmentBuffer(uBuf, offset: 0, index: 0)
                 enc.setFragmentBuffer(wBuf, offset: 0, index: 1)
+                enc.setFragmentTexture(pipelines.blueNoiseTexture, index: 1)
                 enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
                 enc.endEncoding()
             }

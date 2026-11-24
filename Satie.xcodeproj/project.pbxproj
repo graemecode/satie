@@ -21,6 +21,7 @@
 		1BC72380A91F4124CFD78781 /* MediaPlayer.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BAB00A878553F903199C632D /* MediaPlayer.framework */; };
 		1D41449803EE15E2F5776E96 /* AppKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 81FA047C9BB90CDE3BCB41AA /* AppKit.framework */; };
 		1E7B6A2E044AFC90E8E4133F /* NowPlayingBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8880E9DB01723F8D1CF71269 /* NowPlayingBridge.swift */; };
+		1FC04F39F2389D296734D9D3 /* BlueNoise64.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1129A70CC12ED837F0058059 /* BlueNoise64.swift */; };
 		23129E809C509A152142AA6B /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B0620EAF39E3CA03E0C9F707 /* Carbon.framework */; };
 		23B4DC3F513C83B1D680D4F1 /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B0620EAF39E3CA03E0C9F707 /* Carbon.framework */; };
 		27BCD328DD52D5B82E249404 /* SatieScore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9F0E70D2C1A26D3B9E6EF9D /* SatieScore.swift */; };
@@ -53,6 +54,7 @@
 		786F0F0221D310BA3EDA86F3 /* StudioLifecycleMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BEE7BA98A1F7854BC616FB /* StudioLifecycleMachine.swift */; };
 		7AA28113C96613625C528500 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A33A2C51CABCFB6BEF4E27F /* Metal.framework */; };
 		7B26BD838432C8BAECE116DA /* iOSMetalVisualizerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 189A933E292B634721E4D149 /* iOSMetalVisualizerView.swift */; };
+		7CF340B0414DAE3F586C5C44 /* BlueNoise64.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1129A70CC12ED837F0058059 /* BlueNoise64.swift */; };
 		7DC4BA7ECCA6389B6D9820D0 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 5E4904B6DEFC775766DA2BDE /* PrivacyInfo.xcprivacy */; };
 		810884CA4997D117337944C5 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E54F49B63B355BED408C30E8 /* QuartzCore.framework */; };
 		8463B97894684EF90CC28AC7 /* SchematicOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC497A2AF3C2921B429F0548 /* SchematicOverlayView.swift */; };
@@ -125,6 +127,7 @@
 		00D042F2C3F30E94ECF157F5 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
 		0333BA3ED9C772EC44D4F50C /* libAcousticCore.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = libAcousticCore.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		07ABB3440DE0092F8D5289CC /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
+		1129A70CC12ED837F0058059 /* BlueNoise64.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlueNoise64.swift; sourceTree = "<group>"; };
 		189A933E292B634721E4D149 /* iOSMetalVisualizerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iOSMetalVisualizerView.swift; sourceTree = "<group>"; };
 		207AD2FDDD6C7BB0B3E43E70 /* Samples */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Samples; path = Sources/AcousticCore/Resources/Samples; sourceTree = SOURCE_ROOT; };
 		2081B71872082F0D71876F09 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
@@ -332,6 +335,7 @@
 		B9ED88A26F5D6F6291FEC36C /* AcousticCore */ = {
 			isa = PBXGroup;
 			children = (
+				1129A70CC12ED837F0058059 /* BlueNoise64.swift */,
 				399F9D5D17214E97E233F23E /* GlobalHotKeys.swift */,
 				99D7F0DD8AEB2D15C2A63885 /* Log.swift */,
 				ECF78C003BD8651395C98184 /* MenuBarPositioner.swift */,
@@ -405,7 +409,7 @@
 			path = Renderer;
 			sourceTree = "<group>";
 		};
-		"TEMP_1C6BFCD1-718F-48D8-BAE1-E87BB631E97E" /* Resources */ = {
+		"TEMP_D9B65ABC-07B3-46DB-868D-42487BF14633" /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -598,6 +602,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				94014079E101F1E06B5D2157 /* AcousticDSP.swift in Sources */,
+				1FC04F39F2389D296734D9D3 /* BlueNoise64.swift in Sources */,
 				F76EABBC008844E07E9CEE38 /* DSPPrimitives.swift in Sources */,
 				D93B9DDB8D481A116962FDBA /* DeepMeditationEngine.swift in Sources */,
 				ED6D81940E85BF1372B5DD0A /* FocusSoundEngine.swift in Sources */,
@@ -639,6 +644,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				59C43D5FC24773E0BDD29662 /* AcousticDSP.swift in Sources */,
+				7CF340B0414DAE3F586C5C44 /* BlueNoise64.swift in Sources */,
 				37877166FFA2E3CD064AAF2D /* DSPPrimitives.swift in Sources */,
 				4DC6CAF3ABA7E263D95151F7 /* DeepMeditationEngine.swift in Sources */,
 				082699013F74504DC81EF9FA /* FocusSoundEngine.swift in Sources */,
