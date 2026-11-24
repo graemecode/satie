@@ -750,4 +750,97 @@ struct AcousticCoreTests {
         print(String(format: "[BLUE-NOISE] 64x64 tile: lowAvg=%.4f highAvg=%.2f High/Low=+%.2f dB", lowAvg, highAvg, ratioDB))
         #expect(ratioDB > 25.0, "Expected genuine blue-noise >25 dB high-pass ratio, got \(ratioDB) dB")
     }
+
+    @Test("StudioAcousticSpace Velvet-Noise + Colorless Orthogonal FDN produces dense, decorrelated, flat, DC-free decaying hall impulse response")
+    func studioAcousticSpaceVelvetFDNProof() {
+        var space = StudioAcousticSpace()
+        let sr = 48_000.0
+        let totalFrames = 96_000 // 2.0 seconds
+        var irL = [Float](repeating: 0, count: totalFrames)
+        var irR = [Float](repeating: 0, count: totalFrames)
+
+        for i in 0..<totalFrames {
+            let x: Float = (i == 0) ? 1.0 : 0.0
+            let (l, r) = space.process(x, x, preDelayMs: 18.0, decay: 0.85, dampLP: 0.36, dampHP: 0.022, erMix: 0.32, modScale: 1.0, dt: 1.0 / sr, sampleRate: sr)
+            irL[i] = l
+            irR[i] = r
+        }
+
+        // 1. Strict finiteness, bounded peak, zero DC
+        var peak: Float = 0
+        var sumL = 0.0, sumR = 0.0
+        for i in 0..<totalFrames {
+            #expect(irL[i].isFinite && irR[i].isFinite)
+            peak = max(peak, max(abs(irL[i]), abs(irR[i])))
+            sumL += Double(irL[i]); sumR += Double(irR[i])
+        }
+        let dc = max(abs(sumL), abs(sumR)) / Double(totalFrames)
+
+        // 2. Early echo density (4 ms .. 60 ms) + stereo decorrelation
+        let erStart = Int(0.004 * sr), erEnd = Int(0.060 * sr)
+        var erSqL = 0.0, erSqR = 0.0, erCross = 0.0
+        for i in erStart..<erEnd {
+            let l = Double(irL[i]), r = Double(irR[i])
+            erSqL += l * l; erSqR += r * r; erCross += l * r
+        }
+        let erRms = sqrt(erSqL / Double(erEnd - erStart))
+        let erActive = (erStart..<erEnd).reduce(0) { acc, i in acc + (abs(Double(irL[i])) > erRms * 0.25 ? 1 : 0) }
+        let erDensity = Double(erActive) / Double(erEnd - erStart)
+        let erStereoCorr = erCross / max(1e-12, sqrt(erSqL * erSqR))
+
+        // 3. Monotonic late decay across three 0.5s windows (0.1..0.6s, 0.7..1.2s, 1.4..1.9s)
+        func rmsWindow(_ a: Double, _ b: Double) -> Double {
+            let s = Int(a * sr), e = Int(b * sr)
+            var acc = 0.0
+            for i in s..<e { acc += Double(irL[i] * irL[i] + irR[i] * irR[i]) * 0.5 }
+            return sqrt(acc / Double(e - s))
+        }
+        let rEarly = rmsWindow(0.10, 0.60)
+        let rMid   = rmsWindow(0.70, 1.20)
+        let rLate  = rmsWindow(1.40, 1.90)
+
+        // 4. Spectral flatness (Wiener entropy) of late tail (0.15s..0.85s) across 64 log-spaced probes in 150..3600 Hz
+        let tailStart = Int(0.15 * sr)
+        let tailLen = 32_768
+        var mags = [Double]()
+        for k in 0..<64 {
+            let f = 150.0 * pow(3600.0 / 150.0, Double(k) / 63.0)
+            let w = 2.0 * Double.pi * f / sr
+            let coeff = 2.0 * cos(w)
+            var s1 = 0.0, s2 = 0.0
+            for i in 0..<tailLen {
+                let x = Double(irL[tailStart + i])
+                let s0 = x + coeff * s1 - s2
+                s2 = s1; s1 = s0
+            }
+            let p = max(1e-18, s1 * s1 + s2 * s2 - coeff * s1 * s2)
+            mags.append(sqrt(p))
+        }
+        let geoMean = exp(mags.map { log($0) }.reduce(0, +) / Double(mags.count))
+        let ariMean = mags.reduce(0, +) / Double(mags.count)
+        let flatness = geoMean / max(ariMean, 1e-12)
+
+        // 5. Verify RT60 decay parameter cleanly scales concert-hall tail length (0.92 > 3x longer tail than 0.85)
+        var hallSpace = StudioAcousticSpace()
+        var hallLateSq = 0.0
+        let lateS = Int(1.40 * sr), lateE = Int(1.90 * sr)
+        for i in 0..<totalFrames {
+            let x: Float = (i == 0) ? 1.0 : 0.0
+            let (l, r) = hallSpace.process(x, x, preDelayMs: 18.0, decay: 0.92, dampLP: 0.36, dampHP: 0.022, erMix: 0.32, modScale: 1.0, dt: 1.0 / sr, sampleRate: sr)
+            if i >= lateS && i < lateE {
+                hallLateSq += Double(l * l + r * r) * 0.5
+            }
+        }
+        let rLateHall = sqrt(hallLateSq / Double(lateE - lateS))
+
+        print(String(format: "[VN-FDN] Peak=%.3f DC=%.6f EarlyDensity=%.1f%% EarlyStereoCorr=%+.3f TailFlatness=%.3f Decay85=(%.5f -> %.5f -> %.6f) Hall92Late=%.5f",
+                     peak, dc, erDensity * 100.0, erStereoCorr, flatness, rEarly, rMid, rLate, rLateHall))
+        #expect(peak > 0.015 && peak < 1.5, "Impulse peak out of range: \(peak)")
+        #expect(dc < 0.0005, "Reverb tail should be DC-free, got \(dc)")
+        #expect(erDensity > 0.12, "Expected 4x denser Velvet-Noise early reflections (>12% on Dirac impulse), got \(erDensity * 100)%")
+        #expect(abs(erStereoCorr) < 0.25, "Expected wide decorrelated stereo ER, got corr=\(erStereoCorr)")
+        #expect(flatness > 0.60, "Expected colorless smooth FDN tail (flatness > 0.60), got \(flatness)")
+        #expect(rEarly > rMid && rMid > rLate && rLate > 1e-6, "Expected smooth unified concert-hall RT60 decay")
+        #expect(rLateHall > rLate * 3.0, "Expected decay=0.92 hall tail to be >3x stronger than decay=0.85 at 1.4-1.9s")
+    }
 }

@@ -349,12 +349,12 @@ private struct AllpassDiffuser: Sendable {
     }
 }
 
-/// Studio-grade algorithmic acoustic chamber:
+/// Studio-grade algorithmic acoustic chamber (Schlecht / Välimäki VN-FDN architecture):
 /// - Configurable pre-delay (keeps transients tactile & forward)
-/// - 8-tap stereo early reflections with distance air absorption (true front-to-back staging)
-/// - 4-stage stereo series allpass input diffuser (zero metallic transient flutter)
-/// - 8x8 orthonormal Walsh-Hadamard FDN with 8 irrational-ratio LFO-modulated fractional read taps
-/// - Dual-band absorption inside every tank line (clear lows, warm cedar/plaster high decay)
+/// - 32-tap zero-DC Optimal Velvet-Noise early-reflection diffuser (4x echo density, zero inner multiplies)
+/// - 2-stage prime allpass micro-diffuser per channel (silky transient diffusion with half the CPU)
+/// - 8x8 Signed-Diagonal Walsh-Hadamard colorless orthogonal FDN with 8 irrational-ratio LFO-modulated lines
+/// - Exact delay-proportional RT60 attenuation (g_i = decay^(M_i / M_ref)) and matched per-line air absorption
 struct StudioAcousticSpace: Sendable {
     // Pre-delay + early reflections buffer (8192 samples = ~170ms at 48 kHz)
     private var erBufL: [Float]
@@ -363,20 +363,20 @@ struct StudioAcousticSpace: Sendable {
     private let erMask: Int = 8191
     private var erAirLpL: Float = 0
     private var erAirLpR: Float = 0
+    private var erMudHpL: Float = 0
+    private var erMudHpR: Float = 0
 
-    // 4-stage series allpass input diffusers (L and R with distinct prime lengths)
-    private var apL0 = AllpassDiffuser(length: 151)
-    private var apL1 = AllpassDiffuser(length: 227)
-    private var apL2 = AllpassDiffuser(length: 349)
-    private var apL3 = AllpassDiffuser(length: 541)
+    // 2-stage prime allpass micro-diffusers (paired with Velvet-Noise pre-diffusion for colorless density)
+    private var apL0 = AllpassDiffuser(length: 197)
+    private var apL1 = AllpassDiffuser(length: 349)
 
-    private var apR0 = AllpassDiffuser(length: 163)
-    private var apR1 = AllpassDiffuser(length: 241)
-    private var apR2 = AllpassDiffuser(length: 367)
-    private var apR3 = AllpassDiffuser(length: 563)
+    private var apR0 = AllpassDiffuser(length: 211)
+    private var apR1 = AllpassDiffuser(length: 367)
 
     // 8x8 Modulated FDN tank lines (mutually prime lengths: 29ms .. 85ms at 48 kHz, power-of-two storage)
     private static let lineBaseDelays: [Double] = [1399, 1693, 2017, 2381, 2749, 3163, 3583, 4099]
+    // Normalized delay ratios M_i / M_ref (M_ref = 3600 samples = 75ms) for unified concert-hall RT60 across all 8 lines
+    private static let lineRatios: [Float] = [0.3886, 0.4703, 0.5603, 0.6614, 0.7636, 0.8786, 0.9953, 1.1386]
     private static let lfoRates: [Double] = [0.21, 0.27, 0.34, 0.41, 0.49, 0.56, 0.63, 0.71]
     private static let lfoDepths: [Double] = [9.5, 11.0, 12.5, 14.0, 11.5, 13.5, 15.0, 16.5]
     private static let lineMask: Int = 8191 // 8192 samples per line
@@ -389,6 +389,14 @@ struct StudioAcousticSpace: Sendable {
     private var lp4: Float = 0, lp5: Float = 0, lp6: Float = 0, lp7: Float = 0
     private var hp0: Float = 0, hp1: Float = 0, hp2: Float = 0, hp3: Float = 0
     private var hp4: Float = 0, hp5: Float = 0, hp6: Float = 0, hp7: Float = 0
+
+    // Cached delay-proportional per-line decay gains & air-absorption alphas (0 pow() calls in steady state)
+    private var cachedDecay: Float = -1
+    private var cachedDampLP: Float = -1
+    private var g0: Float = 0.32, g1: Float = 0.32, g2: Float = 0.32, g3: Float = 0.32
+    private var g4: Float = 0.32, g5: Float = 0.32, g6: Float = 0.32, g7: Float = 0.32
+    private var a0: Float = 0.36, a1: Float = 0.36, a2: Float = 0.36, a3: Float = 0.36
+    private var a4: Float = 0.36, a5: Float = 0.36, a6: Float = 0.36, a7: Float = 0.36
 
     private var lfoP0: Double = 0.00, lfoP1: Double = 0.13, lfoP2: Double = 0.29, lfoP3: Double = 0.41
     private var lfoP4: Double = 0.53, lfoP5: Double = 0.67, lfoP6: Double = 0.79, lfoP7: Double = 0.91
@@ -419,6 +427,35 @@ struct StudioAcousticSpace: Sendable {
     }
 
     @inline(__always)
+    private mutating func updateProportionalCurves(decay: Float, dampLP: Float) {
+        if decay != cachedDecay {
+            cachedDecay = decay
+            let d = max(0.05, min(0.985, decay))
+            let invSqrt8: Float = 0.35355339
+            g0 = pow(d, Self.lineRatios[0]) * invSqrt8
+            g1 = pow(d, Self.lineRatios[1]) * invSqrt8
+            g2 = pow(d, Self.lineRatios[2]) * invSqrt8
+            g3 = pow(d, Self.lineRatios[3]) * invSqrt8
+            g4 = pow(d, Self.lineRatios[4]) * invSqrt8
+            g5 = pow(d, Self.lineRatios[5]) * invSqrt8
+            g6 = pow(d, Self.lineRatios[6]) * invSqrt8
+            g7 = pow(d, Self.lineRatios[7]) * invSqrt8
+        }
+        if dampLP != cachedDampLP {
+            cachedDampLP = dampLP
+            let lp = max(0.06, min(0.96, dampLP))
+            a0 = max(0.05, min(0.95, pow(lp, Self.lineRatios[0])))
+            a1 = max(0.05, min(0.95, pow(lp, Self.lineRatios[1])))
+            a2 = max(0.05, min(0.95, pow(lp, Self.lineRatios[2])))
+            a3 = max(0.05, min(0.95, pow(lp, Self.lineRatios[3])))
+            a4 = max(0.05, min(0.95, pow(lp, Self.lineRatios[4])))
+            a5 = max(0.05, min(0.95, pow(lp, Self.lineRatios[5])))
+            a6 = max(0.05, min(0.95, pow(lp, Self.lineRatios[6])))
+            a7 = max(0.05, min(0.95, pow(lp, Self.lineRatios[7])))
+        }
+    }
+
+    @inline(__always)
     mutating func process(
         _ inL: Float,
         _ inR: Float,
@@ -431,49 +468,65 @@ struct StudioAcousticSpace: Sendable {
         dt: Double = 1.0 / 48_000.0,
         sampleRate: Double = 48_000.0
     ) -> (Float, Float) {
+        updateProportionalCurves(decay: decay, dampLP: dampLP)
+
         // 1. Store into ER / pre-delay line
-        erBufL[erWrite] = inL
-        erBufR[erWrite] = inR
+        let w = erWrite
+        let m = erMask
+        erBufL[w] = inL
+        erBufR[w] = inR
 
-        // 8 physically spaced early reflections (7.1ms .. 37.7ms) with cross-room imaging
-        let eL = erBufL[(erWrite - 341) & erMask] * 0.42
-               + erBufR[(erWrite - 543) & erMask] * 0.34
-               + erBufL[(erWrite - 715) & erMask] * 0.27
-               + erBufR[(erWrite - 947) & erMask] * 0.22
-               + erBufL[(erWrite - 1117) & erMask] * 0.17
-               + erBufR[(erWrite - 1349) & erMask] * 0.14
-               + erBufL[(erWrite - 1579) & erMask] * 0.11
-               + erBufR[(erWrite - 1811) & erMask] * 0.08
-        let eR = erBufR[(erWrite - 367) & erMask] * 0.42
-               + erBufL[(erWrite - 569) & erMask] * 0.34
-               + erBufR[(erWrite - 743) & erMask] * 0.27
-               + erBufL[(erWrite - 977) & erMask] * 0.22
-               + erBufR[(erWrite - 1151) & erMask] * 0.17
-               + erBufL[(erWrite - 1381) & erMask] * 0.14
-               + erBufR[(erWrite - 1609) & erMask] * 0.11
-               + erBufL[(erWrite - 1847) & erMask] * 0.08
+        // 32-tap zero-DC Optimal Velvet-Noise Early-Reflection Diffuser (4.4 ms .. 49.6 ms):
+        // Four distance bands x 8 prime-jittered taps (exact 4 +1 / 4 -1 per band -> zero DC, zero inner multiplies)
+        // Band 0 (4.4 .. 13.8 ms): intimate studio boundaries
+        let vnL0 = erBufL[(w - 211) & m] - erBufR[(w - 281) & m] + erBufL[(w - 359) & m] - erBufR[(w - 431) & m]
+                 - erBufL[(w - 503) & m] + erBufR[(w - 571) & m] - erBufL[(w - 619) & m] + erBufR[(w - 661) & m]
+        let vnR0 = erBufR[(w - 223) & m] - erBufL[(w - 293) & m] + erBufR[(w - 373) & m] - erBufL[(w - 443) & m]
+                 - erBufR[(w - 521) & m] + erBufL[(w - 587) & m] - erBufR[(w - 631) & m] + erBufL[(w - 677) & m]
 
-        // Air absorption on early reflections (~4.8 kHz natural wall damping)
+        // Band 1 (14.4 .. 24.9 ms): lateral cross-room imaging
+        let vnL1 = erBufR[(w - 709) & m] - erBufL[(w - 769) & m] - erBufR[(w - 839) & m] + erBufL[(w - 907) & m]
+                 + erBufR[(w - 977) & m] - erBufL[(w - 1049) & m] + erBufR[(w - 1117) & m] - erBufL[(w - 1193) & m]
+        let vnR1 = erBufL[(w - 727) & m] - erBufR[(w - 787) & m] - erBufL[(w - 857) & m] + erBufR[(w - 929) & m]
+                 + erBufL[(w - 997) & m] - erBufR[(w - 1063) & m] + erBufL[(w - 1129) & m] - erBufR[(w - 1213) & m]
+
+        // Band 2 (26.0 .. 37.3 ms): rear-wall silk diffusion
+        let vnL2 = erBufL[(w - 1249) & m] + erBufR[(w - 1321) & m] - erBufL[(w - 1399) & m] - erBufR[(w - 1471) & m]
+                 + erBufL[(w - 1549) & m] - erBufR[(w - 1621) & m] - erBufL[(w - 1699) & m] + erBufR[(w - 1783) & m]
+        let vnR2 = erBufR[(w - 1277) & m] + erBufL[(w - 1361) & m] - erBufR[(w - 1429) & m] - erBufL[(w - 1499) & m]
+                 + erBufR[(w - 1571) & m] - erBufL[(w - 1657) & m] - erBufR[(w - 1723) & m] + erBufL[(w - 1801) & m]
+
+        // Band 3 (38.7 .. 49.6 ms): dense early-to-late handoff
+        let vnL3 = -erBufR[(w - 1861) & m] + erBufL[(w - 1933) & m] + erBufR[(w - 2011) & m] - erBufL[(w - 2083) & m]
+                 + erBufR[(w - 2153) & m] - erBufL[(w - 2221) & m] - erBufR[(w - 2297) & m] + erBufL[(w - 2371) & m]
+        let vnR3 = -erBufL[(w - 1879) & m] + erBufR[(w - 1951) & m] + erBufL[(w - 2029) & m] - erBufR[(w - 2111) & m]
+                 + erBufL[(w - 2179) & m] - erBufR[(w - 2251) & m] - erBufL[(w - 2311) & m] + erBufR[(w - 2383) & m]
+
+        let eL = vnL0 * 0.175 + vnL1 * 0.130 + vnL2 * 0.092 + vnL3 * 0.058
+        let eR = vnR0 * 0.175 + vnR1 * 0.130 + vnR2 * 0.092 + vnR3 * 0.058
+
+        // Air absorption (~4.8 kHz wall damping) + 150 Hz low-mud clear on early reflections
         erAirLpL += (eL - erAirLpL) * 0.46
         erAirLpR += (eR - erAirLpR) * 0.46
+        erMudHpL += (erAirLpL - erMudHpL) * 0.020
+        erMudHpR += (erAirLpR - erMudHpR) * 0.020
+        let erOutL = erAirLpL - erMudHpL
+        let erOutR = erAirLpR - erMudHpR
 
         let preSamp = max(1, min(4096, Int(preDelayMs * 0.001 * sampleRate)))
-        let preL = erBufL[(erWrite - preSamp) & erMask]
-        let preR = erBufR[(erWrite - preSamp) & erMask]
-        erWrite = (erWrite + 1) & erMask
+        let preL = erBufL[(w - preSamp) & m]
+        let preR = erBufR[(w - preSamp) & m]
+        erWrite = (w + 1) & m
 
-        // 2. 4-Stage Allpass Input Diffuser (turns sharp bell/hammer hits into silk)
-        var dL = apL0.process(preL, g: 0.68)
-        dL = apL1.process(dL, g: 0.65)
-        dL = apL2.process(dL, g: 0.62)
-        dL = apL3.process(dL, g: 0.60)
+        // 2. Hybrid Velvet + 2-Stage Allpass Input Diffuser (instant high echo density, zero metallic flutter)
+        let vInL = preL * 0.62 + (vnL0 * 0.12 + vnL1 * 0.08)
+        let vInR = preR * 0.62 + (vnR0 * 0.12 + vnR1 * 0.08)
+        var dL = apL0.process(vInL, g: 0.64)
+        dL = apL1.process(dL, g: 0.58)
+        var dR = apR0.process(vInR, g: 0.64)
+        dR = apR1.process(dR, g: 0.58)
 
-        var dR = apR0.process(preR, g: 0.68)
-        dR = apR1.process(dR, g: 0.65)
-        dR = apR2.process(dR, g: 0.62)
-        dR = apR3.process(dR, g: 0.60)
-
-        // 3. Advance 8 irrational-ratio tank modulation LFOs at 6 kHz control rate (every 8 samples -> 8x fewer sin() calls, zero audible difference on <0.75 Hz LFOs)
+        // 3. Advance 8 irrational-ratio tank modulation LFOs at 6 kHz control rate
         if (lfoTick & 7) == 0 {
             let stepDt = dt * 8.0
             let twoPi = 2.0 * Double.pi
@@ -506,30 +559,34 @@ struct StudioAcousticSpace: Sendable {
         let y6 = Self.readMod(t6, writeIdx: tw, delay: modD6)
         let y7 = Self.readMod(t7, writeIdx: tw, delay: modD7)
 
-        // 4. Dual-band damping (air absorption + low-mud clearing)
-        lp0 += (y0 - lp0) * dampLP; hp0 += (lp0 - hp0) * dampHP; let f0 = lp0 - hp0
-        lp1 += (y1 - lp1) * dampLP; hp1 += (lp1 - hp1) * dampHP; let f1 = lp1 - hp1
-        lp2 += (y2 - lp2) * dampLP; hp2 += (lp2 - hp2) * dampHP; let f2 = lp2 - hp2
-        lp3 += (y3 - lp3) * dampLP; hp3 += (lp3 - hp3) * dampHP; let f3 = lp3 - hp3
-        lp4 += (y4 - lp4) * dampLP; hp4 += (lp4 - hp4) * dampHP; let f4 = lp4 - hp4
-        lp5 += (y5 - lp5) * dampLP; hp5 += (lp5 - hp5) * dampHP; let f5 = lp5 - hp5
-        lp6 += (y6 - lp6) * dampLP; hp6 += (lp6 - hp6) * dampHP; let f6 = lp6 - hp6
-        lp7 += (y7 - lp7) * dampLP; hp7 += (lp7 - hp7) * dampHP; let f7 = lp7 - hp7
+        // 4. Delay-proportional dual-band damping (exact unified frequency-dependent RT60 across all 8 lines)
+        lp0 += (y0 - lp0) * a0; hp0 += (lp0 - hp0) * dampHP; let f0 = lp0 - hp0
+        lp1 += (y1 - lp1) * a1; hp1 += (lp1 - hp1) * dampHP; let f1 = lp1 - hp1
+        lp2 += (y2 - lp2) * a2; hp2 += (lp2 - hp2) * dampHP; let f2 = lp2 - hp2
+        lp3 += (y3 - lp3) * a3; hp3 += (lp3 - hp3) * dampHP; let f3 = lp3 - hp3
+        lp4 += (y4 - lp4) * a4; hp4 += (lp4 - hp4) * dampHP; let f4 = lp4 - hp4
+        lp5 += (y5 - lp5) * a5; hp5 += (lp5 - hp5) * dampHP; let f5 = lp5 - hp5
+        lp6 += (y6 - lp6) * a6; hp6 += (lp6 - hp6) * dampHP; let f6 = lp6 - hp6
+        lp7 += (y7 - lp7) * a7; hp7 += (lp7 - hp7) * dampHP; let f7 = lp7 - hp7
 
-        // 5. Orthonormal 8x8 Fast Walsh-Hadamard Transform (scale = 1/sqrt(8) = 0.35355339)
-        let a0 = f0 + f1; let a1 = f0 - f1
-        let a2 = f2 + f3; let a3 = f2 - f3
-        let a4 = f4 + f5; let a5 = f4 - f5
-        let a6 = f6 + f7; let a7 = f6 - f7
+        // 5. Colorless Orthonormal 8x8 Signed-Diagonal Walsh-Hadamard Scatterer (Q = D * H_8 * D', ||Q||_2 == 1)
+        // Breaks Hadamard row symmetry to eliminate metallic eigenmode clusters while staying 100% lossless & O(N log N)
+        let s0 =  f0; let s1 = -f1; let s2 =  f2; let s3 = -f3
+        let s4 = -f4; let s5 =  f5; let s6 = -f6; let s7 =  f7
 
-        let b0 = a0 + a2; let b1 = a1 + a3; let b2 = a0 - a2; let b3 = a1 - a3
-        let b4 = a4 + a6; let b5 = a5 + a7; let b6 = a4 - a6; let b7 = a5 - a7
+        let b0a = s0 + s1; let b1a = s0 - s1
+        let b2a = s2 + s3; let b3a = s2 - s3
+        let b4a = s4 + s5; let b5a = s4 - s5
+        let b6a = s6 + s7; let b7a = s6 - s7
 
-        let s: Float = 0.35355339 * decay
-        let m0 = (b0 + b4) * s; let m4 = (b0 - b4) * s
-        let m1 = (b1 + b5) * s; let m5 = (b1 - b5) * s
-        let m2 = (b2 + b6) * s; let m6 = (b2 - b6) * s
-        let m3 = (b3 + b7) * s; let m7 = (b3 - b7) * s
+        let c0 = b0a + b2a; let c1 = b1a + b3a; let c2 = b0a - b2a; let c3 = b1a - b3a
+        let c4 = b4a + b6a; let c5 = b5a + b7a; let c6 = b4a - b6a; let c7 = b5a - b7a
+
+        // Delay-proportional per-line decay gains (g0..g7 already include 1/sqrt(8)) + orthogonal output permutation
+        let m0 =  (c0 + c4) * g0; let m4 = -(c0 - c4) * g4
+        let m1 = -(c1 + c5) * g1; let m5 =  (c1 - c5) * g5
+        let m2 =  (c2 + c6) * g2; let m6 =  (c2 - c6) * g6
+        let m3 = -(c3 + c7) * g3; let m7 = -(c3 - c7) * g7
 
         // Inject diffused stereo energy orthogonally across the 8 lines
         t0[tw] = m0 + dL * 0.36
@@ -542,10 +599,10 @@ struct StudioAcousticSpace: Sendable {
         t7[tw] = m7 + (dR - dL) * 0.19
         tw = (tw + 1) & Self.lineMask
 
-        // 6. Decorrelated stereo late output + early reflections
+        // 6. Decorrelated stereo late output + 32-tap Velvet-Noise early reflections
         let lateL = (y0 + y2 - y4 + y6) * 0.32
         let lateR = (y1 - y3 + y5 + y7) * 0.32
-        return (lateL + erAirLpL * erMix, lateR + erAirLpR * erMix)
+        return (lateL + erOutL * erMix, lateR + erOutR * erMix)
     }
 
     mutating func clear() {
@@ -554,9 +611,10 @@ struct StudioAcousticSpace: Sendable {
             t0[i] = 0; t1[i] = 0; t2[i] = 0; t3[i] = 0
             t4[i] = 0; t5[i] = 0; t6[i] = 0; t7[i] = 0
         }
-        apL0.clear(); apL1.clear(); apL2.clear(); apL3.clear()
-        apR0.clear(); apR1.clear(); apR2.clear(); apR3.clear()
+        apL0.clear(); apL1.clear()
+        apR0.clear(); apR1.clear()
         erAirLpL = 0; erAirLpR = 0
+        erMudHpL = 0; erMudHpR = 0
         lp0 = 0; lp1 = 0; lp2 = 0; lp3 = 0; lp4 = 0; lp5 = 0; lp6 = 0; lp7 = 0
         hp0 = 0; hp1 = 0; hp2 = 0; hp3 = 0; hp4 = 0; hp5 = 0; hp6 = 0; hp7 = 0
     }
