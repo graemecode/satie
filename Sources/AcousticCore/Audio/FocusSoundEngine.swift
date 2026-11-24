@@ -7,6 +7,7 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
     case pulse
     case rain
     case still
+    case dive
     case drift
 
     public var id: String { rawValue }
@@ -15,8 +16,9 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .focus: return "Soft Light"
         case .pulse: return "Kinetic Pulse"
-        case .rain: return "Rain & Glass"
+        case .rain:  return "Rain & Glass"
         case .still: return "Still"
+        case .dive:  return "Deep Dive"
         case .drift: return "Gymnopédie"
         }
     }
@@ -25,8 +27,9 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .focus: return "FOCUS"
         case .pulse: return "PULSE"
-        case .rain: return "RAIN"
+        case .rain:  return "RAIN"
         case .still: return "STILL"
+        case .dive:  return "DIVE"
         case .drift: return "NIGHT"
         }
     }
@@ -35,8 +38,9 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .focus: return "Felt Piano · Vibraphone"
         case .pulse: return "Analog Pulse · Warm Sub"
-        case .rain: return "Gentle Rain · Wine Glasses"
+        case .rain:  return "Gentle Rain · Wine Glasses"
         case .still: return "Quiet Ambient · No Melody"
+        case .dive:  return "Rain · Bronze Bowls · Breath"
         case .drift: return "Nocturnal Piano · Cello"
         }
     }
@@ -171,12 +175,20 @@ public struct VisualMusicalFrame: Sendable {
     public let chordAge: Float           // Seconds since last chord change (>= 99.0 when inactive)
     public let barPhase: Float           // 0..1 within current bar
     public let isPlaying: Bool
+    public let breathPhase: Float        // 0..1 live resonance breath pacer (Deep Dive)
+    public let meditationDepth: Float    // 0..1 physiological descent arc (Arrival -> Depth)
+    public let binauralDeltaHz: Float    // Live binaural beat frequency (Hz)
+    public let isDeepDive: Bool
 
     public static let empty = VisualMusicalFrame(
         notes: [VisualNoteEvent](repeating: .inactive, count: 12),
         chordAge: 99.0,
         barPhase: 0,
-        isPlaying: false
+        isPlaying: false,
+        breathPhase: 0.5,
+        meditationDepth: 0.0,
+        binauralDeltaHz: 0.0,
+        isDeepDive: false
     )
 }
 
@@ -198,6 +210,7 @@ final class VisualNoteRing: @unchecked Sendable {
 
     let clockMsAtom = Atomic<UInt64>(0)
     let chordStampMsAtom = Atomic<UInt64>(0)
+    let meditationStateAtom = Atomic<UInt64>(0)
     private var writeCursor: Int = 0
 
     @inline(__always)
@@ -240,6 +253,7 @@ final class VisualNoteRing: @unchecked Sendable {
         for i in 0..<12 { storeSlot(i, 0) }
         clockMsAtom.store(0, ordering: .releasing)
         chordStampMsAtom.store(0, ordering: .releasing)
+        meditationStateAtom.store(0, ordering: .releasing)
         writeCursor = 0
     }
 
@@ -270,6 +284,16 @@ final class VisualNoteRing: @unchecked Sendable {
         clockMsAtom.store(ms, ordering: .releasing)
     }
 
+    @inline(__always)
+    func updateMeditation(breath01: Float, depth01: Float, deltaHz: Float, isDeepDive: Bool) {
+        let bU = UInt64(max(0.0, min(1.0, breath01)) * 65535.0) & 0xFFFF
+        let dU = UInt64(max(0.0, min(1.0, depth01)) * 65535.0) & 0xFFFF
+        let fU = UInt64(max(0.0, min(20.0, deltaHz)) / 20.0 * 65535.0) & 0xFFFF
+        let flag: UInt64 = isDeepDive ? 1 : 0
+        let packed = bU | (dU << 16) | (fU << 32) | (flag << 48)
+        meditationStateAtom.store(packed, ordering: .releasing)
+    }
+
     func snapshot(isPlaying: Bool, barPhase: Float) -> VisualMusicalFrame {
         let nowMs = clockMsAtom.load(ordering: .acquiring)
         guard isPlaying, nowMs > 0 else { return .empty }
@@ -283,7 +307,7 @@ final class VisualNoteRing: @unchecked Sendable {
                 continue
             }
             let age = Float(nowMs - stampMs) * 0.001
-            if age > 10.0 {
+            if age > 15.0 {
                 out.append(.inactive)
                 continue
             }
@@ -295,7 +319,21 @@ final class VisualNoteRing: @unchecked Sendable {
         }
         let chordStamp = chordStampMsAtom.load(ordering: .acquiring)
         let chordAge: Float = (chordStamp > 0 && nowMs >= chordStamp) ? Float(nowMs - chordStamp) * 0.001 : 99.0
-        return VisualMusicalFrame(notes: out, chordAge: chordAge, barPhase: barPhase, isPlaying: true)
+        let medPacked = meditationStateAtom.load(ordering: .acquiring)
+        let isDeep = ((medPacked >> 48) & 1) != 0
+        let breathPhase = isDeep ? (Float(medPacked & 0xFFFF) / 65535.0) : 0.5
+        let medDepth = isDeep ? (Float((medPacked >> 16) & 0xFFFF) / 65535.0) : 0.0
+        let deltaHz = isDeep ? (Float((medPacked >> 32) & 0xFFFF) / 65535.0 * 20.0) : 0.0
+        return VisualMusicalFrame(
+            notes: out,
+            chordAge: chordAge,
+            barPhase: barPhase,
+            isPlaying: true,
+            breathPhase: breathPhase,
+            meditationDepth: medDepth,
+            binauralDeltaHz: deltaHz,
+            isDeepDive: isDeep
+        )
     }
 }
 
@@ -860,11 +898,13 @@ public final class FocusSoundEngine: @unchecked Sendable {
         frames: Int = 4096,
         ducked: Bool = false,
         warmupFrames: Int = 24_000,
-        seed: UInt32 = 42
+        seed: UInt32 = 42,
+        sessionProgress: Float = -1.0
     ) -> (left: [Float], right: [Float]) {
         let state = FocusRenderState(seed: seed)
         state.modeAtom.store(FocusSoundscape.allCases.firstIndex(of: mode) ?? 0, ordering: .releasing)
         state.circadianAtom.store(circadian.rawValue, ordering: .releasing)
+        state.sessionProgressBitsAtom.store(sessionProgress.bitPattern, ordering: .releasing)
         state.volumeBitsAtom.store(Float(0.75).bitPattern, ordering: .releasing)
         state.isActiveAtom.store(1, ordering: .releasing)
         state.isDuckedAtom.store(ducked ? 1 : 0, ordering: .releasing)
@@ -872,7 +912,7 @@ public final class FocusSoundEngine: @unchecked Sendable {
 
         var warmL = [Float](repeating: 0, count: 512)
         var warmR = [Float](repeating: 0, count: 512)
-        let warmBlocks = max(1, warmupFrames / 512)
+        let warmBlocks = max(0, warmupFrames / 512)
         for _ in 0..<warmBlocks {
             warmL.withUnsafeMutableBufferPointer { lb in
                 warmR.withUnsafeMutableBufferPointer { rb in
@@ -883,10 +923,22 @@ public final class FocusSoundEngine: @unchecked Sendable {
 
         var l = [Float](repeating: 0, count: frames)
         var r = [Float](repeating: 0, count: frames)
-        l.withUnsafeMutableBufferPointer { lb in
-            r.withUnsafeMutableBufferPointer { rb in
-                state.render(outL: lb.baseAddress!, outR: rb.baseAddress!, frames: frames, sampleRate: 48_000, allowSyncFallback: true)
+        let chunk = 2048
+        var offset = 0
+        while offset < frames {
+            let n = min(chunk, frames - offset)
+            l.withUnsafeMutableBufferPointer { lb in
+                r.withUnsafeMutableBufferPointer { rb in
+                    state.render(
+                        outL: lb.baseAddress!.advanced(by: offset),
+                        outR: rb.baseAddress!.advanced(by: offset),
+                        frames: n,
+                        sampleRate: 48_000,
+                        allowSyncFallback: true
+                    )
+                }
             }
+            offset += n
         }
         return (l, r)
     }
@@ -1012,6 +1064,7 @@ private final class FocusRenderState: @unchecked Sendable {
     private var velvetBrown = VelvetBrownNoise()
     private var rainEngine = PhysicalRainEngine()
     private var grooveEngine = HypnoticGrooveEngine()
+    private var deepMeditation: DeepMeditationEngine
     private var masterBus = AudiophileMasterBus()
 
     // ZDF bus tone shapers
@@ -1032,11 +1085,14 @@ private final class FocusRenderState: @unchecked Sendable {
     private var duckGain: Float = 1
     private var dryTransitionGain: Float = 1
     private var smoothVol: Float = 0.65
+    private var betaAmPhase: Double = 0
     private(set) var isAudibleOutput: Bool = false
 
     init(seed: UInt32 = 42) {
-        self.noiseRNG = FastNoiseRNG(seed: UInt64(seed) &* 0x9E3779B97F4A7C15 ^ 0xA5A5_5A5A)
+        let baseSeed = UInt64(seed) &* 0x9E3779B97F4A7C15 ^ 0xA5A5_5A5A
+        self.noiseRNG = FastNoiseRNG(seed: baseSeed)
         self.offlineScoreRNG = SeededRNG(seed: seed)
+        self.deepMeditation = DeepMeditationEngine(bank: StudioSampleBank.shared, seed: baseSeed ^ 0xD1AE_5A71)
         self.samplerVoices = (0..<24).map { _ in AcousticSamplerVoice() }
         self.feltPianos = (0..<8).map { _ in FeltPianoVoice() }
     }
@@ -1062,12 +1118,14 @@ private final class FocusRenderState: @unchecked Sendable {
         studioRain.reset()
         velvetBrown.reset()
         grooveEngine.reset()
+        deepMeditation.reset()
         masterBus.clear()
         strHpL.reset(); strHpR.reset()
         strLpL.reset(); strLpR.reset()
         padLpL.reset(); padLpR.reset()
 
         clockSec = 0
+        betaAmPhase = 0
         currentBarStartSec = 0
         barBellCursor = 0
         barSustainCursor = 0
@@ -1088,8 +1146,10 @@ private final class FocusRenderState: @unchecked Sendable {
             samplerVoices[i].active = false
         }
         grooveEngine.reset()
+        deepMeditation.reset()
         dryTransitionGain = 0.0 // ramps smoothly 0 -> 1 over ~220ms while reverb/Beads carry the tail
         clockSec = 0
+        betaAmPhase = 0
         currentBarStartSec = 0
         barBellCursor = 0
         barSustainCursor = 0
@@ -1141,6 +1201,7 @@ private final class FocusRenderState: @unchecked Sendable {
         let intensity: SoundIntensity = intensityRaw == 0 ? .still : (intensityRaw == 2 ? .deep : .flow)
         let maskingRaw = max(0, min(2, maskingBedAtom.load(ordering: .acquiring)))
         let maskingBed: MaskingBed = maskingRaw == 1 ? .rain : (maskingRaw == 2 ? .brown : .off)
+        let isDeepMeditation = (mode == .dive)
         let sessionProg = Float(bitPattern: sessionProgressBitsAtom.load(ordering: .acquiring))
         let targetVol = Float(bitPattern: volumeBitsAtom.load(ordering: .acquiring))
 
@@ -1195,7 +1256,11 @@ private final class FocusRenderState: @unchecked Sendable {
         if softReseedAtom.exchange(0, ordering: .acquiring) != 0 && wantActive {
             // Smooth musical phrase pivot: keeps reverb & granular tails blooming while loading fresh seed bar
             currentBarStartSec = clockSec
-            pullNextBar(mode: mode, circadian: circadian, allowSyncFallback: allowSyncFallback)
+            if isDeepMeditation {
+                deepMeditation.reset(seed: noiseRNG.nextUInt64())
+            } else {
+                pullNextBar(mode: mode, circadian: circadian, allowSyncFallback: allowSyncFallback)
+            }
         }
 
         if scoreResetAtom.exchange(0, ordering: .acquiring) != 0 || (wantActive && (modeIdx != activeModeIdx || circadianRaw != activeCircadianRaw)) {
@@ -1284,7 +1349,7 @@ private final class FocusRenderState: @unchecked Sendable {
             tapeWowMs = 1.45
             figEchoSend = 0.14
             melEchoSend = 0.20
-        case .still:
+        case .still, .dive:
             preDelayMs = 28.0
             roomDecay = Float(0.89 + 0.03 * spaceBloom)
             roomDampLP = 0.28
@@ -1312,6 +1377,9 @@ private final class FocusRenderState: @unchecked Sendable {
         let activeStep: Float = wantActive ? 0.00018 : 0.00032
         let duckStep: Float   = wantDucked ? 0.00028 : 0.00009
         var blockPeak: Float = 0
+        var lastMedBreath: Float = 0.5
+        var lastMedDepth: Float = 0.0
+        var lastMedDeltaHz: Float = 0.0
 
         for i in 0..<frames {
             activeGain += (targetActiveGain - activeGain) * activeStep
@@ -1323,6 +1391,79 @@ private final class FocusRenderState: @unchecked Sendable {
             if masterEnv < 0.0001 && !chimeVoiceA.active && !chimeVoiceB.active {
                 outL[i] = 0
                 outR[i] = 0
+                continue
+            }
+
+            if isDeepMeditation {
+                clockSec += dt
+                let med = deepMeditation.step(
+                    elapsedSec: clockSec,
+                    circadian: circadian,
+                    intensity: intensity,
+                    sessionProgress: sessionProg,
+                    masterScale: masterEnv * smoothVol * arcGainScale,
+                    dt: dt,
+                    sampleRate: sampleRate,
+                    sineTable: bank.sineTable
+                )
+                lastMedBreath = med.breath01
+                lastMedDepth = med.depth01
+                lastMedDeltaHz = med.binauralDeltaHz
+                if let strike = med.strike {
+                    visualRing.recordNote(
+                        midi: strike.midi,
+                        pan: Double(strike.pan),
+                        velocity: Double(strike.velocity),
+                        kind: strike.isRinBell ? 2 : 1,
+                        clockSec: clockSec
+                    )
+                }
+
+                var dL = med.dryL
+                var dR = med.dryR
+                if maskingBed == .brown {
+                    let (bL, bR) = velvetBrown.step(clockSec: clockSec, brightnessScale: intBrightScale * arcBrightness, sampleRate: sampleRate)
+                    dL += bL * 0.65
+                    dR += bR * 0.65
+                }
+
+                let (wetL, wetR) = space.process(
+                    med.revInL * dryTransitionGain,
+                    med.revInR * dryTransitionGain,
+                    preDelayMs: 34.0,
+                    decay: 0.908,
+                    dampLP: 0.34,
+                    dampHP: 0.025,
+                    erMix: 0.36,
+                    modScale: 1.04,
+                    dt: dt,
+                    sampleRate: sampleRate
+                )
+                let mL = dL * dryTransitionGain + wetL * 0.56
+                let mR = dR * dryTransitionGain + wetR * 0.56
+
+                // Calibrated makeup to match Classic STILL RMS (~ -19.0 dBFS at 75% volume)
+                let diveMakeup: Float = 5.4
+                var (finalL, finalR) = masterBus.process(
+                    mL, mR,
+                    airCeilingHz: min(airCeilingHz, 6400.0),
+                    stereoWidthBoost: 0.10,
+                    outputGain: diveMakeup * masterEnv * smoothVol * arcGainScale,
+                    postMatrixInjectL: med.postMatrixL,
+                    postMatrixInjectR: med.postMatrixR,
+                    sampleRate: sampleRate
+                )
+
+                if chimeVoiceA.active || chimeVoiceB.active {
+                    let (cAL, cAR) = chimeVoiceA.step(dt: dt, sampleRate: sampleRate, sineTable: bank.sineTable, noise: &noiseRNG)
+                    let (cBL, cBR) = chimeVoiceB.step(dt: dt, sampleRate: sampleRate, sineTable: bank.sineTable, noise: &noiseRNG)
+                    finalL = tanh((finalL + (cAL + cBL) * 1.25) / 0.94) * 0.94
+                    finalR = tanh((finalR + (cAR + cBR) * 1.25) / 0.94) * 0.94
+                }
+
+                outL[i] = finalL
+                outR[i] = finalR
+                blockPeak = max(blockPeak, abs(finalL), abs(finalR))
                 continue
             }
 
@@ -1449,7 +1590,7 @@ private final class FocusRenderState: @unchecked Sendable {
                             nextPianoSlot = (nextPianoSlot + 1) % feltPianos.count
                         }
 
-                    case .still:
+                    case .still, .dive:
                         // Zero-Ego Study: Friction-Bowed Wine Glasses + Whisper Felt Piano (no melody hook, pure suspended field)
                         if sampleBank.isAvailable {
                             let inst: AcousticInstrumentID = (ev.kind == .glint) ? .glass : ((barBellCursor % 2 == 0) ? .piano : .glass)
@@ -1611,10 +1752,11 @@ private final class FocusRenderState: @unchecked Sendable {
             var filtPadL = padLpL.lowpass(pL)
             var filtPadR = padLpR.lowpass(pR)
 
-            // 4. Mode-specific Groove (Kinetic Pulse) or 3-Layer Physical Rain (Rain & Glass)
+            // 4. Mode-specific Groove (Kinetic Pulse) + Band-Selective 15 Hz Beta-Range Rapid AM (Woods & Loui 2024)
             var pulseSub: Float = 0
             var percL: Float = 0, percR: Float = 0
             var sidechainGain: Float = 1.0
+            var betaModGain: Float = 1.0
             if mode == .pulse {
                 let grv = grooveEngine.step(
                     clockSec: clockSec, spb: spb, dt: dt, sampleRate: sampleRate,
@@ -1627,6 +1769,14 @@ private final class FocusRenderState: @unchecked Sendable {
                 // Pad & cello gently breathe around the analog sub-kick
                 filtPadL *= sidechainGain
                 filtPadR *= sidechainGain
+
+                // Woods, Loui et al. (Communications Biology, Oct 2024): smooth 15.0 Hz beta-band
+                // rapid acoustic AM on mid-upper harmonic layers (never sub-bass) supports sustained attention
+                betaAmPhase += 15.0 * dt
+                if betaAmPhase >= 1.0 { betaAmPhase -= floor(betaAmPhase) }
+                let amDepth: Float = intensity == .still ? 0.22 : (intensity == .deep ? 0.42 : 0.34)
+                let modWave = 0.5 - 0.5 * Float(cos(2.0 * Double.pi * betaAmPhase))
+                betaModGain = (1.0 - amDepth * modWave) / (1.0 - amDepth * 0.5)
             }
 
             // Independent Acoustic Masking Bed:
@@ -1655,12 +1805,12 @@ private final class FocusRenderState: @unchecked Sendable {
             }
 
             // 5. Studio Acoustic Space (Pre-Delay + Early Reflections + 4-Stage Allpass + 8x8 Modulated FDN)
-            let dryL = (fcL + mcL + scL * sidechainGain + filtPadL + bsL + pulseSub + percL + rainTexL) * dryTransitionGain + beadsL * cloudWet * sidechainGain
-            let dryR = (fcR + mcR + scR * sidechainGain + filtPadR + bsR + pulseSub + percR + rainTexR) * dryTransitionGain + beadsR * cloudWet * sidechainGain
+            let dryL = ((fcL + mcL + scL * sidechainGain + filtPadL) * betaModGain + bsL + pulseSub + percL + rainTexL) * dryTransitionGain + beadsL * cloudWet * sidechainGain * betaModGain
+            let dryR = ((fcR + mcR + scR * sidechainGain + filtPadR) * betaModGain + bsR + pulseSub + percR + rainTexR) * dryTransitionGain + beadsR * cloudWet * sidechainGain * betaModGain
 
             // Keep sub-bass & close rain sheet mostly out of the reverb tank for crystalline clarity
-            let revInL = (fcL + mcL + strCleanL * 0.95 + filtPadL * 0.65 + percL * 0.40 + rainTexL * 0.20) * dryTransitionGain + beadsL * (cloudWet * 0.65)
-            let revInR = (fcR + mcR + strCleanR * 0.95 + filtPadR * 0.65 + percR * 0.40 + rainTexR * 0.20) * dryTransitionGain + beadsR * (cloudWet * 0.65)
+            let revInL = ((fcL + mcL + strCleanL * 0.95 + filtPadL * 0.65) * betaModGain + percL * 0.40 + rainTexL * 0.20) * dryTransitionGain + beadsL * (cloudWet * 0.65) * betaModGain
+            let revInR = ((fcR + mcR + strCleanR * 0.95 + filtPadR * 0.65) * betaModGain + percR * 0.40 + rainTexR * 0.20) * dryTransitionGain + beadsR * (cloudWet * 0.65) * betaModGain
             let (wetL, wetR) = space.process(
                 revInL, revInR,
                 preDelayMs: preDelayMs,
@@ -1685,6 +1835,7 @@ private final class FocusRenderState: @unchecked Sendable {
             case .rain:  modeMakeup = 7.4
             case .drift: modeMakeup = 6.2
             case .still: modeMakeup = 7.1
+            case .dive:  modeMakeup = 6.3
             }
             var (finalL, finalR) = masterBus.process(
                 mixL, mixR,
@@ -1717,6 +1868,12 @@ private final class FocusRenderState: @unchecked Sendable {
         }
 
         visualRing.updateClock(clockSec: clockSec)
+        visualRing.updateMeditation(
+            breath01: lastMedBreath,
+            depth01: lastMedDepth,
+            deltaHz: lastMedDeltaHz,
+            isDeepDive: isDeepMeditation
+        )
         isAudibleOutput = blockPeak > 0.0008
     }
 }

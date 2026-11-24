@@ -128,6 +128,17 @@ struct SoundscapeGlyph: View {
                     ctx.stroke(ref, with: .color(secondary), style: thinStyle)
                 }
 
+            case .dive:
+                // DIVE (Deep Dive Meditation): Concentric resonance rings rising from a singing-bowl center
+                for (idx, (frac, isPrimary)) in [(CGFloat(0.96), false), (CGFloat(0.62), true), (CGFloat(0.30), true)].enumerated() {
+                    let r = ir * frac
+                    let ring = Path(ellipseIn: CGRect(x: center.x - r, y: center.y - r, width: r * 2, height: r * 2))
+                    ctx.stroke(ring, with: .color(isPrimary ? primary : secondary), style: idx == 0 ? thinStyle : strokeStyle)
+                }
+                let dotR = max(1.3, size * 0.036)
+                let dot = Path(ellipseIn: CGRect(x: center.x - dotR, y: center.y - dotR, width: dotR * 2, height: dotR * 2))
+                ctx.fill(dot, with: .color(primary))
+
             case .drift:
                 // NIGHT (Gymnopédie): Exact mathematical crescent (true circle-circle intersection) + 2 subtle stars
                 let R = ir * 0.88

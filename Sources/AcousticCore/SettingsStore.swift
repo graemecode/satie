@@ -10,6 +10,7 @@ public enum VisualPreset: Int, CaseIterable, Identifiable, Sendable {
     case phosphor = 2
     case liquid = 3
     case horizon = 4
+    case oculus = 5
 
     public var id: Int { rawValue }
 
@@ -20,6 +21,7 @@ public enum VisualPreset: Int, CaseIterable, Identifiable, Sendable {
         case .phosphor: return "03 Phosphor Scope"
         case .liquid:   return "04 Nocturne Silk"
         case .horizon:  return "05 Horizon"
+        case .oculus:   return "06 Oculus"
         }
     }
 
@@ -30,6 +32,7 @@ public enum VisualPreset: Int, CaseIterable, Identifiable, Sendable {
         case .phosphor: return "03 Scope"
         case .liquid:   return "04 Nocturne"
         case .horizon:  return "05 Horizon"
+        case .oculus:   return "06 Oculus"
         }
     }
 
@@ -40,6 +43,7 @@ public enum VisualPreset: Int, CaseIterable, Identifiable, Sendable {
         case .phosphor: return "Scope"
         case .liquid:   return "Nocturne"
         case .horizon:  return "Horizon"
+        case .oculus:   return "Oculus"
         }
     }
 
@@ -50,6 +54,7 @@ public enum VisualPreset: Int, CaseIterable, Identifiable, Sendable {
         case .pulse: return .phosphor
         case .rain:  return .ecology
         case .still: return .horizon
+        case .dive:  return .oculus
         case .drift: return .liquid
         }
     }

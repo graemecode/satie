@@ -508,11 +508,12 @@ struct SatieiOSRootView: View {
                             .foregroundColor(inkDim)
                     }
 
+                    visualOptionChip(label: "Auto (Paired to Sound)", selected: state.visualFollowsSoundscape) {
+                        state.setVisualOverride(nil)
+                    }
+
                     let gridColumns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 3)
                     LazyVGrid(columns: gridColumns, spacing: 6) {
-                        visualOptionChip(label: "Auto", selected: state.visualFollowsSoundscape) {
-                            state.setVisualOverride(nil)
-                        }
                         ForEach(VisualPreset.allCases) { p in
                             visualOptionChip(
                                 label: p.cleanName,
@@ -648,6 +649,7 @@ struct SatieiOSRootView: View {
         case .pulse: return Color(red: 0.62, green: 0.78, blue: 1.00)
         case .rain:  return Color(red: 0.52, green: 0.82, blue: 0.84)
         case .still: return Color(red: 0.78, green: 0.82, blue: 0.88)
+        case .dive:  return Color(red: 0.62, green: 0.88, blue: 0.94)
         case .drift: return Color(red: 0.92, green: 0.84, blue: 0.74)
         }
     }

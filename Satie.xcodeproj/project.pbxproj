@@ -37,6 +37,7 @@
 		414D266FE2F48BDC9A5138A9 /* PopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3DA4821A4C1D37DA91900FD /* PopoverView.swift */; };
 		48EA52D10AE5CEEDEA1AF67C /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 98F2A747872292287D43EDB1 /* Shaders.metal */; };
 		49F30A0595CBC1046F357205 /* SatieScore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9F0E70D2C1A26D3B9E6EF9D /* SatieScore.swift */; };
+		4DC6CAF3ABA7E263D95151F7 /* DeepMeditationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BAAE580701A189444B0BECF /* DeepMeditationEngine.swift */; };
 		4F91BE3C5414B7D80FF785AB /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 5E4904B6DEFC775766DA2BDE /* PrivacyInfo.xcprivacy */; };
 		50E1402F8A8D5E148E0E3821 /* MenuBarIconView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC8E104331B3F39C4E04B1C7 /* MenuBarIconView.swift */; };
 		548C3AA218C4B0BD2B164437 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 07ABB3440DE0092F8D5289CC /* UIKit.framework */; };
@@ -49,6 +50,7 @@
 		6BCC890D383A4C365C2D578D /* SystemOutputMute.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAC394FB658764287AB8D2AD /* SystemOutputMute.swift */; };
 		6C2A115B406C284E20140A3B /* AVKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 3EDC67035BD454BB902EEE81 /* AVKit.framework */; };
 		6C6FC10F0F6FBB01296337B7 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C09B2662313A4B98C2FDB60B /* AudioToolbox.framework */; };
+		786F0F0221D310BA3EDA86F3 /* StudioLifecycleMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BEE7BA98A1F7854BC616FB /* StudioLifecycleMachine.swift */; };
 		7AA28113C96613625C528500 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A33A2C51CABCFB6BEF4E27F /* Metal.framework */; };
 		7B26BD838432C8BAECE116DA /* iOSMetalVisualizerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 189A933E292B634721E4D149 /* iOSMetalVisualizerView.swift */; };
 		7DC4BA7ECCA6389B6D9820D0 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 5E4904B6DEFC775766DA2BDE /* PrivacyInfo.xcprivacy */; };
@@ -75,12 +77,14 @@
 		B89B065AF726B4CC73C9ADFF /* Samples in Resources */ = {isa = PBXBuildFile; fileRef = 207AD2FDDD6C7BB0B3E43E70 /* Samples */; };
 		BD610A83FD38B644F9F19AE0 /* RingBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A19E78A66174C598734FA64 /* RingBuffer.swift */; };
 		C0B58F408CC04DFB3E98A79A /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E54F49B63B355BED408C30E8 /* QuartzCore.framework */; };
+		C488B2DFAFA75BA649EB8376 /* StudioLifecycleMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BEE7BA98A1F7854BC616FB /* StudioLifecycleMachine.swift */; };
 		C4F420D28FD4848C2137D557 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2E99D8026CE501ABDECE5557 /* IOKit.framework */; };
 		C79736F69FBD1903C8BC5098 /* libAcousticCoreiOS.a in Frameworks */ = {isa = PBXBuildFile; fileRef = BC53345179B29CF2DA3DB649 /* libAcousticCoreiOS.a */; };
 		CA0AF107BB4C5EA9A236C486 /* StudioSampleBank.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E006F291E4706B32DAC704 /* StudioSampleBank.swift */; };
 		CC179D843B12A33A046A6E21 /* SatieiOSState.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFF0CFC2804B8A275E4867CF /* SatieiOSState.swift */; };
 		D4E55D31EBA9DA4B71DF5144 /* MenuBarPositioner.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECF78C003BD8651395C98184 /* MenuBarPositioner.swift */; };
 		D82D425EBE9CEA06C43783BA /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 629495FE49834D6D71731C80 /* SwiftUI.framework */; };
+		D93B9DDB8D481A116962FDBA /* DeepMeditationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BAAE580701A189444B0BECF /* DeepMeditationEngine.swift */; };
 		DAED4C2EA2EB9A543BAD77F0 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 440ED3310416F607260F337C /* MetalKit.framework */; };
 		DB4132EDADD58A7E1792E7FD /* SatieiOSRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2D7570FAF75051B97363F1 /* SatieiOSRootView.swift */; };
 		DC62F69E36A9F79F6D343094 /* PhysicalInstruments.swift in Sources */ = {isa = PBXBuildFile; fileRef = C36E1A9803E13EA8DAD1C9C2 /* PhysicalInstruments.swift */; };
@@ -134,6 +138,7 @@
 		3EDC67035BD454BB902EEE81 /* AVKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVKit.framework; path = System/Library/Frameworks/AVKit.framework; sourceTree = SDKROOT; };
 		40CC447EB9A17B2B2E70A325 /* ModularAlchemy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModularAlchemy.swift; sourceTree = "<group>"; };
 		440ED3310416F607260F337C /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
+		4BAAE580701A189444B0BECF /* DeepMeditationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepMeditationEngine.swift; sourceTree = "<group>"; };
 		5E4904B6DEFC775766DA2BDE /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		602EB20DCB48E0B90610AF70 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		629495FE49834D6D71731C80 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
@@ -149,6 +154,7 @@
 		A3DA4821A4C1D37DA91900FD /* PopoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverView.swift; sourceTree = "<group>"; };
 		B0620EAF39E3CA03E0C9F707 /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
 		B088A28104E37FB1C43B26EA /* StoreKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = StoreKit.framework; path = System/Library/Frameworks/StoreKit.framework; sourceTree = SDKROOT; };
+		B9BEE7BA98A1F7854BC616FB /* StudioLifecycleMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioLifecycleMachine.swift; sourceTree = "<group>"; };
 		BAB00A878553F903199C632D /* MediaPlayer.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MediaPlayer.framework; path = System/Library/Frameworks/MediaPlayer.framework; sourceTree = SDKROOT; };
 		BC53345179B29CF2DA3DB649 /* libAcousticCoreiOS.a */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = archive.ar; path = libAcousticCoreiOS.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		C09B2662313A4B98C2FDB60B /* AudioToolbox.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AudioToolbox.framework; path = System/Library/Frameworks/AudioToolbox.framework; sourceTree = SDKROOT; };
@@ -330,6 +336,7 @@
 				99D7F0DD8AEB2D15C2A63885 /* Log.swift */,
 				ECF78C003BD8651395C98184 /* MenuBarPositioner.swift */,
 				2081B71872082F0D71876F09 /* SettingsStore.swift */,
+				B9BEE7BA98A1F7854BC616FB /* StudioLifecycleMachine.swift */,
 				CB0B9D04FCB0145DD8AB62EC /* Audio */,
 				74E5D46148EC2FFB163C3C91 /* Media */,
 			);
@@ -341,6 +348,7 @@
 			isa = PBXGroup;
 			children = (
 				28203EBA3E3674D8B8D6BFCF /* AcousticDSP.swift */,
+				4BAAE580701A189444B0BECF /* DeepMeditationEngine.swift */,
 				97835604CF2371330F57FCF8 /* DSPPrimitives.swift */,
 				C4FA21DBE3D9F0F3D9E6307C /* FocusSoundEngine.swift */,
 				40CC447EB9A17B2B2E70A325 /* ModularAlchemy.swift */,
@@ -397,7 +405,7 @@
 			path = Renderer;
 			sourceTree = "<group>";
 		};
-		"TEMP_C995F80D-F265-4037-A90F-0912DD3D8070" /* Resources */ = {
+		"TEMP_1C6BFCD1-718F-48D8-BAE1-E87BB631E97E" /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -591,6 +599,7 @@
 			files = (
 				94014079E101F1E06B5D2157 /* AcousticDSP.swift in Sources */,
 				F76EABBC008844E07E9CEE38 /* DSPPrimitives.swift in Sources */,
+				D93B9DDB8D481A116962FDBA /* DeepMeditationEngine.swift in Sources */,
 				ED6D81940E85BF1372B5DD0A /* FocusSoundEngine.swift in Sources */,
 				2E3AE4798A666582E1EEE326 /* GlobalHotKeys.swift in Sources */,
 				ED56ABE00CF954D43C198428 /* Log.swift in Sources */,
@@ -601,6 +610,7 @@
 				A6A8C039392338FBB5C50E31 /* RingBuffer.swift in Sources */,
 				49F30A0595CBC1046F357205 /* SatieScore.swift in Sources */,
 				9868CC73A7A45ECEED79DEB2 /* SettingsStore.swift in Sources */,
+				786F0F0221D310BA3EDA86F3 /* StudioLifecycleMachine.swift in Sources */,
 				1B28437D80E1A0D580D05BB0 /* StudioSampleBank.swift in Sources */,
 				1105963129D6B8BA312D5A86 /* SystemOutputMute.swift in Sources */,
 			);
@@ -630,6 +640,7 @@
 			files = (
 				59C43D5FC24773E0BDD29662 /* AcousticDSP.swift in Sources */,
 				37877166FFA2E3CD064AAF2D /* DSPPrimitives.swift in Sources */,
+				4DC6CAF3ABA7E263D95151F7 /* DeepMeditationEngine.swift in Sources */,
 				082699013F74504DC81EF9FA /* FocusSoundEngine.swift in Sources */,
 				074A3E10A6E0DF5FAE439508 /* GlobalHotKeys.swift in Sources */,
 				AF9C4239355A6EFBFEE96523 /* Log.swift in Sources */,
@@ -640,6 +651,7 @@
 				BD610A83FD38B644F9F19AE0 /* RingBuffer.swift in Sources */,
 				27BCD328DD52D5B82E249404 /* SatieScore.swift in Sources */,
 				361756963F28B602B8259B42 /* SettingsStore.swift in Sources */,
+				C488B2DFAFA75BA649EB8376 /* StudioLifecycleMachine.swift in Sources */,
 				CA0AF107BB4C5EA9A236C486 /* StudioSampleBank.swift in Sources */,
 				6BCC890D383A4C365C2D578D /* SystemOutputMute.swift in Sources */,
 			);

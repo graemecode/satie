@@ -39,6 +39,7 @@ struct AcousticUniforms {
         .zero, .zero, .zero, .zero, .zero, .zero
     )
     var noteKinds: (SIMD4<Float>, SIMD4<Float>, SIMD4<Float>) = (.zero, .zero, .zero)
+    var breathDepth: SIMD4<Float> = SIMD4<Float>(0.5, 0.0, 0.0, 0.0) // (breath01, depth01, binauralDeltaHz, isDeepDive)
 }
 
 /// Shared Metal device + compiled pipelines (created once, shared across Popover, MiniHUD, and Studio windows).
@@ -59,6 +60,7 @@ final class SharedMetalPipelines {
     let liquidUpdatePipeline: MTLRenderPipelineState
     let liquidDisplayPipeline: MTLRenderPipelineState
     let horizonPipeline: MTLRenderPipelineState
+    let oculusPipeline: MTLRenderPipelineState
 
     private init() {
         guard let dev = MTLCreateSystemDefaultDevice(),
@@ -106,6 +108,7 @@ final class SharedMetalPipelines {
         self.liquidUpdatePipeline = makePipeline(vertex: "fullscreenVertex", fragment: "liquidUpdateFragment", pixelFormat: .rgba16Float)
         self.liquidDisplayPipeline = makePipeline(vertex: "fullscreenVertex", fragment: "liquidDisplayFragment")
         self.horizonPipeline = makePipeline(vertex: "fullscreenVertex", fragment: "horizonFragment")
+        self.oculusPipeline = makePipeline(vertex: "fullscreenVertex", fragment: "oculusFragment")
     }
 }
 
@@ -124,9 +127,11 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
     private var pingIndex = 0
     private var pingPongSize: CGSize = .zero
     private var lastPreset: VisualPreset = .circuit
-    private var desiredActive: Bool = true
+    private var desiredActive: Bool = false
+    private var lastRenderedWallTime: CFTimeInterval = 0
     private var pendingFPSUpdate: Int? = nil
     nonisolated(unsafe) private var windowObservers: [NSObjectProtocol] = []
+    nonisolated(unsafe) private var workspaceObservers: [NSObjectProtocol] = []
 
     init(frame: CGRect, compactMode: Bool) {
         self.compactMode = compactMode
@@ -146,8 +151,9 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
         self.framebufferOnly = true
         self.preferredFramesPerSecond = compactMode ? 60 : 120
         self.enableSetNeedsDisplay = false
-        self.isPaused = false
+        self.isPaused = true
         self.delegate = self
+        installWorkspaceObservers()
     }
 
     @available(*, unavailable)
@@ -159,24 +165,51 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
         for obs in windowObservers {
             NotificationCenter.default.removeObserver(obs)
         }
+        let ws = NSWorkspace.shared.notificationCenter
+        for obs in workspaceObservers {
+            ws.removeObserver(obs)
+        }
     }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         installWindowObservers()
-        syncPauseState(forceRestart: true)
-    }
-
-    func setActive(_ active: Bool) {
-        desiredActive = active
-        syncPauseState(forceRestart: active)
-    }
-
-    /// Ensures the MTKView display link is alive after preset switches, resizes, or fullscreen transitions.
-    func ensureRunning() {
         syncPauseState(forceRestart: false)
-        if !isPaused, window?.isVisible == true {
-            draw()
+    }
+
+    /// Strictly idempotent: 250ms SwiftUI telemetry updates that pass the same `active` flag are pure NO-OPs
+    /// and never tear down or recreate MTKView's CVDisplayLink.
+    func setActive(_ active: Bool) {
+        guard desiredActive != active else { return }
+        desiredActive = active
+        syncPauseState(forceRestart: false)
+    }
+
+    /// Safely recovers a stalled macOS CVDisplayLink after Space switch, fullscreen transition, deminiaturize,
+    /// or system wake — ONLY toggling `isPaused` when frames have actually stopped arriving (>250ms).
+    /// Never calls synchronous `draw()` inside SwiftUI layout passes.
+    func recoverIfStalled() {
+        guard desiredActive, let win = window, !isHidden, !win.isMiniaturized, win.isVisible else {
+            syncPauseState(forceRestart: false)
+            return
+        }
+        let stalled = (CACurrentMediaTime() - lastRenderedWallTime) > 0.25
+        syncPauseState(forceRestart: stalled)
+    }
+
+    private func installWorkspaceObservers() {
+        let ws = NSWorkspace.shared.notificationCenter
+        let wakeNames: [NSNotification.Name] = [
+            NSWorkspace.didWakeNotification,
+            NSWorkspace.screensDidWakeNotification
+        ]
+        for name in wakeNames {
+            let obs = ws.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.recoverIfStalled()
+                }
+            }
+            workspaceObservers.append(obs)
         }
     }
 
@@ -193,12 +226,14 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
             NSWindow.didChangeOcclusionStateNotification,
             NSWindow.didEnterFullScreenNotification,
             NSWindow.didExitFullScreenNotification,
-            NSWindow.didChangeScreenNotification
+            NSWindow.didChangeScreenNotification,
+            NSWindow.didMiniaturizeNotification,
+            NSWindow.didDeminiaturizeNotification
         ]
         for name in names {
             let obs = nc.addObserver(forName: name, object: win, queue: .main) { [weak self] _ in
                 Task { @MainActor [weak self] in
-                    self?.syncPauseState(forceRestart: true)
+                    self?.recoverIfStalled()
                 }
             }
             windowObservers.append(obs)
@@ -210,15 +245,14 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
             if !isPaused { isPaused = true }
             return
         }
-        let shouldRun = desiredActive && !isHidden
+        let shouldRun = desiredActive && !isHidden && !win.isMiniaturized && win.isVisible
         if !shouldRun {
             if !isPaused { isPaused = true }
             return
         }
-        // On macOS 15+, toggling isPaused after fullscreen / occlusion transitions recovers any stalled CVDisplayLink.
         if isPaused {
             isPaused = false
-        } else if forceRestart && win.isVisible {
+        } else if forceRestart {
             isPaused = true
             isPaused = false
         }
@@ -283,8 +317,10 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
     func draw(in view: MTKView) {
         guard !isHidden,
               let win = window,
+              !win.isMiniaturized,
               win.isVisible,
               win.occlusionState.contains(.visible) else { return }
+        lastRenderedWallTime = CACurrentMediaTime()
 
         let state = AppState.shared
         let snap = state.stepDSP(drivenByMetal: true)
@@ -378,6 +414,12 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
             SIMD4<Float>(music.notes[4].kind, music.notes[5].kind, music.notes[6].kind, music.notes[7].kind),
             SIMD4<Float>(music.notes[8].kind, music.notes[9].kind, music.notes[10].kind, music.notes[11].kind)
         )
+        uniforms.breathDepth = SIMD4<Float>(
+            music.breathPhase,
+            music.meditationDepth,
+            state.effectiveCircadianPhase == .night ? 1.0 : 0.0,
+            music.isDeepDive ? 1.0 : 0.0
+        )
 
         let uBuf = uniformBuffers[slot]
         memcpy(uBuf.contents(), &uniforms, MemoryLayout<AcousticUniforms>.stride)
@@ -450,9 +492,9 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
                 pingIndex = nextIndex
             }
 
-        case .horizon:
+        case .horizon, .oculus:
             if let enc = cmd.makeRenderCommandEncoder(descriptor: renderPassDesc) {
-                enc.setRenderPipelineState(pipelines.horizonPipeline)
+                enc.setRenderPipelineState(preset == .horizon ? pipelines.horizonPipeline : pipelines.oculusPipeline)
                 enc.setFragmentBuffer(uBuf, offset: 0, index: 0)
                 enc.setFragmentBuffer(wBuf, offset: 0, index: 1)
                 enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)

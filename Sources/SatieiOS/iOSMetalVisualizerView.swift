@@ -39,6 +39,7 @@ struct AcousticUniforms {
         .zero, .zero, .zero, .zero, .zero, .zero
     )
     var noteKinds: (SIMD4<Float>, SIMD4<Float>, SIMD4<Float>) = (.zero, .zero, .zero)
+    var breathDepth: SIMD4<Float> = SIMD4<Float>(0.5, 0.0, 0.0, 0.0)
 }
 
 @MainActor
@@ -58,6 +59,7 @@ final class SharediOSMetalPipelines {
     let liquidUpdatePipeline: MTLRenderPipelineState
     let liquidDisplayPipeline: MTLRenderPipelineState
     let horizonPipeline: MTLRenderPipelineState
+    let oculusPipeline: MTLRenderPipelineState
 
     private init() {
         guard let dev = MTLCreateSystemDefaultDevice(),
@@ -99,6 +101,7 @@ final class SharediOSMetalPipelines {
         self.liquidUpdatePipeline = makePipeline(vertex: "fullscreenVertex", fragment: "liquidUpdateFragment", pixelFormat: .rgba16Float)
         self.liquidDisplayPipeline = makePipeline(vertex: "fullscreenVertex", fragment: "liquidDisplayFragment")
         self.horizonPipeline = makePipeline(vertex: "fullscreenVertex", fragment: "horizonFragment")
+        self.oculusPipeline = makePipeline(vertex: "fullscreenVertex", fragment: "oculusFragment")
     }
 }
 
@@ -304,6 +307,12 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
             SIMD4<Float>(music.notes[4].kind, music.notes[5].kind, music.notes[6].kind, music.notes[7].kind),
             SIMD4<Float>(music.notes[8].kind, music.notes[9].kind, music.notes[10].kind, music.notes[11].kind)
         )
+        uniforms.breathDepth = SIMD4<Float>(
+            music.breathPhase,
+            music.meditationDepth,
+            CircadianPhase.current() == .night ? 1.0 : 0.0,
+            music.isDeepDive ? 1.0 : 0.0
+        )
 
         let uBuf = uniformBuffers[slot]
         memcpy(uBuf.contents(), &uniforms, MemoryLayout<AcousticUniforms>.stride)
@@ -373,9 +382,9 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
                 pingIndex = nextIndex
             }
 
-        case .horizon:
+        case .horizon, .oculus:
             if let enc = cmd.makeRenderCommandEncoder(descriptor: renderPassDesc) {
-                enc.setRenderPipelineState(pipelines.horizonPipeline)
+                enc.setRenderPipelineState(preset == .horizon ? pipelines.horizonPipeline : pipelines.oculusPipeline)
                 enc.setFragmentBuffer(uBuf, offset: 0, index: 0)
                 enc.setFragmentBuffer(wBuf, offset: 0, index: 1)
                 enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)

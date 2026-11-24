@@ -221,7 +221,7 @@ public enum SatieScore {
         case .pulse: return 104.0
         case .rain:  return 60.0
         case .drift: return 54.0
-        case .still: return 58.0
+        case .still, .dive: return 58.0
         }
     }
 
@@ -286,7 +286,7 @@ public enum SatieScore {
         case .drift:
             form = driftForm
             glints = driftGlints
-        case .still:
+        case .still, .dive:
             form = stillForm
             glints = stillGlints
         }
@@ -526,7 +526,7 @@ public enum SatieScore {
                 ))
             }
 
-        case .still:
+        case .still, .dive:
             // Zero-ego Study / Deep Reading: strictly non-resolving suspended pentatonic clouds,
             // zero melody hook, ultra-gentle harmonic presence so prefrontal cortex stays 100% on text/code
             if !maSilenceWindow && (bar % 2 == 0 || extraDeep) {

@@ -260,6 +260,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 case "2": AppState.shared.preset = .ecology; AppState.shared.performHaptic(); return true
                 case "3": AppState.shared.preset = .phosphor; AppState.shared.performHaptic(); return true
                 case "4": AppState.shared.preset = .liquid; AppState.shared.performHaptic(); return true
+                case "5": AppState.shared.preset = .horizon; AppState.shared.performHaptic(); return true
+                case "6": AppState.shared.preset = .oculus; AppState.shared.performHaptic(); return true
                 case "m": AppState.shared.toggleSystemMute(); return true
                 default: break
                 }

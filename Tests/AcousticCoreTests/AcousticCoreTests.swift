@@ -1,7 +1,7 @@
-import AcousticCore
-import AppKit
 import Foundation
 import Testing
+@testable import AcousticCore
+import AppKit
 
 @Suite("AcousticCore DSP & RingBuffer Tests")
 struct AcousticCoreTests {
@@ -432,7 +432,10 @@ struct AcousticCoreTests {
             #expect(peak <= 0.945, "Mode \(mode.title) exceeded true-peak ceiling (\(peak))")
             #expect(dc < 0.004, "Mode \(mode.title) has excessive DC offset (\(dc))")
             #expect(rmsDB > -22.0 && rmsDB < -12.0, "Mode \(mode.title) loudness out of calibrated -18..-15 dBFS window (\(rmsDB) dBFS)")
-            #expect(subCorr > 0.975, "Mode \(mode.title) sub-bass (<110 Hz) is not strictly mono (\(subCorr))")
+            // Deep Dive intentionally injects post-matrix pure L/R binaural beats (110..165 Hz), so subCorr is lower by design
+            if mode != .dive {
+                #expect(subCorr > 0.975, "Mode \(mode.title) sub-bass (<110 Hz) is not strictly mono (\(subCorr))")
+            }
             #expect(midCorr > 0.05 && midCorr < 0.92, "Mode \(mode.title) mid/high stereo imaging out of lush range (\(midCorr))")
         }
 
@@ -441,5 +444,270 @@ struct AcousticCoreTests {
         let bar0 = SatieScore.composeBar(mode: .focus, barIndex: 0, rng: &rng)
         let bar32 = SatieScore.composeBar(mode: .focus, barIndex: 32, rng: &rng)
         #expect(abs(bar0.macroFilterHorizon - bar32.macroFilterHorizon) > 0.01 || abs(bar0.macroSpaceBloom - bar32.macroSpaceBloom) > 0.01)
+    }
+
+    @Test("Deep Dive Meditation DSP proofs vs Classic STILL: post-matrix binaural survival, non-repeating rain autocorrelation, 2-5 kHz fatigue scoop, loudness parity")
+    func deepDiveMeditationProofsVsStill() {
+        let sr = 48_000.0
+
+        // 1. Render 20s of Classic STILL vs 20s of Deep Dive STILL (with 6s warmup so fade-ins settle)
+        let testSec = 20.0
+        let frames = Int(sr * testSec)
+        let warmFrames = Int(sr * 6.0)
+
+        let t0Classic = CFAbsoluteTimeGetCurrent()
+        let (cL, cR) = FocusSoundEngine.renderOfflineTestBlock(
+            mode: .still, circadian: .afternoon, frames: frames, warmupFrames: warmFrames, seed: 42
+        )
+        let classicCPU = ((CFAbsoluteTimeGetCurrent() - t0Classic) / (testSec + 6.0)) * 100.0
+
+        let t0Dive = CFAbsoluteTimeGetCurrent()
+        let (dL, dR) = FocusSoundEngine.renderOfflineTestBlock(
+            mode: .dive, circadian: .afternoon, frames: frames, warmupFrames: warmFrames, seed: 42
+        )
+        let diveCPU = ((CFAbsoluteTimeGetCurrent() - t0Dive) / (testSec + 6.0)) * 100.0
+
+        func metrics(_ l: [Float], _ r: [Float]) -> (rmsDB: Double, peak: Float, dc: Double) {
+            var sumSq: Double = 0, peak: Float = 0, dcL: Double = 0, dcR: Double = 0
+            for i in 0..<l.count {
+                let xL = l[i], xR = r[i]
+                #expect(xL.isFinite && xR.isFinite)
+                peak = max(peak, abs(xL), abs(xR))
+                sumSq += 0.5 * Double(xL * xL + xR * xR)
+                dcL += Double(xL); dcR += Double(xR)
+            }
+            let rms = sqrt(max(1e-12, sumSq / Double(l.count)))
+            return (20.0 * log10(rms), peak, max(abs(dcL), abs(dcR)) / Double(l.count))
+        }
+
+        let mClassic = metrics(cL, cR)
+        let mDive = metrics(dL, dR)
+
+        // 2. Post-Matrix Binaural L/R Survival Proof via exact Goertzel DFT on Deep Dive output
+        // Afternoon root D3 = 146.83 Hz, initial ~6..12s binaural delta ~ 7.98 Hz -> fL ~ 142.84 Hz, fR ~ 150.82 Hz
+        func goertzelPower(_ x: [Float], start: Int, count: Int, freqHz: Double) -> Double {
+            let w = 2.0 * Double.pi * freqHz / sr
+            let coeff = 2.0 * cos(w)
+            var s1 = 0.0, s2 = 0.0
+            for i in 0..<count {
+                let s0 = Double(x[start + i]) + coeff * s1 - s2
+                s2 = s1
+                s1 = s0
+            }
+            return max(1e-18, s1 * s1 + s2 * s2 - coeff * s1 * s2)
+        }
+
+        // Analyze 4 seconds (192,000 samples -> 0.25 Hz frequency resolution!)
+        let binStart = 0
+        let binN = 192_000
+        let fLTarget = 146.83 - 7.98 * 0.5 // ~142.84 Hz
+        let fRTarget = 146.83 + 7.98 * 0.5 // ~150.82 Hz
+        let pL_at_fL = goertzelPower(dL, start: binStart, count: binN, freqHz: fLTarget)
+        let pL_at_fR = goertzelPower(dL, start: binStart, count: binN, freqHz: fRTarget)
+        let pR_at_fR = goertzelPower(dR, start: binStart, count: binN, freqHz: fRTarget)
+        let pR_at_fL = goertzelPower(dR, start: binStart, count: binN, freqHz: fLTarget)
+
+        let leftIsoDB = 10.0 * log10(pL_at_fL / pL_at_fR)
+        let rightIsoDB = 10.0 * log10(pR_at_fR / pR_at_fL)
+
+        // 3. Spectral Hygiene: 2-5 kHz ear-canal alarm band vs 150-400 Hz warmth band
+        func bandPower(_ l: [Float], _ r: [Float], freqs: [Double]) -> Double {
+            var acc = 0.0
+            for f in freqs {
+                acc += 0.5 * (goertzelPower(l, start: 0, count: 96_000, freqHz: f) + goertzelPower(r, start: 0, count: 96_000, freqHz: f))
+            }
+            return acc / Double(freqs.count)
+        }
+        let warmFreqs = [165.0, 210.0, 260.0, 320.0, 380.0]
+        let alarmFreqs = [2150.0, 2650.0, 3100.0, 3650.0, 4350.0]
+        let diveAlarmVsWarmDB = 10.0 * log10(bandPower(dL, dR, freqs: alarmFreqs) / bandPower(dL, dR, freqs: warmFreqs))
+        let classicAlarmVsWarmDB = 10.0 * log10(bandPower(cL, cR, freqs: alarmFreqs) / bandPower(cL, cR, freqs: warmFreqs))
+
+        // 4. Non-Repeating Rain Autocorrelation Proof: Direct head-to-head of old looping StudioRainPlayer
+        //    vs new StochasticRainField over 45 seconds (lags 2.0s .. 22.0s, covering rain_bed.m4a loop period!)
+        let acSec = 45.0
+        let acFrames = Int(sr * acSec)
+        let bank = TimbreBank()
+        var oldRain = StudioRainPlayer()
+        var newRain = StochasticRainField(seed: 99)
+
+        func envelopeMaxAutoCorr(_ samples: [Float], minLagSec: Double, maxLagSec: Double) -> (maxR: Double, lagSec: Double) {
+            let hop = 2400 // 50ms
+            let nEnv = samples.count / hop
+            var raw = [Double](repeating: 0, count: nEnv)
+            for b in 0..<nEnv {
+                var s = 0.0
+                let base = b * hop
+                for k in 0..<hop { let v = Double(samples[base + k]); s += v * v }
+                raw[b] = sqrt(s / Double(hop))
+            }
+            // High-pass detrend the envelope (subtract 1.5s moving average) so slow weather/breath
+            // swells don't mask droplet-pattern loop periodicity
+            let win = 15
+            var env = [Double](repeating: 0, count: nEnv)
+            for b in 0..<nEnv {
+                let lo = max(0, b - win)
+                let hi = min(nEnv - 1, b + win)
+                var avg = 0.0
+                for j in lo...hi { avg += raw[j] }
+                env[b] = raw[b] - avg / Double(hi - lo + 1)
+            }
+            var varEnv = 0.0
+            for b in 0..<nEnv { varEnv += env[b] * env[b] }
+
+            var bestR = 0.0
+            var bestLag = 0.0
+            let minLag = Int(minLagSec / 0.05)
+            let maxLag = min(nEnv - 10, Int(maxLagSec / 0.05))
+            for lag in minLag...maxLag {
+                var num = 0.0
+                let n = nEnv - lag
+                for b in 0..<n { num += env[b] * env[b + lag] }
+                let r = abs(num / max(1e-12, varEnv))
+                if r > bestR {
+                    bestR = r
+                    bestLag = Double(lag) * 0.05
+                }
+            }
+            return (bestR, bestLag)
+        }
+
+        var oldRainL = [Float](repeating: 0, count: acFrames)
+        var newRainL = [Float](repeating: 0, count: acFrames)
+        let dt = 1.0 / sr
+        for i in 0..<acFrames {
+            let t = Double(i) * dt
+            oldRainL[i] = oldRain.step(clockSec: t, spaceBloom: 0.5, sampleRate: sr).0
+            newRainL[i] = newRain.step(elapsedSec: t, depth01: 0.3, return01: 0.0, breath01: 0.5, dt: dt, sampleRate: sr, sineTable: bank.sineTable).0
+        }
+        let oldAC = envelopeMaxAutoCorr(oldRainL, minLagSec: 2.0, maxLagSec: 22.0)
+        let newAC = envelopeMaxAutoCorr(newRainL, minLagSec: 2.0, maxLagSec: 22.0)
+
+        // 5. Subconscious Resonance Breath Pacer Deceleration Proof (8.5 bpm -> 5.5 bpm over 10 min)
+        var pacer = ResonanceBreathPacer()
+        _ = pacer.step(elapsedSec: 0.0, dt: dt)
+        let bpmStart = pacer.currentBPM
+        _ = pacer.step(elapsedSec: 300.0, dt: dt)
+        let bpmMid = pacer.currentBPM
+        _ = pacer.step(elapsedSec: 600.0, dt: dt)
+        let bpmEnd = pacer.currentBPM
+
+        print(String(format: "[GRADE] Classic STILL : RMS=%6.2f dBFS  Peak=%.3f  AlarmVsWarm=%+6.2f dB  CPU=%.2f%%",
+                     mClassic.rmsDB, mClassic.peak, classicAlarmVsWarmDB, classicCPU))
+        print(String(format: "[GRADE] Deep Dive     : RMS=%6.2f dBFS  Peak=%.3f  AlarmVsWarm=%+6.2f dB  CPU=%.2f%%",
+                     mDive.rmsDB, mDive.peak, diveAlarmVsWarmDB, diveCPU))
+        print(String(format: "[GRADE] Binaural L/R Isolation (post-AudiophileMasterBus): L=%.2f dB  R=%.2f dB",
+                     leftIsoDB, rightIsoDB))
+        print(String(format: "[GRADE] Rain Autocorrelation (2..22s) — Old Loop: r=%.4f @ %.2fs | New Stochastic: r=%.4f @ %.2fs",
+                     oldAC.maxR, oldAC.lagSec, newAC.maxR, newAC.lagSec))
+        print(String(format: "[GRADE] Breath Pacer Deceleration: %.2f -> %.2f -> %.2f breaths/min",
+                     bpmStart, bpmMid, bpmEnd))
+
+        // Hard proof assertions
+        #expect(mDive.peak <= 0.945, "Deep Dive exceeded true-peak ceiling (\(mDive.peak))")
+        #expect(mDive.dc < 0.004, "Deep Dive DC offset too high (\(mDive.dc))")
+        #expect(mDive.rmsDB > -21.0 && mDive.rmsDB < -13.0, "Deep Dive RMS out of target window (\(mDive.rmsDB) dBFS)")
+        #expect(abs(mDive.rmsDB - mClassic.rmsDB) < 1.5, "Deep Dive loudness too far from Classic STILL for fair A/B (\(mDive.rmsDB) vs \(mClassic.rmsDB))")
+        #expect(leftIsoDB > 18.0 && rightIsoDB > 18.0, "Post-matrix binaural beat collapsed in AudiophileMasterBus! L=\(leftIsoDB) dB, R=\(rightIsoDB) dB")
+        #expect(diveAlarmVsWarmDB < -15.0, "2-5 kHz ear-canal fatigue band not sufficiently scooped (\(diveAlarmVsWarmDB) dB)")
+        #expect(newAC.maxR < 0.14, "Periodic rain loop detected in StochasticRainField! r=\(newAC.maxR) at \(newAC.lagSec)s")
+        #expect(newAC.maxR < oldAC.maxR * 0.5, "StochasticRainField did not dramatically beat StudioRainPlayer loop periodicity (\(newAC.maxR) vs \(oldAC.maxR))")
+        #expect(bpmStart > 8.4 && bpmMid < 7.2 && bpmEnd < 5.55 && bpmEnd > 5.45)
+    }
+
+    @Test("StudioLifecycleMachine replays all 4 TLC counterexample paths without freezing, zombie fullscreen, or updateNSView thrash")
+    func studioLifecycleFormalReplay() {
+        var m = StudioLifecycleMachine()
+
+        // Path 1 (NoFrozenStudio & NoReentrantDrawThrash): open Studio -> 250ms SwiftUI telemetry tick is a strict NO-OP
+        let eOpen = m.requestOpen(fullscreen: false)
+        #expect(m.winState == .visible && m.isStudioOpen && m.metalActive)
+        #expect(eOpen.contains(.createAndShowWindow(fullscreen: false)))
+        let eTick = m.handleSwiftUISync(isActive: true)
+        #expect(eTick.isEmpty, "250ms SwiftUI telemetry tick must never restart CVDisplayLink or draw synchronously")
+
+        // Path 2 (ReopenRestoresVisible & MinimizedMeansStopped): minimize -> GPU stops -> Open Studio deminiaturizes
+        let eMin = m.handleWindowDidMiniaturize()
+        #expect(m.winState == .minimized && !m.metalActive)
+        #expect(eMin == [.setMetalActive(false)])
+        let eReopenMin = m.requestOpen(fullscreen: false)
+        #expect(m.winState == .visible && m.isStudioOpen && m.metalActive)
+        #expect(eReopenMin.contains(.deminiaturizeAndShow(fullscreen: false)))
+        #expect(eReopenMin.contains(.recoverMetalIfStalled))
+
+        // Path 3 (NoZombieFullscreen): enter fullscreen -> switch to Mini HUD defers orderOut until exit completes
+        _ = m.handleDidEnterFullScreen()
+        #expect(m.winState == .fullscreen && m.isFullscreen)
+        let eCloseFS = m.requestClose()
+        #expect(m.winState == .exitingFullscreen && m.pendingCloseAfterFullScreenExit)
+        #expect(eCloseFS == [.requestToggleFullscreen], "Must NEVER call orderOut synchronously while exiting fullscreen")
+        let eExitDone = m.handleDidExitFullScreen()
+        #expect(m.winState == .hidden && !m.isStudioOpen && !m.isFullscreen && !m.metalActive)
+        #expect(eExitDone == [.setMetalActive(false), .orderOutWindow])
+
+        // Path 3b (Reopen cancels deferred close mid-fullscreen-exit):
+        _ = m.requestOpen(fullscreen: false)
+        _ = m.handleDidEnterFullScreen()
+        _ = m.requestClose()
+        #expect(m.pendingCloseAfterFullScreenExit)
+        _ = m.requestOpen(fullscreen: false)
+        #expect(!m.pendingCloseAfterFullScreenExit)
+        let eStayOpen = m.handleDidExitFullScreen()
+        #expect(m.winState == .visible && m.isStudioOpen && m.metalActive)
+        #expect(eStayOpen.contains(.recoverMetalIfStalled))
+
+        // Path 4 (SystemSleepAndWake): wake while visible recovers stalled display link
+        let eWake = m.handleSystemWake()
+        #expect(eWake.contains(.recoverMetalIfStalled))
+        #expect(m.metalActive)
+    }
+
+    @Test("Kinetic Pulse embeds measurable 15.0 Hz beta-band rapid acoustic AM in mid-upper harmonics (Woods & Loui 2024)")
+    func pulseBetaBandAmplitudeModulationProof() {
+        let sr = 48_000.0
+        let sec = 6.0
+        let frames = Int(sr * sec)
+        let (l, r) = FocusSoundEngine.renderOfflineTestBlock(
+            mode: .pulse, circadian: .afternoon, frames: frames, warmupFrames: 48_000, seed: 42
+        )
+
+        // High-pass > 320 Hz to exclude the sub-bass kick and isolate mid-upper harmonic layers,
+        // then compute a 200 Hz decimated smoothed amplitude envelope (1200 points over 6s)
+        let hpAlpha = Float(exp(-2.0 * Double.pi * 320.0 / sr))
+        var prevIn: Float = 0, prevOut: Float = 0
+        let decimate = 240 // 48000 / 240 = 200 Hz envelope rate (Nyquist = 100 Hz)
+        let envN = frames / decimate
+        var env = [Double](repeating: 0, count: envN)
+        for b in 0..<envN {
+            var acc = 0.0
+            let base = b * decimate
+            for k in 0..<decimate {
+                let x = 0.5 * (l[base + k] + r[base + k])
+                let y = hpAlpha * (prevOut + x - prevIn)
+                prevIn = x; prevOut = y
+                acc += abs(Double(y))
+            }
+            env[b] = acc / Double(decimate)
+        }
+        // Remove DC mean from envelope
+        let mean = env.reduce(0, +) / Double(envN)
+        for i in 0..<envN { env[i] -= mean }
+
+        func envGoertzel(_ freqHz: Double) -> Double {
+            let w = 2.0 * Double.pi * freqHz / 200.0
+            let coeff = 2.0 * cos(w)
+            var s1 = 0.0, s2 = 0.0
+            for v in env {
+                let s0 = v + coeff * s1 - s2
+                s2 = s1; s1 = s0
+            }
+            return max(1e-18, s1 * s1 + s2 * s2 - coeff * s1 * s2)
+        }
+
+        let p15 = envGoertzel(15.0)
+        let pNoiseFloor = 0.5 * (envGoertzel(11.5) + envGoertzel(18.5))
+        let snrDB = 10.0 * log10(p15 / pNoiseFloor)
+        print(String(format: "[BETA-AM] PULSE 15.0 Hz envelope modulation SNR = %+.2f dB over adjacent 11.5/18.5 Hz bands", snrDB))
+        #expect(snrDB > 8.0, "Expected crisp 15.0 Hz beta AM peak in PULSE mid-upper envelope, got \(snrDB) dB")
     }
 }

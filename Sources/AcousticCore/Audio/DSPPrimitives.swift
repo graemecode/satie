@@ -156,6 +156,13 @@ struct CytomicSVF: Sendable {
     @inline(__always)
     mutating func highpass(_ x: Float) -> Float { processAll(x).hp }
 
+    /// Passive/active Cytomic bell filter (exact gain `linearGain` at cutoffHz, 0 dB at DC & Nyquist).
+    @inline(__always)
+    mutating func bell(_ x: Float, linearGain: Float) -> Float {
+        let res = processAll(x)
+        return x + (linearGain - 1.0) * k * res.bp
+    }
+
     mutating func reset() {
         ic1eq = 0
         ic2eq = 0
@@ -600,6 +607,8 @@ struct AudiophileMasterBus: Sendable {
         airCeilingHz: Double,
         stereoWidthBoost: Float = 0.12,
         outputGain: Float = 2.05,
+        postMatrixInjectL: Float = 0,
+        postMatrixInjectR: Float = 0,
         sampleRate: Double = 48_000.0
     ) -> (Float, Float) {
         if abs(airCeilingHz - lastAirHz) > 40.0 {
@@ -650,8 +659,8 @@ struct AudiophileMasterBus: Sendable {
         let coeff: Float = targetGain < optoGain ? 0.00055 : 0.00008 // ~38ms attack, ~260ms optical release
         optoGain += (targetGain - optoGain) * coeff
 
-        let gluedL = mixL * optoGain
-        let gluedR = mixR * optoGain
+        let gluedL = mixL * optoGain + postMatrixInjectL
+        let gluedR = mixR * optoGain + postMatrixInjectR
 
         // 5. 2.5ms Lookahead True-Peak Limiter (ceiling -1.0 dBFS = 0.891)
         let ceiling: Float = 0.891

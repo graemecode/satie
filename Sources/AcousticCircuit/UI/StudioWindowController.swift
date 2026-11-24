@@ -51,18 +51,18 @@ final class StudioStageNSView: NSView {
 struct StudioStageRepresentable: NSViewRepresentable {
     var isActive: Bool
     var preset: VisualPreset
+    var onStageCreated: ((StudioStageNSView) -> Void)? = nil
 
     func makeNSView(context: Context) -> StudioStageNSView {
         let view = StudioStageNSView(frame: .zero)
         view.metalView.setActive(isActive)
+        onStageCreated?(view)
         return view
     }
 
     func updateNSView(_ nsView: StudioStageNSView, context: Context) {
+        // Strictly idempotent: never forces CVDisplayLink restart or synchronous draw() inside SwiftUI layout!
         nsView.metalView.setActive(isActive)
-        if isActive {
-            nsView.metalView.ensureRunning()
-        }
     }
 }
 
@@ -71,6 +71,7 @@ struct StudioContentView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let onToggleFullscreen: () -> Void
     let onSwitchToMiniHUD: () -> Void
+    var onStageCreated: ((StudioStageNSView) -> Void)? = nil
 
     @State private var hudVisible: Bool = true
     @State private var immersionMode: Bool = false
@@ -92,7 +93,7 @@ struct StudioContentView: View {
     var body: some View {
         ZStack {
             // 1. Full-bleed edge-to-edge 120Hz Metal + Retina Schematic Stage
-            StudioStageRepresentable(isActive: state.isStudioOpen, preset: state.preset)
+            StudioStageRepresentable(isActive: state.isStudioOpen, preset: state.preset, onStageCreated: onStageCreated)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // Smooth crossfade veil when switching visual worlds
@@ -451,6 +452,7 @@ final class StudioNSWindow: NSWindow {
         case "3": AppState.shared.preset = .phosphor; AppState.shared.performHaptic(); return
         case "4": AppState.shared.preset = .liquid; AppState.shared.performHaptic(); return
         case "5": AppState.shared.preset = .horizon; AppState.shared.performHaptic(); return
+        case "6": AppState.shared.preset = .oculus; AppState.shared.performHaptic(); return
         case " ": AppState.shared.togglePlayOrStartFocus(); return
         case "m": AppState.shared.toggleSystemMute(); return
         default: break
@@ -466,21 +468,72 @@ final class StudioNSWindow: NSWindow {
 @MainActor
 final class StudioWindowController: NSObject, NSWindowDelegate {
     private var window: StudioNSWindow?
+    private weak var stageView: StudioStageNSView?
+    private var lifecycle = StudioLifecycleMachine()
     private var onSwitchToMiniHUD: (() -> Void)?
 
     func show(fullscreen: Bool = false, onSwitchToMiniHUD: @escaping () -> Void) {
         self.onSwitchToMiniHUD = onSwitchToMiniHUD
+        let effects = lifecycle.requestOpen(fullscreen: fullscreen)
+        applyLifecycleStateAndEffects(effects)
+    }
 
-        if let existing = window {
-            NSApp.activate(ignoringOtherApps: true)
-            existing.makeKeyAndOrderFront(nil)
-            AppState.shared.isStudioOpen = true
-            if fullscreen && !existing.styleMask.contains(.fullScreen) {
-                existing.toggleFullScreen(nil)
-            }
-            return
+    func close() {
+        if let w = window, !w.styleMask.contains(.fullScreen) {
+            AppState.shared.settings.studioFrame = w.frame
         }
+        let effects = lifecycle.requestClose()
+        applyLifecycleStateAndEffects(effects)
+    }
 
+    private func applyLifecycleStateAndEffects(_ effects: [StudioLifecycleMachine.Effect]) {
+        // Always sync published AppState flags BEFORE ordering window front so window notifications see the new state
+        AppState.shared.isStudioOpen = lifecycle.isStudioOpen
+        AppState.shared.isFullscreen = lifecycle.isFullscreen
+
+        for effect in effects {
+            switch effect {
+            case .createAndShowWindow(let fullscreen):
+                createWindowAndShow(fullscreen: fullscreen)
+
+            case .deminiaturizeAndShow(let fullscreen):
+                guard let existing = window else { continue }
+                NSApp.activate(ignoringOtherApps: true)
+                if existing.isMiniaturized {
+                    existing.deminiaturize(nil)
+                }
+                existing.makeKeyAndOrderFront(nil)
+                if fullscreen && !existing.styleMask.contains(.fullScreen) {
+                    existing.toggleFullScreen(nil)
+                }
+
+            case .orderFrontWindow(let fullscreen):
+                guard let existing = window else { continue }
+                NSApp.activate(ignoringOtherApps: true)
+                existing.makeKeyAndOrderFront(nil)
+                if fullscreen && !existing.styleMask.contains(.fullScreen) {
+                    existing.toggleFullScreen(nil)
+                }
+
+            case .orderOutWindow:
+                window?.orderOut(nil)
+
+            case .requestToggleFullscreen:
+                if let w = window, w.styleMask.contains(.fullScreen) {
+                    w.toggleFullScreen(nil)
+                }
+
+            case .setMetalActive(let active):
+                stageView?.metalView.setActive(active)
+
+            case .recoverMetalIfStalled:
+                stageView?.metalView.recoverIfStalled()
+            }
+        }
+    }
+
+    private func createWindowAndShow(fullscreen: Bool) {
+        let onSwitch = onSwitchToMiniHUD
         let content = StudioContentView(
             state: AppState.shared,
             onToggleFullscreen: { [weak self] in
@@ -488,7 +541,10 @@ final class StudioWindowController: NSObject, NSWindowDelegate {
             },
             onSwitchToMiniHUD: { [weak self] in
                 self?.close()
-                onSwitchToMiniHUD()
+                onSwitch?()
+            },
+            onStageCreated: { [weak self] stage in
+                self?.stageView = stage
             }
         )
 
@@ -508,9 +564,8 @@ final class StudioWindowController: NSObject, NSWindowDelegate {
         win.delegate = self
         win.onMiniHUDShortcut = { [weak self] in
             self?.close()
-            onSwitchToMiniHUD()
+            onSwitch?()
         }
-        AppState.shared.isStudioOpen = true
         win.contentView = NSHostingView(rootView: content)
         if let saved = AppState.shared.settings.studioFrame,
            NSScreen.screens.contains(where: { $0.visibleFrame.intersects(saved) }) {
@@ -524,23 +579,10 @@ final class StudioWindowController: NSObject, NSWindowDelegate {
         win.makeKeyAndOrderFront(nil)
 
         if fullscreen {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                win.toggleFullScreen(nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak win] in
+                win?.toggleFullScreen(nil)
             }
         }
-    }
-
-    func close() {
-        if let w = window {
-            if !w.styleMask.contains(.fullScreen) {
-                AppState.shared.settings.studioFrame = w.frame
-            } else {
-                w.toggleFullScreen(nil)
-            }
-        }
-        window?.orderOut(nil)
-        AppState.shared.isStudioOpen = false
-        AppState.shared.isFullscreen = false
     }
 
     func windowDidResize(_ notification: Notification) {
@@ -559,15 +601,31 @@ final class StudioWindowController: NSObject, NSWindowDelegate {
         if let w = window, !w.styleMask.contains(.fullScreen) {
             AppState.shared.settings.studioFrame = w.frame
         }
-        AppState.shared.isStudioOpen = false
-        AppState.shared.isFullscreen = false
+        let effects = lifecycle.handleWindowWillClose()
+        applyLifecycleStateAndEffects(effects)
+    }
+
+    func windowDidMiniaturize(_ notification: Notification) {
+        let effects = lifecycle.handleWindowDidMiniaturize()
+        applyLifecycleStateAndEffects(effects)
+    }
+
+    func windowDidDeminiaturize(_ notification: Notification) {
+        let effects = lifecycle.handleWindowDidDeminiaturize()
+        applyLifecycleStateAndEffects(effects)
     }
 
     func windowDidEnterFullScreen(_ notification: Notification) {
-        AppState.shared.isFullscreen = true
+        let effects = lifecycle.handleDidEnterFullScreen()
+        applyLifecycleStateAndEffects(effects)
+    }
+
+    func windowWillExitFullScreen(_ notification: Notification) {
+        lifecycle.handleWillExitFullScreen()
     }
 
     func windowDidExitFullScreen(_ notification: Notification) {
-        AppState.shared.isFullscreen = false
+        let effects = lifecycle.handleDidExitFullScreen()
+        applyLifecycleStateAndEffects(effects)
     }
 }

@@ -364,11 +364,12 @@ struct PopoverView: View {
                         .foregroundColor(inkDim)
                 }
 
+                visualOptionChip(label: "Auto (Paired to Sound)", selected: state.visualFollowsSoundscape) {
+                    state.setVisualOverride(nil)
+                }
+
                 let cols = Array(repeating: GridItem(.flexible(), spacing: 4), count: 3)
                 LazyVGrid(columns: cols, spacing: 4) {
-                    visualOptionChip(label: "Auto", selected: state.visualFollowsSoundscape) {
-                        state.setVisualOverride(nil)
-                    }
                     ForEach(VisualPreset.allCases) { p in
                         visualOptionChip(
                             label: p.cleanName,
@@ -532,6 +533,7 @@ struct PopoverView: View {
         case .rain:  return Color(red: 0.52, green: 0.82, blue: 0.84) // Kyoto rain sea-glass
         case .drift: return Color(red: 0.92, green: 0.84, blue: 0.74) // Nocturnal lunar pearl
         case .still: return Color(red: 0.78, green: 0.82, blue: 0.88) // Pure obsidian mist
+        case .dive:  return Color(red: 0.62, green: 0.88, blue: 0.94) // Iridescent opalescent prism
         }
     }
 

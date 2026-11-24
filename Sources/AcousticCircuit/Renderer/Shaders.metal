@@ -24,6 +24,7 @@ struct AcousticUniforms {
     float4 impulses[6];    // 24 per-band transient impulses
     float4 noteA[12];      // Live note events: (pitchNorm, pan, velocity, ageSec)
     float4 noteKinds[3];   // 12 note kind codes (0=figure, 1=melody, 2=glint, 3=sustain)
+    float4 breathDepth;    // (breath01, depth01, binauralDeltaHz, isDeepDive)
 };
 
 static inline float getBand(constant AcousticUniforms& u, int idx) {
@@ -90,14 +91,6 @@ static inline float sdSegment(float2 p, float2 a, float2 b) {
 static inline float2 minDimCoord(float2 uv, float2 center, float aspect) {
     float2 d = uv - center;
     return (aspect >= 1.0) ? float2(d.x * aspect, d.y) : float2(d.x, d.y / max(0.25, aspect));
-}
-
-static inline float3 cosinePalette(float t) {
-    float3 a = float3(0.55, 0.45, 0.66);
-    float3 b = float3(0.45, 0.42, 0.46);
-    float3 c = float3(1.00, 0.92, 0.84);
-    float3 d = float3(0.08, 0.34, 0.64);
-    return a + b * cos(6.2831853 * (c * t + d));
 }
 
 // ============================================================================
@@ -785,4 +778,235 @@ fragment float4 horizonFragment(FullscreenOut in [[stage_in]],
     // Subtle film dither so 10-bit OLED / Retina gradients never band
     float grain = (hash12(in.position.xy + fract(u.time)) - 0.5) * 0.012;
     return float4(max(col + grain, 0.0), 1.0);
+}
+
+// ============================================================================
+// PRESET 06: OCULUS — JAMES TURRELL ATEN REIGN / SKYSPACE + BOWL CAUSTICS
+// ============================================================================
+// Four recessed architectural plaster tiers bathed in indirect cove light,
+// coupled directly to Deep Dive's live 8.5 -> 5.5 bpm respiratory pacer and
+// 20-minute physiological descent (Warm Aten Reign Dusk -> Guggenheim Twilight
+// -> Nocturnal Skyspace Cerulean). Struck bronze bowls project translucent
+// Faraday water-caustic ripples across the plaster domes before returning to
+// motionless contemplative stillness during Ma silence.
+
+static inline float3 turrellMix3(float3 a, float3 b, float3 c, float t) {
+    float u = clamp(t, 0.0, 1.0);
+    if (u < 0.5) {
+        return mix(a, b, smoothstep(0.0, 0.5, u));
+    }
+    return mix(b, c, smoothstep(0.5, 1.0, u));
+}
+
+fragment float4 oculusFragment(FullscreenOut in [[stage_in]],
+                               constant AcousticUniforms& u [[buffer(0)]],
+                               device const float* wave [[buffer(1)]]) {
+    float2 uv = in.uv;
+    float aspect = u.resolution.x / max(1.0, u.resolution.y);
+    float playing = u.isPlaying;
+    float isDeep = u.breathDepth.w;
+
+    // Live physiological breath (exact ResonanceBreathPacer in Deep Dive; soft acoustic breath on other modes)
+    float breath01 = (playing > 0.5)
+        ? ((isDeep > 0.5)
+            ? u.breathDepth.x
+            : clamp(0.45 + 0.35 * sin(u.time * 0.57) + 0.20 * u.bass, 0.0, 1.0))
+        : 0.42;
+
+    // Live physiological depth arc (0 = Arrival warm dusk -> 0.5 = Twilight -> 1.0 = Deep Skyspace)
+    // In Standby (paused), rests quietly at serene nocturnal twilight (0.72) with soft low luminance.
+    float depth01 = (playing > 0.5)
+        ? ((isDeep > 0.5)
+            ? u.breathDepth.y
+            : (0.28 + 0.44 * (0.5 + 0.5 * sin(u.time * 0.018))))
+        : 0.72;
+
+    // Frame-aware architectural centering (all 4 concentric tiers fit gracefully in Popover, Studio, iPhone & iPad)
+    float centerY = (u.isCompact > 0.5) ? 0.50 : ((aspect < 1.0) ? 0.45 : 0.505);
+    float2 p = uv - float2(0.5, centerY);
+    if (aspect >= 1.0) {
+        p.x *= aspect;
+        p.x *= (u.isCompact > 0.5) ? 0.76 : 0.80;
+        if (u.isCompact > 0.5) p *= 1.18; // Frame all 4 recessed chambers cleanly in compact popover card
+    } else {
+        p.y /= aspect;
+        p.y *= 0.72; // Tall cathedral oculus on portrait iPhone
+        p *= 0.96;
+    }
+
+    // Imperceptible respiratory dilation (+3.0% on inhale, deep warm settle on exhale)
+    float breathScale = 1.0 + playing * (breath01 - 0.5) * 0.058;
+    float2 bp = p / breathScale;
+
+    // Subtle Guggenheim off-axis vertical parallax between deeper recessed architectural tiers
+    float par = (u.isCompact > 0.5) ? 0.005 : 0.0085;
+    float2 p1 = bp;
+    float2 p2 = bp + float2(0.0, -par);
+    float2 p3 = bp + float2(0.0, -par * 2.0);
+    float2 p4 = bp + float2(0.0, -par * 2.8);
+
+    float r1 = length(p1);
+    float r2 = length(p2);
+    float r3 = length(p3);
+    float r4 = length(p4);
+
+    // 3-Keyframe Perceptually Curated Turrell Ganzfeld Trajectory (zero muddy midpoint!)
+    // Daytime arc: Aten Reign Warm Dusk -> Guggenheim Velvet Twilight -> Nocturnal Skyspace Cerulean
+    float3 oA = float3(0.028, 0.032, 0.082);
+    float3 t1A = float3(0.110, 0.082, 0.242);
+    float3 t2A = float3(0.360, 0.136, 0.312);
+    float3 t3A = float3(0.735, 0.298, 0.280);
+    float3 skA = float3(0.955, 0.720, 0.495);
+
+    float3 oM = float3(0.020, 0.028, 0.072);
+    float3 t1M = float3(0.068, 0.088, 0.235);
+    float3 t2M = float3(0.185, 0.145, 0.365);
+    float3 t3M = float3(0.395, 0.255, 0.455);
+    float3 skM = float3(0.785, 0.675, 0.775);
+
+    float3 oD = float3(0.013, 0.022, 0.056);
+    float3 t1D = float3(0.036, 0.086, 0.198);
+    float3 t2D = float3(0.074, 0.195, 0.340);
+    float3 t3D = float3(0.145, 0.375, 0.470);
+    float3 skD = float3(0.635, 0.805, 0.875);
+
+    float3 cOuterDay = turrellMix3(oA,  oM,  oD,  depth01);
+    float3 cTier1Day = turrellMix3(t1A, t1M, t1D, depth01);
+    float3 cTier2Day = turrellMix3(t2A, t2M, t2D, depth01);
+    float3 cTier3Day = turrellMix3(t3A, t3M, t3D, depth01);
+    float3 cSkyDay   = turrellMix3(skA, skM, skD, depth01);
+
+    // Nocturnal Low-Melanopic Ember Arc (20:00-05:59): strips 460-490 nm ipRGC blue/cyan spike
+    // to protect evening melatonin (< 10 melanopic EDI) while preserving deep Turrell warmth
+    float3 noA = float3(0.026, 0.014, 0.010);
+    float3 nt1A = float3(0.105, 0.036, 0.022);
+    float3 nt2A = float3(0.285, 0.088, 0.044);
+    float3 nt3A = float3(0.560, 0.205, 0.078);
+    float3 nskA = float3(0.840, 0.495, 0.185);
+
+    float3 noM = float3(0.020, 0.010, 0.008);
+    float3 nt1M = float3(0.078, 0.024, 0.016);
+    float3 nt2M = float3(0.205, 0.058, 0.032);
+    float3 nt3M = float3(0.415, 0.140, 0.056);
+    float3 nskM = float3(0.680, 0.365, 0.125);
+
+    float3 noD = float3(0.014, 0.008, 0.005);
+    float3 nt1D = float3(0.048, 0.017, 0.010);
+    float3 nt2D = float3(0.125, 0.038, 0.018);
+    float3 nt3D = float3(0.265, 0.095, 0.036);
+    float3 nskD = float3(0.485, 0.255, 0.082);
+
+    float isNight = clamp(u.breathDepth.z, 0.0, 1.0);
+    float3 cOuter = mix(cOuterDay, turrellMix3(noA,  noM,  noD,  depth01), isNight);
+    float3 cTier1 = mix(cTier1Day, turrellMix3(nt1A, nt1M, nt1D, depth01), isNight);
+    float3 cTier2 = mix(cTier2Day, turrellMix3(nt2A, nt2M, nt2D, depth01), isNight);
+    float3 cTier3 = mix(cTier3Day, turrellMix3(nt3A, nt3M, nt3D, depth01), isNight);
+    float3 cSky   = mix(cSkyDay,   turrellMix3(nskA, nskM, nskD, depth01), isNight);
+
+    // Tier radii spanning cleanly across the viewport
+    float R1 = 0.64;
+    float R2 = 0.47;
+    float R3 = 0.32;
+    float R4 = 0.19;
+
+    // Subtle matte architectural plaster micro-grain (makes flat OLED light feel physical & tactile)
+    float grainFine = gradNoise(uv * 54.0) * 0.0042 + gradNoise(uv * 17.0) * 0.0036;
+
+    // Outer room architectural ceiling cove
+    float gOut = clamp(1.0 - max(0.0, r1 - R1) * 1.20, 0.0, 1.0);
+    float3 col = cOuter * (0.44 + 0.60 * pow(gOut, 1.40))
+               + cTier1 * exp(-max(0.0, r1 - R1) * 6.8) * (0.30 + 0.09 * breath01);
+
+    // Tier 1 (crisp architectural bevel at R1, recessed inner shadow, indirect light spilling from R2)
+    float m1 = 1.0 - smoothstep(R1 - 0.0065, R1 + 0.0085, r1);
+    float shadow1 = smoothstep(R1, R1 - 0.055, r1);
+    float cove1 = pow(clamp((R1 - r1) / (R1 - R2), 0.0, 1.0), 1.45);
+    float3 t1 = mix(cOuter * 0.82, cTier1, 0.34 + 0.66 * shadow1) * (0.70 + 0.38 * cove1)
+              + cTier2 * pow(cove1, 2.5) * 0.28;
+    float edge1 = exp(-pow((r1 - R1) / 0.0048, 2.0)) * 0.13;
+    col = mix(col, t1, m1) + mix(cTier1, cTier2, 0.5) * edge1;
+
+    // Tier 2 (crisp recessed step at R2, richer cove glow from R3)
+    float m2 = 1.0 - smoothstep(R2 - 0.0058, R2 + 0.0075, r2);
+    float shadow2 = smoothstep(R2, R2 - 0.048, r2);
+    float cove2 = pow(clamp((R2 - r2) / (R2 - R3), 0.0, 1.0), 1.40);
+    float3 t2 = mix(cTier1 * 0.82, cTier2, 0.34 + 0.66 * shadow2) * (0.74 + 0.34 * cove2)
+              + cTier3 * pow(cove2, 2.4) * 0.32;
+    float edge2 = exp(-pow((r2 - R2) / 0.0044, 2.0)) * 0.15;
+    col = mix(col, t2, m2) + mix(cTier2, cTier3, 0.5) * edge2;
+
+    // Tier 3 (crisp recessed step at R3, warm luminous cove glow framing the central oculus)
+    float m3 = 1.0 - smoothstep(R3 - 0.0052, R3 + 0.0068, r3);
+    float shadow3 = smoothstep(R3, R3 - 0.040, r3);
+    float cove3 = pow(clamp((R3 - r3) / (R3 - R4), 0.0, 1.0), 1.35);
+    float3 t3 = mix(cTier2 * 0.82, cTier3, 0.36 + 0.64 * shadow3) * (0.78 + 0.32 * cove3)
+              + cSky * pow(cove3, 2.2) * 0.36;
+    float edge3 = exp(-pow((r3 - R3) / 0.0038, 2.0)) * 0.17;
+    col = mix(col, t3, m3) + mix(cTier3, cSky, 0.5) * edge3;
+
+    // Central Skyspace Oculus (infinite atmospheric dusk aperture breathing in exact lockstep with audio)
+    float m4 = 1.0 - smoothstep(R4 - 0.0042, R4 + 0.0058, r4);
+    float skyGrad = clamp(0.5 - p4.y * 1.65, 0.0, 1.0);
+    // Whisper-soft living sky atmosphere (high-altitude rain veil drifting imperceptibly across the skylight)
+    float skyVeil = gradNoise(p4 * 5.2 + float2(u.time * 0.016, -u.time * 0.011)) * (0.030 + 0.025 * u.treble);
+    int wIdx = clamp(int(fract(uv.x) * 511.0), 0, 511);
+    float airShimmer = playing * wave[wIdx] * 0.012 * (0.4 + 0.6 * u.energy);
+
+    float3 skyCol = mix(cSky * 0.87, cSky * 1.08 + float3(0.05, 0.04, 0.03), skyGrad + skyVeil)
+                  * (0.86 + 0.20 * breath01 + airShimmer);
+    float skyRim = smoothstep(R4, R4 - 0.024, r4);
+    skyCol = mix(cTier3 * 0.90, skyCol, 0.54 + 0.46 * skyRim);
+    float edge4 = exp(-pow((r4 - R4) / 0.0034, 2.0)) * 0.19;
+    col = mix(col, skyCol, m4) + cSky * edge4;
+
+    // Live Multi-Bowl Faraday Water-Caustic Resonance (100% silence-respectful during Ma gaps!)
+    if (playing > 0.5) {
+        float causticAccum = 0.0;
+        float ringAccum = 0.0;
+        for (int n = 0; n < 12; n++) {
+            float4 na = u.noteA[n]; // (pitchNorm, pan, velocity, ageSec)
+            float age = na.w;
+            if (age > 0.001 && age < 14.5) {
+                float vel = na.z;
+                float env = exp(-age * 0.30) * smoothstep(0.0, 0.18, age) * vel;
+                float2 bc = p4 - float2(na.y * 0.042, (na.x - 0.5) * 0.024);
+                float rb = length(bc);
+                float ab = atan2(bc.y, bc.x);
+
+                // Pitch-locked angular Faraday eigenmode (m=3 deep temple bowls -> m=7 high Zen rin bells)
+                float mA = floor(3.0 + na.x * 3.0);
+                float mB = mA + 2.0;
+                float precess = u.time * (0.36 + 0.18 * na.x) * (na.y >= 0.0 ? 1.0 : -1.0);
+
+                float front = 0.03 + age * 0.095;
+                float band = exp(-pow((rb - front) / 0.115, 2.0)) * exp(-rb * 1.65);
+                float wA = cos(rb * 40.0 - age * 2.4) * cos(ab * mA + precess);
+                float wB = cos(rb * 45.0 - age * 2.1 + 0.85) * cos(ab * mB - precess * 0.72);
+                float web = pow(max(0.0, 0.5 + 0.5 * (0.58 * wA + 0.42 * wB)), 5.2);
+                float softHalo = exp(-pow((rb - front) / 0.022, 2.0)) * smoothstep(0.01, 0.07, rb);
+
+                causticAccum += web * band * env;
+                ringAccum += softHalo * env;
+            }
+        }
+        if (causticAccum > 0.0005 || ringAccum > 0.0005) {
+            float3 lightTint = mix(cSky * 1.18, float3(1.0, 0.97, 0.92), 0.52);
+            float tierReach = 0.22 + 0.78 * m1;
+            col += lightTint * (min(1.0, causticAccum) * 0.26 + min(1.0, ringAccum) * 0.13) * tierReach;
+        }
+    }
+
+    // Gentle standby dim when paused so silence feels deeply restful
+    col *= mix(0.62, 1.0, playing);
+
+    // Subtle edge obsidian darkening so white Braun top/bottom chrome always reads effortlessly
+    float2 vig = uv - 0.5;
+    float edgeDark = clamp(1.05 - dot(vig, vig) * 0.62, 0.38, 1.0);
+    float dockContrast = 1.0 - 0.24 * smoothstep(0.76, 1.0, uv.y) - 0.14 * smoothstep(0.18, 0.0, uv.y);
+    col = (col + grainFine) * edgeDark * dockContrast;
+
+    // Filmic highlight rolloff + 10-bit OLED dither (zero banding on Apple XDR / OLED)
+    col = col / (1.0 + col * 0.16);
+    float dither = (hash12(in.position.xy + fract(u.time)) - 0.5) * 0.011;
+    return float4(max(col + dither, 0.0), 1.0);
 }
