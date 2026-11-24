@@ -1,7 +1,7 @@
 import AcousticCore
 import AppKit
 import Metal
-import MetalKit
+import QuartzCore
 import SwiftUI
 import simd
 
@@ -137,14 +137,38 @@ final class SharedMetalPipelines {
     }
 }
 
-/// High-efficiency 120Hz ProMotion Metal visualizer view with optional Retina schematic overlay callback.
-final class AcousticMetalView: MTKView, MTKViewDelegate {
+/// Weak proxy breaking retain cycles between `CAMetalDisplayLink` and `AcousticMetalView`.
+@MainActor
+private final class MetalDisplayLinkProxy: NSObject, CAMetalDisplayLinkDelegate {
+    weak var owner: AcousticMetalView?
+
+    init(owner: AcousticMetalView) {
+        self.owner = owner
+    }
+
+    nonisolated func metalDisplayLink(_ link: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
+        nonisolated(unsafe) let u = update
+        MainActor.assumeIsolated {
+            self.owner?.render(update: u)
+        }
+    }
+}
+
+/// Native macOS 15+ 120Hz Apple EDR visualizer backed directly by `CAMetalLayer` + `CAMetalDisplayLink`.
+/// Avoids `MTKView`'s legacy `CVDisplayLink`, which macOS permanently tears down on `NSWindow.close()`
+/// when reusing `isReleasedWhenClosed = false` windows (causing frozen Studio windows on reopen).
+@MainActor
+final class AcousticMetalView: NSView {
     let compactMode: Bool
     var onSnapshotRendered: ((AcousticSnapshot) -> Void)?
 
     private let pipelines: SharedMetalPipelines
+    private let metalLayer: CAMetalLayer
     private let uniformBuffers: [MTLBuffer]
     private let waveBuffers: [MTLBuffer]
+    private var displayLink: CAMetalDisplayLink?
+    private var displayLinkProxy: MetalDisplayLinkProxy?
+    private var currentTargetFPS: Int = 0
     private var frameSlot = 0
     private var lastDrawTime: CFTimeInterval = CACurrentMediaTime()
 
@@ -154,7 +178,6 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
     private var lastPreset: VisualPreset = .circuit
     private var desiredActive: Bool = false
     private var lastRenderedWallTime: CFTimeInterval = 0
-    private var pendingFPSUpdate: Int? = nil
     nonisolated(unsafe) private var windowObservers: [NSObjectProtocol] = []
     nonisolated(unsafe) private var workspaceObservers: [NSObjectProtocol] = []
 
@@ -163,6 +186,18 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
         let p = SharedMetalPipelines.shared
         self.pipelines = p
 
+        let layer = CAMetalLayer()
+        layer.device = p.device
+        layer.pixelFormat = .rgba16Float
+        layer.colorspace = p.displayColorSpace
+        layer.wantsExtendedDynamicRangeContent = true
+        layer.framebufferOnly = true
+        layer.maximumDrawableCount = 3
+        layer.displaySyncEnabled = true
+        layer.allowsNextDrawableTimeout = true
+        layer.isOpaque = true
+        self.metalLayer = layer
+
         self.uniformBuffers = (0..<3).map { _ in
             p.device.makeBuffer(length: MemoryLayout<AcousticUniforms>.stride, options: .storageModeShared)!
         }
@@ -170,31 +205,19 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
             p.device.makeBuffer(length: MemoryLayout<SIMD2<Float>>.stride * 256, options: .storageModeShared)!
         }
 
-        super.init(frame: frame, device: p.device)
-        self.colorPixelFormat = .rgba16Float
-        self.colorspace = p.displayColorSpace
-        self.clearColor = MTLClearColor(red: 0.0021, green: 0.0033, blue: 0.0061, alpha: 1.0)
-        self.framebufferOnly = true
-        self.preferredFramesPerSecond = compactMode ? 60 : 120
-        self.enableSetNeedsDisplay = false
-        self.isPaused = true
-        self.delegate = self
-        configureEDRLayer()
+        super.init(frame: frame)
+        self.wantsLayer = true
+        self.layer = layer
         installWorkspaceObservers()
     }
 
-    private func configureEDRLayer() {
-        self.colorspace = pipelines.displayColorSpace
-        if let metalLayer = self.layer as? CAMetalLayer {
-            metalLayer.pixelFormat = .rgba16Float
-            metalLayer.wantsExtendedDynamicRangeContent = true
-            metalLayer.colorspace = pipelines.displayColorSpace
-        }
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 
-    @available(*, unavailable)
-    required init(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+    override func makeBackingLayer() -> CALayer {
+        metalLayer
     }
 
     deinit {
@@ -207,31 +230,122 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
         }
     }
 
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        if newWindow == nil {
+            teardownDisplayLink()
+        }
+        super.viewWillMove(toWindow: newWindow)
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         configureEDRLayer()
+        updateDrawableSize()
         installWindowObservers()
-        syncPauseState(forceRestart: false)
+        syncDisplayLink(forceRecreate: false)
     }
 
-    /// Strictly idempotent: 250ms SwiftUI telemetry updates that pass the same `active` flag are pure NO-OPs
-    /// and never tear down or recreate MTKView's CVDisplayLink.
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        configureEDRLayer()
+        updateDrawableSize()
+    }
+
+    override func layout() {
+        super.layout()
+        updateDrawableSize()
+        if desiredActive && displayLink == nil {
+            syncDisplayLink(forceRecreate: false)
+        }
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        updateDrawableSize()
+    }
+
+    private func configureEDRLayer() {
+        metalLayer.pixelFormat = .rgba16Float
+        metalLayer.wantsExtendedDynamicRangeContent = true
+        metalLayer.colorspace = pipelines.displayColorSpace
+    }
+
+    private func updateDrawableSize() {
+        let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0
+        if metalLayer.contentsScale != scale {
+            metalLayer.contentsScale = scale
+        }
+        let w = max(2, Int((bounds.width * scale).rounded()))
+        let h = max(2, Int((bounds.height * scale).rounded()))
+        let target = CGSize(width: w, height: h)
+        if metalLayer.drawableSize != target {
+            metalLayer.drawableSize = target
+        }
+    }
+
+    /// Idempotent when already rendering; self-healing when the window just became visible after `makeNSView`.
     func setActive(_ active: Bool) {
-        guard desiredActive != active else { return }
         desiredActive = active
-        syncPauseState(forceRestart: false)
-    }
-
-    /// Safely recovers a stalled macOS CVDisplayLink after Space switch, fullscreen transition, deminiaturize,
-    /// or system wake — ONLY toggling `isPaused` when frames have actually stopped arriving (>250ms).
-    /// Never calls synchronous `draw()` inside SwiftUI layout passes.
-    func recoverIfStalled() {
-        guard desiredActive, let win = window, !isHidden, !win.isMiniaturized, win.isVisible else {
-            syncPauseState(forceRestart: false)
+        if !active {
+            teardownDisplayLink()
             return
         }
-        let stalled = (CACurrentMediaTime() - lastRenderedWallTime) > 0.25
-        syncPauseState(forceRestart: stalled)
+        syncDisplayLink(forceRecreate: false)
+    }
+
+    /// Rebuilds the `CAMetalDisplayLink` cleanly if it is missing or has not delivered a frame in > 250 ms.
+    func recoverIfStalled() {
+        guard desiredActive, let win = window, !isHidden, !win.isMiniaturized, win.isVisible else {
+            teardownDisplayLink()
+            return
+        }
+        let stalled = displayLink == nil || (CACurrentMediaTime() - lastRenderedWallTime) > 0.25
+        syncDisplayLink(forceRecreate: stalled)
+    }
+
+    private func teardownDisplayLink() {
+        if let link = displayLink {
+            link.isPaused = true
+            link.invalidate()
+            displayLink = nil
+        }
+        displayLinkProxy = nil
+        currentTargetFPS = 0
+    }
+
+    private func syncDisplayLink(forceRecreate: Bool) {
+        guard desiredActive,
+              let win = window,
+              !isHidden,
+              !win.isMiniaturized,
+              win.isVisible else {
+            teardownDisplayLink()
+            return
+        }
+        if forceRecreate {
+            teardownDisplayLink()
+        }
+        configureEDRLayer()
+        updateDrawableSize()
+        if displayLink == nil {
+            let proxy = MetalDisplayLinkProxy(owner: self)
+            let link = CAMetalDisplayLink(metalLayer: metalLayer)
+            link.delegate = proxy
+            let initialMax = Float(compactMode ? 60 : min(120, win.screen?.maximumFramesPerSecond ?? 120))
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 15, maximum: initialMax, preferred: initialMax)
+            link.add(to: .main, forMode: .common)
+            self.displayLinkProxy = proxy
+            self.displayLink = link
+            self.currentTargetFPS = Int(initialMax)
+        }
+        displayLink?.isPaused = false
+    }
+
+    private func updateFrameRateRangeIfNeeded(_ desiredFPS: Int) {
+        guard let link = displayLink, currentTargetFPS != desiredFPS else { return }
+        currentTargetFPS = desiredFPS
+        let fps = Float(max(15, min(120, desiredFPS)))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: min(15, fps), maximum: fps, preferred: fps)
     }
 
     private func installWorkspaceObservers() {
@@ -248,6 +362,18 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
             }
             workspaceObservers.append(obs)
         }
+        let sleepNames: [NSNotification.Name] = [
+            NSWorkspace.willSleepNotification,
+            NSWorkspace.screensDidSleepNotification
+        ]
+        for name in sleepNames {
+            let obs = ws.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.teardownDisplayLink()
+                }
+            }
+            workspaceObservers.append(obs)
+        }
     }
 
     private func installWindowObservers() {
@@ -258,16 +384,29 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
         guard let win = window else { return }
 
         let nc = NotificationCenter.default
-        let names: [NSNotification.Name] = [
+
+        // Cleanly invalidate CAMetalDisplayLink on close/miniaturize so reopening creates a fresh live link
+        let stopNames: [NSNotification.Name] = [
+            NSWindow.willCloseNotification,
+            NSWindow.didMiniaturizeNotification
+        ]
+        for name in stopNames {
+            let obs = nc.addObserver(forName: name, object: win, queue: .main) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.teardownDisplayLink()
+                }
+            }
+            windowObservers.append(obs)
+        }
+
+        let wakeNames: [NSNotification.Name] = [
             NSWindow.didBecomeKeyNotification,
-            NSWindow.didChangeOcclusionStateNotification,
             NSWindow.didEnterFullScreenNotification,
             NSWindow.didExitFullScreenNotification,
             NSWindow.didChangeScreenNotification,
-            NSWindow.didMiniaturizeNotification,
             NSWindow.didDeminiaturizeNotification
         ]
-        for name in names {
+        for name in wakeNames {
             let obs = nc.addObserver(forName: name, object: win, queue: .main) { [weak self] _ in
                 Task { @MainActor [weak self] in
                     self?.recoverIfStalled()
@@ -275,41 +414,18 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
             }
             windowObservers.append(obs)
         }
-    }
 
-    private func syncPauseState(forceRestart: Bool) {
-        guard let win = window else {
-            if !isPaused { isPaused = true }
-            return
-        }
-        let shouldRun = desiredActive && !isHidden && !win.isMiniaturized && win.isVisible
-        if !shouldRun {
-            if !isPaused { isPaused = true }
-            return
-        }
-        if isPaused {
-            isPaused = false
-        } else if forceRestart {
-            isPaused = true
-            isPaused = false
-        }
-    }
-
-    private func scheduleFPSChange(_ desiredFPS: Int) {
-        guard preferredFramesPerSecond != desiredFPS, pendingFPSUpdate != desiredFPS else { return }
-        pendingFPSUpdate = desiredFPS
-        // Never mutate preferredFramesPerSecond synchronously inside draw(in:), which can stall MTKView's display link on macOS 15+.
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.pendingFPSUpdate == desiredFPS else { return }
-            self.pendingFPSUpdate = nil
-            if self.preferredFramesPerSecond != desiredFPS {
-                self.preferredFramesPerSecond = desiredFPS
+        let occObs = nc.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: win, queue: .main) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, let w = self.window else { return }
+                if w.occlusionState.contains(.visible) {
+                    self.recoverIfStalled()
+                } else {
+                    self.displayLink?.isPaused = true
+                }
             }
         }
-    }
-
-    func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
-        // Ping-pong buffers reallocate lazily on next draw
+        windowObservers.append(occObs)
     }
 
     private func ensurePingPongTextures(size: CGSize) {
@@ -351,12 +467,19 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
         cmd.commit()
     }
 
-    func draw(in view: MTKView) {
-        guard !isHidden,
+    fileprivate func render(update: CAMetalDisplayLink.Update) {
+        guard desiredActive,
+              !isHidden,
               let win = window,
               !win.isMiniaturized,
-              win.isVisible,
-              win.occlusionState.contains(.visible) else { return }
+              win.isVisible else {
+            teardownDisplayLink()
+            return
+        }
+        guard win.occlusionState.contains(.visible),
+              bounds.width >= 2,
+              bounds.height >= 2 else { return }
+
         lastRenderedWallTime = CACurrentMediaTime()
 
         let state = AppState.shared
@@ -378,10 +501,14 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
             activeCap = min(120, screenMax)
         }
         let desiredFPS = snap.isSilent ? 15 : activeCap
-        scheduleFPSChange(desiredFPS)
+        updateFrameRateRangeIfNeeded(desiredFPS)
 
-        guard let drawable = currentDrawable,
-              let renderPassDesc = currentRenderPassDescriptor else { return }
+        let drawable = update.drawable
+        let renderPassDesc = MTLRenderPassDescriptor()
+        renderPassDesc.colorAttachments[0].texture = drawable.texture
+        renderPassDesc.colorAttachments[0].loadAction = .clear
+        renderPassDesc.colorAttachments[0].storeAction = .store
+        renderPassDesc.colorAttachments[0].clearColor = MTLClearColor(red: 0.0021, green: 0.0033, blue: 0.0061, alpha: 1.0)
 
         let now = CACurrentMediaTime()
         let frameDt = Float(max(0.002, min(0.05, now - lastDrawTime)))
@@ -394,7 +521,7 @@ final class AcousticMetalView: MTKView, MTKViewDelegate {
             }
         }
 
-        let size = drawableSize
+        let size = CGSize(width: drawable.texture.width, height: drawable.texture.height)
         let slot = frameSlot % 3
         frameSlot &+= 1
 

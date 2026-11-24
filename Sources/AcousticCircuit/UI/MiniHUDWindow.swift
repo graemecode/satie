@@ -14,7 +14,7 @@ struct MiniHUDContentView: View {
 
     var body: some View {
         ZStack {
-            MetalVisualizerRepresentable(compactMode: true)
+            MetalVisualizerRepresentable(compactMode: true, isActive: state.isMiniHUDOpen)
 
             VStack {
                 HStack {

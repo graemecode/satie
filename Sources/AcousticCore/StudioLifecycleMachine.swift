@@ -42,37 +42,29 @@ public struct StudioLifecycleMachine: Sendable, Equatable {
             winState = .visible
             isStudioOpen = true
             metalActive = true
-            return [.createAndShowWindow(fullscreen: fullscreen), .setMetalActive(true)]
+            return [.createAndShowWindow(fullscreen: fullscreen), .setMetalActive(true), .recoverMetalIfStalled]
 
         case .hidden:
             winState = .visible
             isStudioOpen = true
             metalActive = true
-            return [.setMetalActive(true), .orderFrontWindow(fullscreen: fullscreen), .recoverMetalIfStalled]
+            return [.orderFrontWindow(fullscreen: fullscreen), .setMetalActive(true), .recoverMetalIfStalled]
 
         case .minimized:
             winState = .visible
             isStudioOpen = true
             metalActive = true
-            return [.setMetalActive(true), .deminiaturizeAndShow(fullscreen: fullscreen), .recoverMetalIfStalled]
+            return [.deminiaturizeAndShow(fullscreen: fullscreen), .setMetalActive(true), .recoverMetalIfStalled]
 
         case .visible:
             isStudioOpen = true
-            var effects: [Effect] = [.orderFrontWindow(fullscreen: fullscreen), .recoverMetalIfStalled]
-            if !metalActive {
-                metalActive = true
-                effects.insert(.setMetalActive(true), at: 0)
-            }
-            return effects
+            metalActive = true
+            return [.orderFrontWindow(fullscreen: fullscreen), .setMetalActive(true), .recoverMetalIfStalled]
 
         case .fullscreen:
             isStudioOpen = true
-            var effects: [Effect] = [.orderFrontWindow(fullscreen: false), .recoverMetalIfStalled]
-            if !metalActive {
-                metalActive = true
-                effects.insert(.setMetalActive(true), at: 0)
-            }
-            return effects
+            metalActive = true
+            return [.orderFrontWindow(fullscreen: false), .setMetalActive(true), .recoverMetalIfStalled]
 
         case .exitingFullscreen:
             // Cancel deferred close so when macOS finishes exiting fullscreen, the window stays visible and live

@@ -114,9 +114,6 @@ final class AppState: ObservableObject {
     private(set) var snapshot: AcousticSnapshot = .empty
     @Published var displayKey: String = "STANDBY"
     @Published var displayEnergy: Float = 0
-    @Published var displayFlux: Float = 0
-    @Published var displayPhase: Float = 1
-    @Published var displayFPS: Int = 60
 
     let focusRingBuffer: StereoRingBuffer
     let focusSound: FocusSoundEngine
@@ -136,8 +133,6 @@ final class AppState: ObservableObject {
     private var uiThrottleAccum: Double = 0
     private var menuBarTickAccum: Double = 0
     private var lastMenuBarWasSilent: Bool = false
-    private var fpsCounter: Int = 0
-    private var fpsAccum: Double = 0
     private var lastRenderDrivenTime: CFTimeInterval = 0
 
     var isFocusAudible: Bool {
@@ -567,32 +562,34 @@ final class AppState: ObservableObject {
                 || tel.pass != scoreTelemetry.pass
                 || tel.chordIndex != scoreTelemetry.chordIndex
                 || tel.didSwapFigure != scoreTelemetry.didSwapFigure {
-                scoreTelemetry = tel
+                if drivenByMetal {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.scoreTelemetry = tel
+                    }
+                } else {
+                    scoreTelemetry = tel
+                }
             }
         }
 
-        fpsCounter += 1
-        fpsAccum += dt
-        if fpsAccum >= 1.0 {
-            let newFPS = Int(round(Double(fpsCounter) / fpsAccum))
-            if (isPopoverOpen || isStudioOpen) && abs(displayFPS - newFPS) >= 2 {
-                displayFPS = newFPS
-            }
-            fpsCounter = 0
-            fpsAccum = 0
-        }
-
-        if isPopoverOpen || isMiniHUDOpen || isStudioOpen {
+        if isMiniHUDOpen {
             uiThrottleAccum += dt
             if uiThrottleAccum >= 0.25 {
                 uiThrottleAccum = 0
-                if displayKey != snap.detectedKey { displayKey = snap.detectedKey }
+                let nextKey = snap.detectedKey
                 let qEnergy = (snap.energy * 100).rounded() / 100
-                let qFlux = (snap.flux * 100).rounded() / 100
-                let qPhase = (snap.stereoCorrelation * 100).rounded() / 100
-                if displayEnergy != qEnergy { displayEnergy = qEnergy }
-                if displayFlux != qFlux { displayFlux = qFlux }
-                if displayPhase != qPhase { displayPhase = qPhase }
+                if displayKey != nextKey || displayEnergy != qEnergy {
+                    if drivenByMetal {
+                        DispatchQueue.main.async { [weak self] in
+                            guard let self else { return }
+                            if self.displayKey != nextKey { self.displayKey = nextKey }
+                            if self.displayEnergy != qEnergy { self.displayEnergy = qEnergy }
+                        }
+                    } else {
+                        if displayKey != nextKey { displayKey = nextKey }
+                        if displayEnergy != qEnergy { displayEnergy = qEnergy }
+                    }
+                }
             }
         }
 

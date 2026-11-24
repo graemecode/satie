@@ -502,18 +502,22 @@ final class StudioWindowController: NSObject, NSWindowDelegate {
                 if existing.isMiniaturized {
                     existing.deminiaturize(nil)
                 }
+                existing.orderFrontRegardless()
                 existing.makeKeyAndOrderFront(nil)
                 if fullscreen && !existing.styleMask.contains(.fullScreen) {
                     existing.toggleFullScreen(nil)
                 }
+                schedulePostOpenRecovery()
 
             case .orderFrontWindow(let fullscreen):
                 guard let existing = window else { continue }
                 NSApp.activate(ignoringOtherApps: true)
+                existing.orderFrontRegardless()
                 existing.makeKeyAndOrderFront(nil)
                 if fullscreen && !existing.styleMask.contains(.fullScreen) {
                     existing.toggleFullScreen(nil)
                 }
+                schedulePostOpenRecovery()
 
             case .orderOutWindow:
                 window?.orderOut(nil)
@@ -559,7 +563,7 @@ final class StudioWindowController: NSObject, NSWindowDelegate {
         win.titlebarAppearsTransparent = true
         win.backgroundColor = NSColor(calibratedRed: 0.028, green: 0.043, blue: 0.071, alpha: 1.0)
         win.minSize = NSSize(width: 720, height: 500)
-        win.collectionBehavior = [.fullScreenPrimary]
+        win.collectionBehavior = [.fullScreenPrimary, .moveToActiveSpace]
         win.isReleasedWhenClosed = false
         win.delegate = self
         win.onMiniHUDShortcut = { [weak self] in
@@ -576,12 +580,21 @@ final class StudioWindowController: NSObject, NSWindowDelegate {
 
         self.window = win
         NSApp.activate(ignoringOtherApps: true)
+        win.orderFrontRegardless()
         win.makeKeyAndOrderFront(nil)
+        schedulePostOpenRecovery()
 
         if fullscreen {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak win] in
                 win?.toggleFullScreen(nil)
             }
+        }
+    }
+
+    private func schedulePostOpenRecovery() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+            guard let self, self.lifecycle.isStudioOpen else { return }
+            self.stageView?.metalView.recoverIfStalled()
         }
     }
 

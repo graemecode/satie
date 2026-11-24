@@ -660,6 +660,14 @@ struct AcousticCoreTests {
         let eWake = m.handleSystemWake()
         #expect(eWake.contains(.recoverMetalIfStalled))
         #expect(m.metalActive)
+
+        // Path 5 (CloseAndReopenOrder): red-button / Cmd+W close -> Expand orders window BEFORE activating Metal
+        let eClose = m.handleWindowWillClose()
+        #expect(m.winState == .hidden && !m.isStudioOpen && !m.metalActive)
+        #expect(eClose == [.setMetalActive(false)])
+        let eReopen = m.requestOpen(fullscreen: false)
+        #expect(eReopen == [.orderFrontWindow(fullscreen: false), .setMetalActive(true), .recoverMetalIfStalled])
+        #expect(m.winState == .visible && m.isStudioOpen && m.metalActive)
     }
 
     @Test("Kinetic Pulse embeds silky beat-locked 14.40 Hz beta AM without harsh headphone vibration (Woods & Loui 2024)")

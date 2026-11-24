@@ -403,8 +403,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func openStudio(fullscreen: Bool) {
         closePopover()
         miniHUD.close()
-        studio.show(fullscreen: fullscreen) { [weak self] in
-            self?.openMiniHUD()
+        // Defer one runloop turn so the borderless menu-bar panel finishes ordering out cleanly before Studio activates
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.studio.show(fullscreen: fullscreen) { [weak self] in
+                self?.openMiniHUD()
+            }
         }
     }
 

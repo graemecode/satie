@@ -18,7 +18,7 @@ brew install --cask graemecode/tap/satie
 ```
 
 ### Direct Download
-Download the Apple-notarized [Satie-4.0.0.dmg](https://github.com/graemecode/satie/releases/latest/download/Satie-4.0.0.dmg) (macOS 15 Sequoia or later, Apple Silicon, 10 MB), drag **Satie** to **Applications**, and launch. No macOS privacy prompts, no virtual audio drivers, no background daemons.
+Download the Apple-notarized [Satie-4.0.1.dmg](https://github.com/graemecode/satie/releases/latest/download/Satie-4.0.1.dmg) (macOS 15 Sequoia or later, Apple Silicon, 10 MB), drag **Satie** to **Applications**, and launch. No macOS privacy prompts, no virtual audio drivers, no background daemons.
 
 ---
 
@@ -90,7 +90,7 @@ Sources/
 ├── AcousticCircuit/                      # Native macOS app & 120 Hz Apple EDR Metal renderer
 │   ├── App/SatieAppIntents.swift         # Native Apple Shortcuts, Siri, Spotlight & Focus Filters
 │   ├── Renderer/Shaders.metal            # 11 compiled Metal pipelines (rgba16Float EDR + blue noise)
-│   ├── Renderer/MetalVisualizerView.swift# Triple-buffered zero-copy Apple Silicon MTKView
+│   ├── Renderer/MetalVisualizerView.swift# Native CAMetalLayer + CAMetalDisplayLink (zero-copy EDR)
 │   ├── Renderer/SchematicOverlayView.swift# Retina CoreGraphics HUD layered over Metal
 │   └── UI/                               # PopoverView (6 geometric glyphs), Studio, MiniHUD, MenuBarIcon
 ├── SatieiOS/ & SatieWidgets/             # iOS 18+ app, Dynamic Island Live Activities & OLED StandBy
