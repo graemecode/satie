@@ -2,7 +2,7 @@
 
 Named after **Erik Satie**, who invented *musique d'ameublement* ("furniture music") in 1917 — sound meant to inhabit a room without demanding attention.
 
-**Satie v4.0** is a native **Swift 6 + Metal** generative focus & meditation instrument and **120 Hz Apple EDR visualizer** living quietly in your macOS menu bar (with shared-core iPhone/iPad, Dynamic Island, StandBy, Apple Watch, Apple TV, and Vision Pro targets). Zero macOS permissions, zero subscriptions, zero network requests, zero third-party packages — **10 MB** Developer ID signed & Apple notarized `.dmg`.
+**Satie v4.1** is a native **Swift 6 + Metal** generative focus & meditation instrument and **120 Hz Apple EDR visualizer** living quietly in your macOS menu bar (with shared-core iPhone/iPad, Dynamic Island, StandBy, Apple Watch, Apple TV, and Vision Pro targets, natively localized in 8 languages: English, Japanese, French, Simplified Chinese, Taiwanese Traditional Chinese, Spanish, German, and Korean). Zero macOS permissions, zero subscriptions, zero network requests, zero third-party packages — **10 MB** Developer ID signed & Apple notarized `.dmg`.
 
 **Website & live 6-world browser preview:** [strangechances.com/satie](https://strangechances.com/satie/)
 
@@ -18,7 +18,7 @@ brew install --cask graemecode/tap/satie
 ```
 
 ### Direct Download
-Download the Apple-notarized [Satie-4.0.1.dmg](https://github.com/graemecode/satie/releases/latest/download/Satie-4.0.1.dmg) (macOS 15 Sequoia or later, Apple Silicon, 10 MB), drag **Satie** to **Applications**, and launch. No macOS privacy prompts, no virtual audio drivers, no background daemons.
+Download the Apple-notarized [Satie-4.1.0.dmg](https://github.com/graemecode/satie/releases/latest/download/Satie-4.1.0.dmg) (macOS 15 Sequoia or later, Apple Silicon, 10 MB), drag **Satie** to **Applications**, and launch. No macOS privacy prompts, no virtual audio drivers, no background daemons.
 
 ---
 
