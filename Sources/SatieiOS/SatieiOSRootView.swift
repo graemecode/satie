@@ -27,6 +27,13 @@ struct SatieiOSRootView: View {
     @State private var worldToastLabel: String? = nil
     @State private var worldToastTask: Task<Void, Never>? = nil
     @State private var presetTransitionVeil: Double = 0.0
+    /// Fade length for entering or leaving Immersion Mode: quick when tapped, slow when it happens on its own.
+    @State private var immersionFade: Double = 0.28
+    @State private var autoImmersionTask: Task<Void, Never>? = nil
+    @State private var lastInteraction: Date = .distantPast
+
+    /// After this long without a touch while playing, the controls fade away and the visual fills the screen.
+    private let autoImmersionDelay: Duration = .seconds(10)
 
     private let timerPresets: [Int] = [0, 25, 45, 90]
     private let hair = Color.white.opacity(0.14)
@@ -90,7 +97,7 @@ struct SatieiOSRootView: View {
             }
             .ignoresSafeArea()
             .opacity(immersionMode ? 0.12 : 1.0)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: immersionMode)
+            .animation(.easeInOut(duration: immersionFade), value: immersionMode)
             .allowsHitTesting(false)
 
             // 2. Floating Editorial HUD (hides cleanly in Immersion Mode)
@@ -142,7 +149,8 @@ struct SatieiOSRootView: View {
                 }
             }
             .opacity(immersionMode ? 0.0 : 1.0)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: immersionMode)
+            .offset(y: immersionMode && !reduceMotion ? 10 : 0)
+            .animation(.easeInOut(duration: immersionFade), value: immersionMode)
             .allowsHitTesting(!immersionMode)
 
             // 3. Full-screen tap/swipe catcher ONLY while in Immersion Mode
@@ -192,7 +200,23 @@ struct SatieiOSRootView: View {
         .statusBarHidden(immersionMode)
         // Keep the screen on while it is being watched: on its side in a stand, or in Immersion Mode.
         .onAppear { syncScreenAwake() }
-        .onChange(of: immersionMode) { _, _ in syncScreenAwake() }
+        .onChange(of: immersionMode) { _, entered in
+            syncScreenAwake()
+            if !entered { scheduleAutoImmersion() }
+        }
+        // Any touch postpones the automatic fade; it never blocks the touch itself.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0).onChanged { _ in noteInteraction() }
+        )
+        .onChange(of: state.isFocusPlaying) { _, playing in
+            if !playing && immersionMode {
+                // Music stopped (paused elsewhere or the timer ended): bring the controls back.
+                exitImmersion()
+            }
+            scheduleAutoImmersion()
+        }
+        .onChange(of: state.focusMode) { _, _ in scheduleAutoImmersion() }
+        .onChange(of: showOptions) { _, _ in scheduleAutoImmersion() }
         .onChange(of: verticalSizeClass) { _, _ in syncScreenAwake() }
         .onChange(of: state.preset) { _, _ in
             guard !reduceMotion else { return }
@@ -204,7 +228,7 @@ struct SatieiOSRootView: View {
         .sheet(isPresented: $showOptions) {
             optionsSheet
                 .presentationDetents([
-                    .height(330),
+                    .height(250),
                     .large
                 ])
                 .presentationDragIndicator(.visible)
@@ -416,9 +440,42 @@ struct SatieiOSRootView: View {
         state.wantsScreenAwake = immersionMode || isCompactLandscape
     }
 
+    private func noteInteraction() {
+        let now = Date()
+        guard now.timeIntervalSince(lastInteraction) > 0.5 else { return }
+        lastInteraction = now
+        scheduleAutoImmersion()
+    }
+
+    /// Restart the countdown to Immersion Mode. It only runs while music plays and nothing else needs the controls.
+    private func scheduleAutoImmersion() {
+        autoImmersionTask?.cancel()
+        guard state.isFocusPlaying, !immersionMode, !showOptions, !UIAccessibility.isVoiceOverRunning else { return }
+        autoImmersionTask = Task { @MainActor in
+            try? await Task.sleep(for: autoImmersionDelay)
+            guard !Task.isCancelled, state.isFocusPlaying, state.isForeground, !immersionMode, !showOptions,
+                  !UIAccessibility.isVoiceOverRunning else { return }
+            immersionFade = 1.6
+            withAnimation(.easeInOut(duration: 1.6)) {
+                immersionMode = true
+            }
+        }
+    }
+
+    private func exitImmersion() {
+        immersionHintTask?.cancel()
+        immersionFade = 0.45
+        withAnimation(.easeOut(duration: 0.45)) {
+            immersionMode = false
+            showImmersionHint = false
+        }
+    }
+
     private func toggleImmersion(_ enter: Bool) {
         state.performHaptic()
         immersionHintTask?.cancel()
+        autoImmersionTask?.cancel()
+        immersionFade = 0.28
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.28)) {
             immersionMode = enter
             showImmersionHint = enter
