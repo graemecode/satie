@@ -22,6 +22,7 @@ struct PopoverView: View {
     let onOpenFullscreen: () -> Void
     let onQuit: () -> Void
     var onRequestResize: (() -> Void)? = nil
+    var onContentHeightChange: ((CGFloat) -> Void)? = nil
 
     @State private var showOptions: Bool = false
     @State private var visualToastLabel: String? = nil
@@ -276,12 +277,18 @@ struct PopoverView: View {
         }
         .padding(14)
         .frame(width: 392)
+        .fixedSize(horizontal: false, vertical: true)
         .background(Color(red: 0.032, green: 0.036, blue: 0.044))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(hair, lineWidth: 1)
         )
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.height
+        } action: { newHeight in
+            onContentHeightChange?(newHeight)
+        }
     }
 
     // MARK: - Consolidated Options Drawer (Timer + Background Noise + Visual + Volume + Utility Footer)

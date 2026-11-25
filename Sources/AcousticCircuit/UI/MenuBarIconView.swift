@@ -63,7 +63,7 @@ final class MenuBarIconView: NSView {
         let w = bounds.width
         let h = bounds.height
         let midY = h * 0.5
-        let waveW: CGFloat = min(21.5, w - 5.0)
+        let waveW: CGFloat = min(20.0, w - 2.0)
         let startX = (w - waveW) * 0.5
 
         let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
@@ -71,8 +71,8 @@ final class MenuBarIconView: NSView {
         let active = isPlaying && !isSilent && !isMuted
         let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
 
-        let primaryAlpha: CGFloat = isMuted ? 0.30 : (active ? 0.98 : 0.86)
-        let ghostAlpha: CGFloat = isMuted ? 0.14 : (active ? 0.44 : 0.34)
+        let primaryAlpha: CGFloat = isMuted ? 0.54 : (active ? 0.98 : 0.88)
+        let ghostAlpha: CGFloat = isMuted ? 0.24 : (active ? 0.44 : 0.34)
 
         // Base standing-wave amplitude (4.8pt calm resting emblem; swells up to ~6.5pt half-height to match macOS menu bar optical height)
         let baseAmp: CGFloat = active ? (4.6 + smoothEnergy * 1.9) : 4.8
@@ -127,11 +127,11 @@ final class MenuBarIconView: NSView {
 
         // Crisp hairline slash when Mac audio is muted so state is unmistakable at a glance
         if isMuted {
-            ctx.setStrokeColor(gray: gray, alpha: 0.88)
+            ctx.setStrokeColor(gray: gray, alpha: 0.92)
             ctx.setLineWidth(1.25)
             ctx.setLineCap(.round)
-            ctx.move(to: CGPoint(x: startX + 3.0, y: midY - 6.0))
-            ctx.addLine(to: CGPoint(x: startX + waveW - 3.0, y: midY + 6.0))
+            ctx.move(to: CGPoint(x: startX + 2.5, y: midY - 5.8))
+            ctx.addLine(to: CGPoint(x: startX + waveW - 2.5, y: midY + 5.8))
             ctx.strokePath()
         }
     }

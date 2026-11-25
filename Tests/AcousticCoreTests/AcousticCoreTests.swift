@@ -257,7 +257,7 @@ struct AcousticCoreTests {
         #expect(p1.origin.x + panel.width <= visible.maxX - 10)
 
         // Case 2: Status item clearly visible to the right of the notch
-        let visibleBtn = CGRect(x: 1320, y: 1085, width: 22, height: 32)
+        let visibleBtn = CGRect(x: 1320, y: 1085, width: 38, height: 32)
         let p2 = MenuBarPositioner.computePlacement(
             buttonScreenRect: visibleBtn,
             screenFrame: screen,
@@ -269,6 +269,50 @@ struct AcousticCoreTests {
         #expect(p2.statusItemOccludedByNotch == false)
         #expect(p2.origin.y + panel.height <= visible.maxY - 8)
         #expect(abs((p2.origin.x + panel.width * 0.5) - visibleBtn.midX) <= 1.0)
+
+        // Case 3: Padded status item window edge crosses notch (943..987 crosses auxR.minX=956)
+        let paddedEdgeWin = CGRect(x: 943, y: 1084, width: 44, height: 33)
+        let p3 = MenuBarPositioner.computePlacement(
+            buttonScreenRect: paddedEdgeWin,
+            screenFrame: screen,
+            visibleFrame: visible,
+            auxLeft: auxL,
+            auxRight: auxR,
+            panelSize: panel
+        )
+        #expect(p3.statusItemOccludedByNotch == true)
+        #expect(p3.origin.x + panel.width == visible.maxX - 10)
+
+        // Case 4: Control Center hides item just right of notch (x=965 > 956, isStatusItemWindowVisible=false)
+        let ccHiddenWin = CGRect(x: 965, y: 1084, width: 38, height: 33)
+        let p4 = MenuBarPositioner.computePlacement(
+            buttonScreenRect: ccHiddenWin,
+            screenFrame: screen,
+            visibleFrame: visible,
+            auxLeft: auxL,
+            auxRight: auxR,
+            panelSize: panel,
+            isStatusItemWindowVisible: false
+        )
+        #expect(p4.statusItemOccludedByNotch == true)
+        #expect(p4.origin.x + panel.width == visible.maxX - 10)
+
+        // Case 5: Dynamic height transitions (compact -> notch hint -> Options drawer -> compact)
+        // must remain strictly top-anchored at visible.maxY - 8 (panel only grows/shrinks downward).
+        let heights: [CGFloat] = [350, 374, 592, 350]
+        for h in heights {
+            let sz = CGSize(width: 392, height: h)
+            let p = MenuBarPositioner.computePlacement(
+                buttonScreenRect: paddedEdgeWin,
+                screenFrame: screen,
+                visibleFrame: visible,
+                auxLeft: auxL,
+                auxRight: auxR,
+                panelSize: sz
+            )
+            #expect(p.origin.y + sz.height == visible.maxY - 8, "Top edge shifted for height \(h): maxY=\(p.origin.y + sz.height)")
+            #expect(p.origin.y >= visible.minY + 10)
+        }
     }
 
     @Test("SatieScore is deterministic, varies on Pass 2+, stays strictly in key, and handles sleep wake cleanly")

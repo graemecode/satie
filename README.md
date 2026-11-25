@@ -18,7 +18,7 @@ brew install --cask graemecode/tap/satie
 ```
 
 ### Direct Download
-Download the Apple-notarized [Satie-4.1.0.dmg](https://github.com/graemecode/satie/releases/latest/download/Satie-4.1.0.dmg) (macOS 15 Sequoia or later, Apple Silicon, 10 MB), drag **Satie** to **Applications**, and launch. No macOS privacy prompts, no virtual audio drivers, no background daemons.
+Download the Apple-notarized [Satie-4.1.1.dmg](https://github.com/graemecode/satie/releases/latest/download/Satie-4.1.1.dmg) (macOS 15 Sequoia or later, Apple Silicon, 10 MB), drag **Satie** to **Applications**, and launch. No macOS privacy prompts, no virtual audio drivers, no background daemons.
 
 ---
 

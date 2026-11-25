@@ -41,8 +41,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarIconView: MenuBarIconView!
     private var floatingPanel: SatieFloatingPanel!
     private var hostingController: NSHostingController<PopoverView>!
+    private var lastMeasuredPopoverHeight: CGFloat = 0
     private var globalMouseMonitor: Any?
     private var localMouseMonitor: Any?
+    private var screenObserver: NSObjectProtocol?
     private var layoutCancellables: Set<AnyCancellable> = []
     private let hotKeys = GlobalHotKeyManager()
 
@@ -119,18 +121,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Keep panel height crisp and anchored downward whenever expandable rows appear/disappear
-        Publishers.CombineLatest(
+        Publishers.CombineLatest3(
             state.$isFocusPlaying.removeDuplicates(),
-            state.$isStatusItemBehindNotch.removeDuplicates()
+            state.$isStatusItemBehindNotch.removeDuplicates(),
+            state.$preset.removeDuplicates()
         )
         .receive(on: RunLoop.main)
-        .sink { [weak self] _, _ in
+        .sink { [weak self] _, _, _ in
             guard let self, self.floatingPanel.isVisible else { return }
             DispatchQueue.main.async {
                 self.repositionFloatingPanel()
             }
         }
         .store(in: &layoutCancellables)
+
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self, self.floatingPanel.isVisible else { return }
+                self.repositionFloatingPanel()
+            }
+        }
 
         state.boot()
 
@@ -142,6 +156,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         hotKeys.unregister()
         removeDismissMonitors()
+        if let screenObserver {
+            NotificationCenter.default.removeObserver(screenObserver)
+            self.screenObserver = nil
+        }
         DistributedNotificationCenter.default().removeObserver(self)
         AppState.shared.shutdown()
     }
@@ -202,7 +220,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Status Bar & Notch-Safe Floating Panel
 
     private func setupMenuBar() {
-        statusItem = NSStatusBar.system.statusItem(withLength: 28)
+        // Match standard macOS 22pt square status item width (38pt total with system margins instead of 44pt)
+        // so Satie stays visible in crowded notched MacBook menu bars.
+        statusItem = NSStatusBar.system.statusItem(withLength: 22)
         statusItem.autosaveName = "SatieStatusItem"
         guard let button = statusItem.button else { return }
 
@@ -222,11 +242,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onOpenStudio: { [weak self] in self?.openStudio(fullscreen: false) },
             onOpenFullscreen: { [weak self] in self?.openStudio(fullscreen: true) },
             onQuit: { NSApp.terminate(nil) },
-            onRequestResize: { [weak self] in self?.repositionFloatingPanel() }
+            onRequestResize: { [weak self] in self?.repositionFloatingPanel() },
+            onContentHeightChange: { [weak self] height in
+                self?.handlePopoverContentHeightChange(height)
+            }
         )
 
         let hc = NSHostingController(rootView: rootView)
-        hc.sizingOptions = [.preferredContentSize]
+        // Own the panel frame exclusively in repositionFloatingPanel() so AppKit never auto-grows
+        // the borderless panel upward behind the menu bar or fights SwiftUI height updates.
+        hc.sizingOptions = []
         self.hostingController = hc
 
         let panel = SatieFloatingPanel(
@@ -304,57 +329,108 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func showPopover() {
         AppState.shared.isPopoverOpen = true
         repositionFloatingPanel()
-        let finalFrame = floatingPanel.frame
-        var startFrame = finalFrame
-        startFrame.origin.y += 5
-        floatingPanel.alphaValue = 0.0
-        floatingPanel.setFrame(startFrame, display: false)
+
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        floatingPanel.alphaValue = reduceMotion ? 1.0 : 0.0
         NSApp.activate(ignoringOtherApps: true)
         floatingPanel.orderFrontRegardless()
         floatingPanel.makeKey()
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = 0.14
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            floatingPanel.animator().alphaValue = 1.0
-            floatingPanel.animator().setFrame(finalFrame, display: true)
+
+        // Animate opacity ONLY (never `animator().setFrame`), so a frame animation can never clobber
+        // a SwiftUI intrinsic height update (such as the notch hint appearing/disappearing on open).
+        if !reduceMotion {
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = 0.12
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                floatingPanel.animator().alphaValue = 1.0
+            }
+        }
+
+        // Re-verify exact layout on the next runloop turn after SwiftUI commits any state diff from open.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.floatingPanel.isVisible else { return }
+            self.repositionFloatingPanel()
         }
         installDismissMonitors()
     }
 
-    private func repositionFloatingPanel() {
-        hostingController.view.layoutSubtreeIfNeeded()
-        let fitting = hostingController.view.fittingSize
-        let size = CGSize(
-            width: max(392, ceil(fitting.width)),
-            height: max(320, ceil(fitting.height))
-        )
+    private func handlePopoverContentHeightChange(_ newHeight: CGFloat) {
+        let rounded = ceil(newHeight)
+        guard rounded >= 240 else { return }
+        lastMeasuredPopoverHeight = rounded
+        guard floatingPanel.isVisible else { return }
+        repositionFloatingPanel(preferredHeight: rounded)
+    }
 
+    private func repositionFloatingPanel(preferredHeight: CGFloat? = nil) {
         let btnWindow = statusItem.button?.window
         let screen = btnWindow?.screen ?? NSScreen.main ?? NSScreen.screens.first
         guard let screen else { return }
 
-        let btnRect: CGRect?
-        if let btn = statusItem.button, let win = btn.window {
-            let inWin = btn.convert(btn.bounds, to: nil)
-            btnRect = win.convertToScreen(inWin)
+        // Use the full status item window frame (including macOS's 8pt horizontal padding) so Control Center's
+        // notch-collision boundary is detected accurately even when only the padded edge touches the notch.
+        let statusItemRect: CGRect?
+        let isStatusItemWindowVisible: Bool
+        if let win = btnWindow, win.frame.width > 1, win.frame.height > 1 {
+            statusItemRect = win.frame
+            // When the menu bar itself is visible (not auto-hidden in fullscreen), an occluded status-item
+            // window means Control Center hid the icon because the menu bar overflowed into the notch.
+            let menuBarVisible = (screen.frame.maxY - screen.visibleFrame.maxY) >= 18
+            isStatusItemWindowVisible = menuBarVisible ? win.occlusionState.contains(.visible) : true
         } else {
-            btnRect = nil
+            statusItemRect = nil
+            isStatusItemWindowVisible = false
         }
 
-        let placement = MenuBarPositioner.computePlacement(
-            buttonScreenRect: btnRect,
+        // Update notch-occlusion state FIRST before measuring panel height so SwiftUI includes/excludes the notch hint.
+        let occluded = MenuBarPositioner.isStatusItemOccluded(
+            buttonScreenRect: statusItemRect,
             screenFrame: screen.frame,
             visibleFrame: screen.visibleFrame,
             auxLeft: screen.auxiliaryTopLeftArea,
             auxRight: screen.auxiliaryTopRightArea,
-            panelSize: size
+            isWindowVisible: isStatusItemWindowVisible
         )
-
-        if AppState.shared.isStatusItemBehindNotch != placement.statusItemOccludedByNotch {
-            AppState.shared.isStatusItemBehindNotch = placement.statusItemOccludedByNotch
+        let occlusionChanged = AppState.shared.isStatusItemBehindNotch != occluded
+        if occlusionChanged {
+            AppState.shared.isStatusItemBehindNotch = occluded
         }
 
-        floatingPanel.setFrame(NSRect(origin: placement.origin, size: size), display: true, animate: false)
+        let panelWidth: CGFloat = 392
+        let fitted = hostingController.sizeThatFits(
+            in: CGSize(width: panelWidth, height: CGFloat.greatestFiniteMagnitude)
+        )
+        let rawHeight: CGFloat
+        if let preferredHeight, preferredHeight >= 240 {
+            rawHeight = preferredHeight
+        } else if fitted.height >= 240 {
+            rawHeight = fitted.height
+        } else if lastMeasuredPopoverHeight >= 240 {
+            rawHeight = lastMeasuredPopoverHeight
+        } else {
+            rawHeight = 352
+        }
+
+        let maxAllowedHeight = max(320, screen.visibleFrame.height - 20)
+        let size = CGSize(
+            width: panelWidth,
+            height: min(max(320, ceil(rawHeight)), maxAllowedHeight)
+        )
+
+        let placement = MenuBarPositioner.computePlacement(
+            buttonScreenRect: statusItemRect,
+            screenFrame: screen.frame,
+            visibleFrame: screen.visibleFrame,
+            auxLeft: screen.auxiliaryTopLeftArea,
+            auxRight: screen.auxiliaryTopRightArea,
+            panelSize: size,
+            isStatusItemWindowVisible: isStatusItemWindowVisible
+        )
+
+        let targetFrame = NSRect(origin: placement.origin, size: size)
+        if !floatingPanel.frame.equalTo(targetFrame) {
+            floatingPanel.setFrame(targetFrame, display: true, animate: false)
+        }
     }
 
     private func closePopover() {
