@@ -208,6 +208,20 @@ struct AcousticCoreTests {
 
         let pairedWorlds = Set(FocusSoundscape.allCases.map { VisualPreset.paired(for: $0) })
         #expect(pairedWorlds.count == FocusSoundscape.allCases.count)
+
+        // Verify shared App Group widget snapshot round-trips cleanly
+        #expect(SatieWidgetSnapshot.appGroupID == "group.com.strangechances.Satie")
+        let end = Date(timeIntervalSince1970: 1_800_000_000)
+        let snap = SatieWidgetSnapshot(
+            soundscapeRaw: FocusSoundscape.dive.rawValue,
+            soundscapeTitle: FocusSoundscape.dive.title,
+            isPlaying: true,
+            endDate: end,
+            updatedAt: Date(timeIntervalSince1970: 1_799_998_800)
+        )
+        snap.save(to: ud)
+        let reloadedSnap = SatieWidgetSnapshot.load(from: ud)
+        #expect(reloadedSnap == snap)
     }
 
     @Test("FocusSoundEngine generates bounded, non-silent stereo audio across all 5 modes")

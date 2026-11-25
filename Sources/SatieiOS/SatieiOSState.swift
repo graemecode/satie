@@ -53,11 +53,26 @@ final class SatieiOSState: ObservableObject {
             focusSound.setMixWithOthers(mixWithOthers)
         }
     }
+    @Published var circadianOverride: CircadianOverride {
+        didSet {
+            settings.circadianOverride = circadianOverride
+            let resolved = circadianOverride.resolvedPhase()
+            focusSound.setCircadianPhase(resolved)
+            if isFocusPlaying {
+                syncLiveActivity()
+            }
+        }
+    }
+
+    var effectiveCircadianPhase: CircadianPhase {
+        circadianOverride.resolvedPhase()
+    }
 
     @Published var isFocusPlaying: Bool = false
     @Published var flowMinutes: Int = 0
     @Published var flowRemainingSeconds: Double? = nil
     @Published var isForeground: Bool = true
+    private(set) var liveBreathBPM: Double = 5.5
 
     private(set) var snapshot: AcousticSnapshot = .empty
 
@@ -95,6 +110,7 @@ final class SatieiOSState: ObservableObject {
         self.flowMinutes = settings.flowMinutes
         self.keepScreenAwake = settings.keepScreenAwake
         self.mixWithOthers = settings.mixWithOthers
+        self.circadianOverride = settings.circadianOverride
 
         self.focusRingBuffer = StereoRingBuffer()
         self.focusSound = FocusSoundEngine(ringBuffer: focusRingBuffer)
@@ -104,9 +120,11 @@ final class SatieiOSState: ObservableObject {
         self.focusSound.setIntensity(.flow)
         self.focusSound.setMaskingBed(settings.maskingBed)
         self.focusSound.setMixWithOthers(settings.mixWithOthers)
-        self.focusSound.setCircadianPhase(CircadianPhase.current())
+        self.focusSound.setCircadianPhase(settings.circadianOverride.resolvedPhase())
         self.dsp = AcousticDSP()
 
+        // Clear any orphaned Dynamic Island / Lock Screen Live Activity left over from a background-terminated session
+        liveActivity.endAll()
         configureMediaControls()
         installAudioSessionObservers()
         SatieWatchBridge.shared.activate()
@@ -159,13 +177,14 @@ final class SatieiOSState: ObservableObject {
             return
         }
         focusMode = mode
-        focusSound.setCircadianPhase(CircadianPhase.current())
+        focusSound.setCircadianPhase(effectiveCircadianPhase)
         let started = focusSound.start(mode: mode)
         guard started else {
             isFocusPlaying = false
             stopHousekeeping()
             updateIdleTimer()
             syncNowPlaying()
+            syncLiveActivity()
             return
         }
 
@@ -202,11 +221,23 @@ final class SatieiOSState: ObservableObject {
         syncLiveActivity()
     }
 
+    func updateBiofeedbackBreathBPM(_ bpm: Double?) {
+        focusSound.setBiofeedbackBreathBPM(bpm)
+        let next = (bpm ?? 5.5)
+        let changed = abs(next - liveBreathBPM) >= 0.15
+        liveBreathBPM = next
+        if changed && isFocusPlaying && focusMode == .dive {
+            syncLiveActivity()
+        }
+    }
+
     private func syncLiveActivity() {
         liveActivity.sync(
             mode: focusMode,
             isPlaying: isFocusPlaying,
-            endDate: flowEndDate
+            endDate: flowEndDate,
+            breathBPM: liveBreathBPM,
+            isNight: effectiveCircadianPhase == .night
         )
         SatieWatchBridge.shared.pushState(mode: focusMode, isPlaying: isFocusPlaying)
     }
@@ -266,6 +297,7 @@ final class SatieiOSState: ObservableObject {
     func setForeground(_ foreground: Bool) {
         isForeground = foreground
         if foreground {
+            focusSound.setCircadianPhase(effectiveCircadianPhase)
             // Reconcile state & wall-clock timer immediately upon returning to foreground
             if isFocusPlaying && !focusSound.isPlaying {
                 isFocusPlaying = false
@@ -273,6 +305,7 @@ final class SatieiOSState: ObservableObject {
                 flowRemainingSeconds = nil
                 stopHousekeeping()
                 syncNowPlaying()
+                syncLiveActivity()
             } else if isFocusPlaying {
                 refreshCountdownFromWallClock()
             }
@@ -359,6 +392,7 @@ final class SatieiOSState: ObservableObject {
                         self.stopHousekeeping()
                         self.updateIdleTimer()
                         self.syncNowPlaying()
+                        self.syncLiveActivity()
                     }
                 case .ended:
                     let opts = AVAudioSession.InterruptionOptions(rawValue: optsRaw)
@@ -412,7 +446,7 @@ final class SatieiOSState: ObservableObject {
             stopHousekeeping()
             return
         }
-        focusSound.setCircadianPhase(CircadianPhase.current())
+        focusSound.setCircadianPhase(effectiveCircadianPhase)
         refreshCountdownFromWallClock()
     }
 
@@ -425,6 +459,7 @@ final class SatieiOSState: ObservableObject {
             focusSound.setSessionProgress(1.0)
             focusSound.triggerSessionChime()
             settings.completedFocusSessions += 1
+            syncLiveActivity()
             Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .seconds(4.0))
                 guard let self, self.isFocusPlaying, self.flowEndDate == nil else { return }

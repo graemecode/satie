@@ -52,7 +52,7 @@ final class SatieWatchBridge: NSObject, WCSessionDelegate, @unchecked Sendable {
         Task { @MainActor in
             let state = SatieiOSState.shared
             if let bpm = targetBPM {
-                state.focusSound.setBiofeedbackBreathBPM(bpm > 0 ? bpm : nil)
+                state.updateBiofeedbackBreathBPM(bpm > 0 ? bpm : nil)
             }
             switch command {
             case "play":
@@ -60,7 +60,7 @@ final class SatieWatchBridge: NSObject, WCSessionDelegate, @unchecked Sendable {
                 state.startFocusSound(mode, durationMinutes: durationMinutes)
             case "pause":
                 state.stopFocusSound()
-                state.focusSound.setBiofeedbackBreathBPM(nil)
+                state.updateBiofeedbackBreathBPM(nil)
             default:
                 break
             }

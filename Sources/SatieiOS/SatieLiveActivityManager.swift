@@ -7,11 +7,14 @@ import WidgetKit
 /// at zero background CPU cost (uses native system timerInterval rendering).
 @MainActor
 final class SatieLiveActivityManager {
+    private var pendingTask: Task<Void, Never>?
+
     func sync(
         mode: FocusSoundscape,
         isPlaying: Bool,
         endDate: Date?,
-        breathBPM: Double = 5.5
+        breathBPM: Double = 5.5,
+        isNight: Bool? = nil
     ) {
         let snapshot = SatieWidgetSnapshot(
             soundscapeRaw: mode.rawValue,
@@ -28,7 +31,7 @@ final class SatieLiveActivityManager {
             return
         }
 
-        let isNight = CircadianPhase.current() == .night
+        let night = isNight ?? (CircadianPhase.current() == .night)
         let contentState = SatieSessionAttributes.ContentState(
             soundscapeRaw: mode.rawValue,
             soundscapeTitle: mode.title,
@@ -36,17 +39,22 @@ final class SatieLiveActivityManager {
             isPlaying: isPlaying,
             endDate: endDate,
             breathBPM: breathBPM,
-            isNight: isNight
+            isNight: night
         )
         let staleDate = endDate ?? Date().addingTimeInterval(3600 * 4)
 
-        Task.detached(priority: .utility) {
+        let previous = pendingTask
+        pendingTask = Task.detached(priority: .utility) {
+            await previous?.value
+            guard !Task.isCancelled else { return }
             await Self.upsertActivity(state: contentState, staleDate: staleDate)
         }
     }
 
     func endAll() {
-        Task.detached(priority: .utility) {
+        let previous = pendingTask
+        pendingTask = Task.detached(priority: .utility) {
+            await previous?.value
             await Self.endAllActivities()
         }
     }

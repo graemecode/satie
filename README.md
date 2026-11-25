@@ -17,7 +17,10 @@ Named after **Erik Satie**, who invented *musique d'ameublement* ("furniture mus
 brew install --cask graemecode/tap/satie
 ```
 
-### Direct Download
+### iPhone & iPad (App Store)
+Download **Satie** on the [App Store](https://apps.apple.com/us/app/satie-focus-soundscapes/id6837572453) (iOS 18+ & iPadOS 18+, free, zero tracking, zero subscriptions).
+
+### Direct Download (macOS)
 Download the Apple-notarized [Satie-4.1.1.dmg](https://github.com/graemecode/satie/releases/latest/download/Satie-4.1.1.dmg) (macOS 15 Sequoia or later, Apple Silicon, 10 MB), drag **Satie** to **Applications**, and launch. No macOS privacy prompts, no virtual audio drivers, no background daemons.
 
 ---

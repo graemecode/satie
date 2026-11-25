@@ -940,7 +940,7 @@ fragment float4 oculusFragment(FullscreenOut in [[stage_in]],
         : 0.72;
 
     // Frame-aware architectural centering (all 4 concentric tiers fit gracefully in Popover, Studio, iPhone & iPad)
-    float centerY = (u.isCompact > 0.5) ? 0.50 : ((aspect < 1.0) ? 0.45 : 0.505);
+    float centerY = (aspect < 1.0) ? 0.44 : ((u.isCompact > 0.5) ? 0.50 : 0.505);
     float2 p = uv - float2(0.5, centerY);
     if (aspect >= 1.0) {
         p.x *= aspect;

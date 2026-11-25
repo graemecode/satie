@@ -270,6 +270,9 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
         guard let drawable = currentDrawable,
               let renderPassDesc = currentRenderPassDescriptor else { return }
 
+        let size = drawableSize
+        guard size.width > 1 && size.height > 1 else { return }
+
         let now = CACurrentMediaTime()
         let frameDt = Float(max(0.002, min(0.05, now - lastDrawTime)))
         lastDrawTime = now
@@ -281,7 +284,6 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
             }
         }
 
-        let size = drawableSize
         let isPortrait = size.height > size.width
         let isCompactLandscape = !isPortrait && (traitCollection.verticalSizeClass == .compact)
         let slot = frameSlot % 3
@@ -345,7 +347,7 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
         uniforms.breathDepth = SIMD4<Float>(
             music.breathPhase,
             music.meditationDepth,
-            CircadianPhase.current() == .night ? 1.0 : 0.0,
+            state.effectiveCircadianPhase == .night ? 1.0 : 0.0,
             music.isDeepDive ? 1.0 : 0.0
         )
         let liveHeadroom = Float(max(1.0, window?.screen.currentEDRHeadroom ?? 1.0))

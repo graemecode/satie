@@ -69,7 +69,7 @@ struct SatieiOSRootView: View {
             )
             .blendMode(.screen)
             .ignoresSafeArea()
-            .animation(.easeInOut(duration: 0.9), value: state.focusMode)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.9), value: state.focusMode)
             .allowsHitTesting(false)
 
             // Soft top & bottom vignettes so chrome floats effortlessly over bright peaks
@@ -90,7 +90,7 @@ struct SatieiOSRootView: View {
             }
             .ignoresSafeArea()
             .opacity(immersionMode ? 0.12 : 1.0)
-            .animation(.easeInOut(duration: 0.3), value: immersionMode)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: immersionMode)
             .allowsHitTesting(false)
 
             // 2. Floating Editorial HUD (hides cleanly in Immersion Mode)
@@ -128,7 +128,7 @@ struct SatieiOSRootView: View {
                     }
                     .accessibilityHidden(true)
 
-                // Bottom Tactile Control Dock: pure Braun minimalism (5 soundscape worlds + Play/Pause + Options)
+                // Bottom Tactile Control Dock: pure Braun minimalism (6 soundscape worlds + Play/Pause + Options)
                 if isCompactLandscape {
                     compactLandscapeDock
                         .frame(maxWidth: contentMaxWidth)
@@ -137,12 +137,12 @@ struct SatieiOSRootView: View {
                 } else {
                     portraitOrTabletDock
                         .frame(maxWidth: contentMaxWidth)
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, isRegularCanvas ? 20 : 14)
                         .padding(.bottom, isRegularCanvas ? 30 : 24)
                 }
             }
             .opacity(immersionMode ? 0.0 : 1.0)
-            .animation(.easeInOut(duration: 0.28), value: immersionMode)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: immersionMode)
             .allowsHitTesting(!immersionMode)
 
             // 3. Full-screen tap/swipe catcher ONLY while in Immersion Mode
@@ -200,7 +200,7 @@ struct SatieiOSRootView: View {
         .sheet(isPresented: $showOptions) {
             optionsSheet
                 .presentationDetents([
-                    .height(state.preset == .phosphor ? 560 : 515),
+                    .height(state.preset == .phosphor ? 615 : 570),
                     .large
                 ])
                 .presentationDragIndicator(.visible)
@@ -217,12 +217,14 @@ struct SatieiOSRootView: View {
                     .font(.system(size: isCompactLandscape ? 22 : (isRegularCanvas ? 32 : 28), weight: .medium))
                     .foregroundColor(.white)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.82)
 
                 Text(heroSubtitle)
                     .font(.system(size: isCompactLandscape ? 9.5 : 10.5, weight: .regular, design: .monospaced))
                     .foregroundColor(inkSoft)
                     .tracking(0.6)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.78)
             }
             .allowsHitTesting(false)
             .accessibilityElement(children: .combine)
@@ -240,10 +242,10 @@ struct SatieiOSRootView: View {
 
     private var portraitOrTabletDock: some View {
         VStack(spacing: isRegularCanvas ? 24 : 22) {
-            // Five Iconic Circular Geometric Soundscape Worlds (FOCUS · PULSE · RAIN · STILL · NIGHT)
+            // Six Iconic Circular Geometric Soundscape Worlds (FOCUS · PULSE · RAIN · STILL · DIVE · NIGHT)
             HStack(spacing: 0) {
                 ForEach(FocusSoundscape.allCases) { mode in
-                    soundscapeButton(mode: mode, glyphSize: isRegularCanvas ? 52 : 48)
+                    soundscapeButton(mode: mode, glyphSize: isRegularCanvas ? 52 : 44)
                 }
             }
 
@@ -595,15 +597,19 @@ struct SatieiOSRootView: View {
 
                 Divider().overlay(hairSoft)
 
-                HStack {
+                HStack(spacing: 8) {
                     Text(SatieL10n.string("ios.offline_badge"))
                         .font(.caption2.monospaced())
                         .foregroundColor(inkDim)
-                    Spacer()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    Spacer(minLength: 4)
                     if let privacyPolicyURL = URL(string: "https://strangechances.com/satie/privacy/") {
                         Link(SatieL10n.string("ios.privacy_policy"), destination: privacyPolicyURL)
                             .font(.caption.weight(.medium))
                             .foregroundColor(inkSoft)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 }
                 .padding(.top, 2)

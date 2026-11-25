@@ -183,6 +183,7 @@ struct SatieFocusFilter: SetFocusFilterIntent {
         }
         #elseif os(iOS) && !SATIE_WIDGET_EXTENSION
         let state = SatieiOSState.shared
+        state.circadianOverride = nocturnalOverride ? .warm : .auto
         if let sc = soundscape {
             if autoPlay {
                 state.startFocusSound(sc.soundscape, durationMinutes: durationMinutes)

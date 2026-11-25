@@ -63,19 +63,26 @@ public struct SatieWidgetSnapshot: Codable, Sendable, Equatable {
         self.updatedAt = updatedAt
     }
 
+    public static let appGroupID = "group.com.strangechances.Satie"
     private static let key = "satie.widget.snapshot.v1"
 
-    public static func load() -> SatieWidgetSnapshot {
-        if let data = UserDefaults.standard.data(forKey: key),
+    private static var sharedDefaults: UserDefaults {
+        UserDefaults(suiteName: appGroupID) ?? .standard
+    }
+
+    public static func load(from defaults: UserDefaults? = nil) -> SatieWidgetSnapshot {
+        let store = defaults ?? sharedDefaults
+        if let data = store.data(forKey: key),
            let decoded = try? JSONDecoder().decode(SatieWidgetSnapshot.self, from: data) {
             return decoded
         }
         return SatieWidgetSnapshot()
     }
 
-    public func save() {
+    public func save(to defaults: UserDefaults? = nil) {
+        let store = defaults ?? Self.sharedDefaults
         if let encoded = try? JSONEncoder().encode(self) {
-            UserDefaults.standard.set(encoded, forKey: Self.key)
+            store.set(encoded, forKey: Self.key)
         }
     }
 }

@@ -255,9 +255,13 @@ struct SatieSessionLiveActivity: Widget {
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
                         .tracking(1.0)
                         .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                     Text(context.state.subtitle)
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(.white.opacity(0.65))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
 
                 Spacer()
@@ -318,9 +322,13 @@ struct SatieSessionLiveActivity: Widget {
                         Text(context.state.soundscapeTitle)
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                         Text(context.state.subtitle)
                             .font(.system(size: 11))
                             .foregroundStyle(.white.opacity(0.65))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
@@ -329,6 +337,8 @@ struct SatieSessionLiveActivity: Widget {
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
                             .tracking(1.2)
                             .foregroundStyle(.white.opacity(0.45))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                         Spacer()
                         Button(intent: PauseSatieIntent()) {
                             Label(SatieL10n.string("common.pause"), systemImage: "pause.fill")
@@ -359,6 +369,8 @@ struct SatieSessionLiveActivity: Widget {
                     Text((FocusSoundscape(rawValue: context.state.soundscapeRaw)?.shortLabel ?? context.state.soundscapeRaw.uppercased()))
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .foregroundStyle(accent)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
                 }
             } minimal: {
                 OculusEmblem(
