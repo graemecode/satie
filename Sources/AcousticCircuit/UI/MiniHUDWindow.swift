@@ -48,6 +48,8 @@ struct MiniHUDContentView: View {
                         } label: {
                             Text(state.preset.shortTitle)
                                 .font(.system(size: 9, weight: .medium, design: .monospaced))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                                 .padding(.horizontal, 6)
                                 .frame(height: 22)
                         }
@@ -61,7 +63,7 @@ struct MiniHUDContentView: View {
                                 .frame(width: 24, height: 22)
                         }
                         .buttonStyle(HUDChipButtonStyle())
-                        .help("Open Studio Window")
+                        .help(SatieL10n.string("hud.open_studio"))
 
                         Button(action: onExpandFullscreen) {
                             Image(systemName: "arrow.up.left.and.arrow.down.right")
@@ -69,7 +71,7 @@ struct MiniHUDContentView: View {
                                 .frame(width: 24, height: 22)
                         }
                         .buttonStyle(HUDChipButtonStyle())
-                        .help("Fullscreen")
+                        .help(SatieL10n.string("menu.fullscreen"))
 
                         Button(action: onClose) {
                             Image(systemName: "xmark")
@@ -77,7 +79,7 @@ struct MiniHUDContentView: View {
                                 .frame(width: 22, height: 22)
                         }
                         .buttonStyle(HUDChipButtonStyle())
-                        .help("Close Mini HUD")
+                        .help(SatieL10n.string("hud.close"))
                     }
                     .transition(.opacity)
                 }

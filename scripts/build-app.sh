@@ -77,6 +77,10 @@ if [[ -d "$ROOT_DIR/Sources/AcousticCore/Resources/Samples" ]]; then
   echo "==> Bundling CC0 studio acoustic samples..."
   cp -R "$ROOT_DIR/Sources/AcousticCore/Resources/Samples" "$RES_DIR/Samples"
 fi
+if [[ -d "$ROOT_DIR/Sources/AcousticCore/Resources/Localization" ]]; then
+  echo "==> Bundling 8-language localizations (en, ja, fr, zh-Hans, zh-Hant, es, de, ko)..."
+  cp -R "$ROOT_DIR/Sources/AcousticCore/Resources/Localization/"*.lproj "$RES_DIR/"
+fi
 if [[ -f "$ROOT_DIR/AppStore/PrivacyInfo.xcprivacy" ]]; then
   cp "$ROOT_DIR/AppStore/PrivacyInfo.xcprivacy" "$RES_DIR/PrivacyInfo.xcprivacy"
 fi
@@ -103,6 +107,17 @@ cat > "$CONTENTS/Info.plist" << EOF
 <dict>
   <key>CFBundleDevelopmentRegion</key>
   <string>en</string>
+  <key>CFBundleLocalizations</key>
+  <array>
+    <string>en</string>
+    <string>ja</string>
+    <string>fr</string>
+    <string>zh-Hans</string>
+    <string>zh-Hant</string>
+    <string>es</string>
+    <string>de</string>
+    <string>ko</string>
+  </array>
   <key>CFBundleExecutable</key>
   <string>$APP_NAME</string>
   <key>CFBundleIconFile</key>

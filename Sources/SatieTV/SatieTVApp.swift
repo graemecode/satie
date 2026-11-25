@@ -264,7 +264,7 @@ struct SatieTVRootView: View {
 
             VStack {
                 HStack {
-                    Text("SATIE · 4K EDR SKYSPACE")
+                    Text(SatieL10n.string("tv.header"))
                         .font(.system(size: 16, weight: .semibold, design: .monospaced))
                         .tracking(3.0)
                         .foregroundStyle(.white.opacity(0.65))
@@ -282,7 +282,7 @@ struct SatieTVRootView: View {
 
                 HStack(spacing: 18) {
                     Button(action: { state.togglePlay() }) {
-                        Label(state.isPlaying ? "Pause" : "Play", systemImage: state.isPlaying ? "pause.fill" : "play.fill")
+                        Label(state.isPlaying ? SatieL10n.string("common.pause") : SatieL10n.string("common.play"), systemImage: state.isPlaying ? "pause.fill" : "play.fill")
                             .font(.system(size: 18, weight: .semibold, design: .monospaced))
                     }
                     ForEach(FocusSoundscape.allCases) { mode in

@@ -103,10 +103,10 @@ struct PopoverView: View {
 
                         QuietIconButton(
                             systemName: "arrow.up.left.and.arrow.down.right",
-                            help: "Open Studio Visualizer (⌘F Fullscreen · ⌘M Mini HUD)",
+                            help: SatieL10n.string("popover.open_studio_help"),
                             action: onOpenStudio
                         )
-                        .accessibilityLabel("Open Studio Visualizer")
+                        .accessibilityLabel(SatieL10n.string("popover.open_studio_a11y"))
                     }
                     .padding(.horizontal, 13)
                     .padding(.top, 11)
@@ -161,7 +161,9 @@ struct PopoverView: View {
                             Text(mode.shortLabel)
                                 .font(.system(size: 8.6, weight: isActive ? .semibold : .regular, design: .monospaced))
                                 .foregroundColor(isActive ? .white : (isSelected ? inkSoft : inkDim))
-                                .tracking(0.5)
+                                .tracking(0.4)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                         }
                         .frame(maxWidth: .infinity)
                         .contentShape(Rectangle())
@@ -169,7 +171,7 @@ struct PopoverView: View {
                     .buttonStyle(MacBraunPressButtonStyle(pressedScale: 0.92, reduceMotion: reduceMotion))
                     .help("\(mode.title) — \(mode.subtitle)")
                     .accessibilityLabel("\(mode.title), \(mode.subtitle)")
-                    .accessibilityHint(isActive ? "Press to pause" : "Press to play")
+                    .accessibilityHint(isActive ? SatieL10n.string("popover.press_to_pause") : SatieL10n.string("popover.press_to_play"))
                     .accessibilityAddTraits(isActive ? [.isSelected] : [])
                 }
             }
@@ -197,8 +199,8 @@ struct PopoverView: View {
                             .overlay(Capsule().stroke(hairSoft, lineWidth: 1))
                         }
                         .buttonStyle(MacBraunPressButtonStyle(pressedScale: 0.94, reduceMotion: reduceMotion))
-                        .help("Adjust or clear sleep timer")
-                        .accessibilityLabel("Sleep timer, \(countdown) remaining")
+                        .help(SatieL10n.string("popover.timer_help"))
+                        .accessibilityLabel(SatieL10n.format("common.timer_remaining_a11y", countdown))
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
@@ -217,8 +219,8 @@ struct PopoverView: View {
                         .shadow(color: Color.white.opacity(state.isFocusPlaying ? 0.22 : 0.06), radius: 14)
                 }
                 .buttonStyle(MacBraunPressButtonStyle(pressedScale: 0.91, reduceMotion: reduceMotion))
-                .help(state.isFocusPlaying ? "Pause \(state.focusMode.title) (Space)" : "Play \(state.focusMode.title) (Space)")
-                .accessibilityLabel(state.isFocusPlaying ? "Pause \(state.focusMode.title)" : "Play \(state.focusMode.title)")
+                .help(state.isFocusPlaying ? SatieL10n.format("common.pause_mode_space", state.focusMode.title) : SatieL10n.format("common.play_mode_space", state.focusMode.title))
+                .accessibilityLabel(state.isFocusPlaying ? SatieL10n.format("common.pause_mode", state.focusMode.title) : SatieL10n.format("common.play_mode", state.focusMode.title))
 
                 // Right wing: One consolidated Options button (plus mute indicator only when Mac is muted)
                 HStack(spacing: 10) {
@@ -227,11 +229,11 @@ struct PopoverView: View {
                         isActive: showOptions,
                         hasIndicatorDot: state.maskingBed != .off || state.flowMinutes > 0 || !state.visualFollowsSoundscape,
                         reduceMotion: reduceMotion,
-                        help: "Options (Timer, Background noise, Visual)"
+                        help: SatieL10n.string("popover.options_help")
                     ) {
                         toggleOptions()
                     }
-                    .accessibilityLabel("Options")
+                    .accessibilityLabel(SatieL10n.string("popover.options"))
 
                     if state.isSystemMuted {
                         CircularControlButton(
@@ -239,11 +241,11 @@ struct PopoverView: View {
                             isActive: true,
                             tintWarning: true,
                             reduceMotion: reduceMotion,
-                            help: "Unmute Mac audio"
+                            help: SatieL10n.string("popover.unmute_mac")
                         ) {
                             state.toggleSystemMute()
                         }
-                        .accessibilityLabel("Unmute Mac audio")
+                        .accessibilityLabel(SatieL10n.string("popover.unmute_mac"))
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -264,10 +266,11 @@ struct PopoverView: View {
 
             // Notch hint only when status bar icon is genuinely hidden behind the camera notch
             if state.isStatusItemBehindNotch {
-                Text("⌥⌘S summon · ⌥⌘Space play/stop · ⌘-drag icon right of notch")
+                Text(SatieL10n.string("popover.notch_hint"))
                     .font(.system(size: 8.8, design: .monospaced))
                     .foregroundColor(inkDim)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.75)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
@@ -288,13 +291,15 @@ struct PopoverView: View {
             // Focus / Sleep Timer
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("TIMER")
+                    Text(SatieL10n.string("options.timer"))
                         .font(.system(size: 9, weight: .semibold, design: .monospaced))
                         .foregroundColor(inkSoft)
                     Spacer()
                     Text(timerStatusLabel)
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
                         .foregroundColor(state.flowMinutes > 0 ? inkSoft : inkDim)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
 
                 HStack(spacing: 4) {
@@ -304,16 +309,18 @@ struct PopoverView: View {
                             state.setFlowMinutes(mins)
                             state.performHaptic()
                         } label: {
-                            Text(mins == 0 ? "∞" : "\(mins)m")
+                            Text(mins == 0 ? "∞" : SatieL10n.format("common.minutes_short", mins))
                                 .font(.system(size: 10, weight: on ? .semibold : .regular, design: .monospaced))
                                 .foregroundColor(on ? .black : inkSoft)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 25)
                                 .background(on ? Color.white : Color.white.opacity(0.05))
                                 .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
                         }
                         .buttonStyle(MacBraunPressButtonStyle(pressedScale: 0.95, reduceMotion: reduceMotion))
-                        .accessibilityLabel(mins == 0 ? "No timer limit" : "\(mins) minute timer")
+                        .accessibilityLabel(mins == 0 ? SatieL10n.string("common.timer_no_limit_a11y") : SatieL10n.format("common.timer_minutes_a11y", mins))
                         .accessibilityAddTraits(on ? [.isSelected] : [])
                     }
                 }
@@ -322,13 +329,16 @@ struct PopoverView: View {
             // Optional Background Noise Layer
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("BACKGROUND NOISE")
+                    Text(SatieL10n.string("options.background_noise"))
                         .font(.system(size: 9, weight: .semibold, design: .monospaced))
                         .foregroundColor(inkSoft)
+                        .lineLimit(1)
                     Spacer()
-                    Text("LAYER UNDER ANY MODE")
+                    Text(SatieL10n.string("options.layer_under_any_mode"))
                         .font(.system(size: 8.5, design: .monospaced))
                         .foregroundColor(inkDim)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                 }
 
                 HStack(spacing: 4) {
@@ -341,6 +351,9 @@ struct PopoverView: View {
                             Text(bed.label)
                                 .font(.system(size: 10, weight: on ? .semibold : .regular))
                                 .foregroundColor(on ? .black : inkSoft)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.72)
+                                .padding(.horizontal, 4)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 25)
                                 .background(on ? Color.white : Color.white.opacity(0.05))
@@ -355,16 +368,20 @@ struct PopoverView: View {
             // Visual World Pairing / Override (Auto by default; click stage anytime)
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text("VISUAL")
+                    Text(SatieL10n.string("options.visual"))
                         .font(.system(size: 9, weight: .semibold, design: .monospaced))
                         .foregroundColor(inkSoft)
                     Spacer()
-                    Text(state.visualFollowsSoundscape ? "PAIRED · \(state.preset.cleanName.uppercased())" : "PINNED · \(state.preset.cleanName.uppercased())")
+                    Text(state.visualFollowsSoundscape
+                         ? SatieL10n.format("options.visual_paired", state.preset.cleanName.uppercased())
+                         : SatieL10n.format("options.visual_pinned", state.preset.cleanName.uppercased()))
                         .font(.system(size: 8.5, design: .monospaced))
                         .foregroundColor(inkDim)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
 
-                visualOptionChip(label: "Auto (Paired to Sound)", selected: state.visualFollowsSoundscape) {
+                visualOptionChip(label: SatieL10n.string("options.visual_auto"), selected: state.visualFollowsSoundscape) {
                     state.setVisualOverride(nil)
                 }
 
@@ -383,12 +400,13 @@ struct PopoverView: View {
 
             if state.preset == .phosphor {
                 HStack {
-                    Text("CRT PHOSPHOR")
+                    Text(SatieL10n.string("options.crt_phosphor"))
                         .font(.system(size: 9, weight: .semibold, design: .monospaced))
                         .foregroundColor(inkSoft)
+                        .lineLimit(1)
                     Spacer()
                     HStack(spacing: 4) {
-                        ForEach([(false, "P31 Emerald"), (true, "P39 Amber")], id: \.0) { isAmber, label in
+                        ForEach([(false, SatieL10n.string("options.phosphor_emerald")), (true, SatieL10n.string("options.phosphor_amber"))], id: \.0) { isAmber, label in
                             let on = state.amberPhosphor == isAmber
                             Button {
                                 state.amberPhosphor = isAmber
@@ -397,6 +415,8 @@ struct PopoverView: View {
                                 Text(label)
                                     .font(.system(size: 9.5, weight: on ? .semibold : .regular, design: .monospaced))
                                     .foregroundColor(on ? .black : inkSoft)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.78)
                                     .padding(.horizontal, 8)
                                     .frame(height: 22)
                                     .background(on ? Color.white : Color.white.opacity(0.05))
@@ -414,21 +434,23 @@ struct PopoverView: View {
             volumeSliderRow
 
             // Quiet 1-line utility footer
-            HStack(spacing: 12) {
-                Button("MINI HUD") { onOpenMiniHUD() }
+            HStack(spacing: 10) {
+                Button(SatieL10n.string("options.footer_mini_hud")) { onOpenMiniHUD() }
                     .buttonStyle(QuietTextLinkStyle())
-                Button("FULLSCREEN") { onOpenFullscreen() }
+                Button(SatieL10n.string("options.footer_fullscreen")) { onOpenFullscreen() }
                     .buttonStyle(QuietTextLinkStyle())
-                Button("PRIVACY") {
+                Button(SatieL10n.string("options.footer_privacy")) {
                     if let privacyPolicyURL = URL(string: "https://strangechances.com/satie/privacy/") {
                         NSWorkspace.shared.open(privacyPolicyURL)
                     }
                 }
                 .buttonStyle(QuietTextLinkStyle())
                 Spacer()
-                Button("QUIT") { onQuit() }
+                Button(SatieL10n.string("options.footer_quit")) { onQuit() }
                     .buttonStyle(QuietTextLinkStyle())
             }
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
             .padding(.top, 2)
         }
         .padding(12)
@@ -445,6 +467,9 @@ struct PopoverView: View {
             Text(label)
                 .font(.system(size: 10, weight: selected ? .semibold : .regular))
                 .foregroundColor(selected ? .black : inkSoft)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .padding(.horizontal, 4)
                 .frame(maxWidth: .infinity)
                 .frame(height: 24)
                 .background(selected ? Color.white : Color.white.opacity(0.05))
@@ -502,9 +527,11 @@ struct PopoverView: View {
 
     private var timerStatusLabel: String {
         if let countdown = compactCountdown {
-            return "\(countdown) REMAINING"
+            return SatieL10n.format("common.minutes_remaining", countdown)
         }
-        return state.flowMinutes > 0 ? "FADES OUT AFTER \(state.flowMinutes)M" : "NO LIMIT"
+        return state.flowMinutes > 0
+            ? SatieL10n.format("common.fades_after_minutes", state.flowMinutes)
+            : SatieL10n.string("common.no_limit")
     }
 
     private var heroTitle: String {

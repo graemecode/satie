@@ -74,9 +74,9 @@ struct PlaySatieSoundscapeIntent: AudioPlaybackIntent {
         #endif
 
         if let mins = durationMinutes, mins > 0 {
-            return .result(dialog: "Playing \(mode.title) for \(mins) minutes.")
+            return .result(dialog: IntentDialog(stringLiteral: SatieL10n.format("intent.dialog.playing_for_minutes", mode.title, mins)))
         }
-        return .result(dialog: "Playing \(mode.title).")
+        return .result(dialog: IntentDialog(stringLiteral: SatieL10n.format("intent.dialog.playing", mode.title)))
     }
 }
 
@@ -93,7 +93,7 @@ struct PauseSatieIntent: AudioPlaybackIntent {
         #elseif os(iOS) && !SATIE_WIDGET_EXTENSION
         SatieiOSState.shared.stopFocusSound()
         #endif
-        return .result(dialog: "Paused Satie.")
+        return .result(dialog: IntentDialog(stringLiteral: SatieL10n.string("intent.dialog.paused")))
     }
 }
 
@@ -117,7 +117,10 @@ struct ToggleSatiePlaybackIntent: AudioPlaybackIntent {
         let playing = true
         let title = "Satie"
         #endif
-        return .result(dialog: playing ? "Playing \(title)." : "Paused Satie.")
+        let message = playing
+            ? SatieL10n.format("intent.dialog.playing", title)
+            : SatieL10n.string("intent.dialog.paused")
+        return .result(dialog: IntentDialog(stringLiteral: message))
     }
 }
 
@@ -145,18 +148,21 @@ struct SatieFocusFilter: SetFocusFilterIntent {
 
     var displayRepresentation: DisplayRepresentation {
         guard let sc = soundscape else {
-            return DisplayRepresentation(title: "Satie", subtitle: "Keep current soundscape")
+            return DisplayRepresentation(
+                title: "Satie",
+                subtitle: LocalizedStringResource(stringLiteral: SatieL10n.string("intent.focus.keep_current"))
+            )
         }
         let timerTag: String
         if let mins = durationMinutes, mins > 0 {
-            timerTag = "\(mins)m"
+            timerTag = SatieL10n.format("common.minutes_short", mins)
         } else {
-            timerTag = "Continuous"
+            timerTag = SatieL10n.string("intent.focus.continuous")
         }
-        let actionTag = autoPlay ? "Play" : "Select"
+        let actionTag = autoPlay ? SatieL10n.string("common.play") : SatieL10n.string("intent.focus.select")
         return DisplayRepresentation(
-            title: "\(sc.soundscape.title)",
-            subtitle: "\(actionTag) · \(timerTag)"
+            title: LocalizedStringResource(stringLiteral: sc.soundscape.title),
+            subtitle: LocalizedStringResource(stringLiteral: "\(actionTag) · \(timerTag)")
         )
     }
 

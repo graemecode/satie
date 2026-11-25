@@ -210,10 +210,12 @@ struct SatieWatchRootView: View {
 
             VStack(spacing: 10) {
                 HStack {
-                    Text("SATIE · DIVE")
+                    Text(SatieL10n.string("watch.header"))
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .tracking(1.2)
                         .foregroundStyle(.white.opacity(0.60))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                     Spacer()
                     if let hr = controller.liveHeartRate {
                         Text("\(Int(hr.rounded())) ♥")
@@ -247,9 +249,11 @@ struct SatieWatchRootView: View {
                         .scaleEffect(scale)
 
                     VStack(spacing: 1) {
-                        Text(controller.isSessionActive ? (controller.isInhaling ? "INHALE" : "EXHALE") : "TAP")
+                        Text(controller.isSessionActive ? (controller.isInhaling ? SatieL10n.string("watch.inhale") : SatieL10n.string("watch.exhale")) : SatieL10n.string("watch.tap"))
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                            .tracking(1.0)
+                            .tracking(0.8)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                             .foregroundStyle(.white.opacity(0.92))
                         Text(String(format: "%.1f bpm", controller.targetBPM))
                             .font(.system(size: 10, weight: .regular, design: .monospaced))
@@ -272,9 +276,11 @@ struct SatieWatchRootView: View {
                 )
 
                 HStack(spacing: 6) {
-                    Text(controller.crownOverrideBPM >= 4.5 ? "MANUAL" : (controller.liveHRV != nil ? "HRV LOCK" : "AUTO 5.5"))
+                    Text(controller.crownOverrideBPM >= 4.5 ? SatieL10n.string("watch.manual") : (controller.liveHRV != nil ? SatieL10n.string("watch.hrv_lock") : SatieL10n.string("watch.auto_55")))
                         .font(.system(size: 9, weight: .semibold, design: .monospaced))
                         .foregroundStyle(accentColor.opacity(0.85))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                     if let hrv = controller.liveHRV {
                         Text("· \(Int(hrv.rounded())) ms")
                             .font(.system(size: 9, weight: .regular, design: .monospaced))

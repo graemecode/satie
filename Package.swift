@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "Satie",
+    defaultLocalization: "en",
     platforms: [
         .macOS(.v15)
     ],
@@ -15,7 +16,8 @@ let package = Package(
             name: "AcousticCore",
             path: "Sources/AcousticCore",
             resources: [
-                .copy("Resources/Samples")
+                .copy("Resources/Samples"),
+                .process("Resources/Localization")
             ],
             linkerSettings: [
                 .linkedFramework("AppKit"),

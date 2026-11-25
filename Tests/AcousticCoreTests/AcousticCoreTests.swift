@@ -971,4 +971,67 @@ struct AcousticCoreTests {
         print(String(format: "[HRV-LOOP] Aroused=%.2f bpm -> Calm=%.2f bpm (Calmness=%.2f, PacerConverged=%.2f bpm)",
                      arousedBPM, calmBPM, ctrl.calmnessIndex, pacer.currentBPM))
     }
+
+    @Test("Localization bundle parity across all 8 Apple locales including authentic Taiwanese Traditional Chinese (zh-Hant)")
+    func localizationParityAndTaiwaneseAudit() {
+        let langs = SatieL10n.supportedLanguages
+        #expect(langs == ["en", "ja", "fr", "zh-Hans", "zh-Hant", "es", "de", "ko"])
+
+        guard let enTable = SatieL10n.table(for: "en") else {
+            Issue.record("Missing en.lproj/Localizable.strings in resourceBundle")
+            return
+        }
+        #expect(enTable.count >= 120, "Expected full localization catalog, got \(enTable.count) keys")
+
+        let specRegex = try! NSRegularExpression(pattern: #"%(?:\d+\$)?(?:\.\d+)?(?:ll|l)?[@dfs]|\$\{[A-Za-z0-9_]+\}"#)
+        func extractSpecs(_ s: String) -> [String] {
+            let range = NSRange(s.startIndex..<s.endIndex, in: s)
+            return specRegex.matches(in: s, range: range).compactMap { m in
+                Range(m.range, in: s).map { String(s[$0]) }
+            }.sorted()
+        }
+
+        for lang in langs {
+            guard let tbl = SatieL10n.table(for: lang) else {
+                Issue.record("Missing \(lang).lproj/Localizable.strings")
+                continue
+            }
+            for (key, enVal) in enTable {
+                guard let val = tbl[key], !val.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    Issue.record("Missing or empty key '\(key)' in \(lang).lproj")
+                    continue
+                }
+                let enSpecs = extractSpecs(enVal)
+                let langSpecs = extractSpecs(val)
+                #expect(langSpecs == enSpecs, "Format specifier mismatch for '\(key)' in \(lang): \(langSpecs) != \(enSpecs)")
+            }
+
+            // Verify AppShortcuts.strings & InfoPlist.strings exist for every shipped locale
+            let lb = SatieL10n.lprojBundle(for: lang)
+            #expect(lb != nil, "Missing \(lang).lproj directory")
+            if let lb {
+                #expect(lb.url(forResource: "AppShortcuts", withExtension: "strings") != nil, "Missing \(lang).lproj/AppShortcuts.strings")
+                #expect(lb.url(forResource: "InfoPlist", withExtension: "strings") != nil, "Missing \(lang).lproj/InfoPlist.strings")
+            }
+
+            if lang != "en" {
+                #expect(tbl["menu.quit"] != enTable["menu.quit"], "menu.quit untranslated in \(lang)")
+                #expect(tbl["soundscape.dive.title"] != enTable["soundscape.dive.title"], "soundscape.dive.title untranslated in \(lang)")
+                #expect(tbl["watch.inhale"] != enTable["watch.inhale"], "watch.inhale untranslated in \(lang)")
+            }
+        }
+
+        // Authentic Taiwanese Traditional Chinese (zh-Hant) terminology checks vs Simplified Chinese (zh-Hans)
+        #expect(SatieL10n.string("menu.quit", language: "zh-Hant") == "結束 Satie")
+        #expect(SatieL10n.string("menu.quit", language: "zh-Hans") == "退出 Satie")
+        #expect(SatieL10n.string("menu.studio_window", language: "zh-Hant") == "工作室視窗")
+        #expect(SatieL10n.string("menu.fullscreen", language: "zh-Hant") == "全螢幕")
+        #expect(SatieL10n.string("ios.privacy_policy", language: "zh-Hant") == "隱私權政策")
+        #expect(SatieL10n.string("watch.exhale", language: "zh-Hant") == "吐氣")
+        #expect(SatieL10n.string("soundscape.focus.short", language: "ja") == "集中")
+        #expect(SatieL10n.string("soundscape.focus.title", language: "fr") == "Lumière douce")
+        #expect(SatieL10n.string("soundscape.dive.short", language: "de") == "TIEFE")
+        #expect(SatieL10n.string("soundscape.dive.title", language: "ko") == "깊은 명상")
+        #expect(SatieL10n.string("soundscape.rain.title", language: "es") == "Lluvia y cristal")
+    }
 }

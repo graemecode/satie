@@ -1,0 +1,8 @@
+/* Generated Satie localization (fr) */
+"Play ${soundscape} in ${applicationName}" = "Lire ${soundscape} dans ${applicationName}";
+"Start ${soundscape} with ${applicationName}" = "Démarrer ${soundscape} avec ${applicationName}";
+"Open ${soundscape} in ${applicationName}" = "Ouvrir ${soundscape} dans ${applicationName}";
+"Toggle ${applicationName}" = "Basculer ${applicationName}";
+"Start ${applicationName}" = "Démarrer ${applicationName}";
+"Pause ${applicationName}" = "Mettre ${applicationName} en pause";
+"Stop ${applicationName}" = "Arrêter ${applicationName}";

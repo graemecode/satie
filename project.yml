@@ -1,6 +1,17 @@
 name: Satie
 options:
   bundleIdPrefix: com.strangechances
+  developmentLanguage: en
+  knownRegions:
+    - en
+    - Base
+    - ja
+    - fr
+    - zh-Hans
+    - zh-Hant
+    - es
+    - de
+    - ko
   deploymentTarget:
     macOS: "15.0"
     iOS: "18.0"
@@ -15,6 +26,7 @@ targets:
       - path: Sources/AcousticCore
         excludes:
           - Resources/Samples/**
+          - Resources/Localization/**
     dependencies:
       - sdk: AppKit.framework
       - sdk: ApplicationServices.framework
@@ -44,6 +56,7 @@ targets:
       - path: Sources/AcousticCircuit
       - path: AppStore/Assets.xcassets
       - path: AppStore/PrivacyInfo.xcprivacy
+      - path: Sources/AcousticCore/Resources/Localization
       - path: Sources/AcousticCore/Resources/Samples
         type: folder
         buildPhase: resources
@@ -69,6 +82,15 @@ targets:
         CFBundleDisplayName: Satie
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleLocalizations:
+          - en
+          - ja
+          - fr
+          - zh-Hans
+          - zh-Hant
+          - es
+          - de
+          - ko
         LSApplicationCategoryType: public.app-category.music
         LSUIElement: true
         ITSAppUsesNonExemptEncryption: false
@@ -106,6 +128,7 @@ targets:
       - path: Sources/AcousticCore
         excludes:
           - Resources/Samples/**
+          - Resources/Localization/**
     dependencies:
       - sdk: AVFoundation.framework
       - sdk: AudioToolbox.framework
@@ -133,6 +156,7 @@ targets:
       - path: Sources/AcousticCircuit/UI/SoundscapeGlyphs.swift
       - path: AppStore/Assets-iOS.xcassets
       - path: AppStore/PrivacyInfo.xcprivacy
+      - path: Sources/AcousticCore/Resources/Localization
       - path: Sources/AcousticCore/Resources/Samples
         type: folder
         buildPhase: resources
@@ -160,6 +184,15 @@ targets:
         CFBundleDisplayName: Satie
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleLocalizations:
+          - en
+          - ja
+          - fr
+          - zh-Hans
+          - zh-Hant
+          - es
+          - de
+          - ko
         LSApplicationCategoryType: public.app-category.music
         ITSAppUsesNonExemptEncryption: false
         NSSupportsLiveActivities: true
@@ -201,6 +234,7 @@ targets:
     sources:
       - path: Sources/SatieWidgets
       - path: Sources/AcousticCircuit/App/SatieAppIntents.swift
+      - path: Sources/AcousticCore/Resources/Localization
     dependencies:
       - target: AcousticCoreiOS
       - sdk: SwiftUI.framework
@@ -213,6 +247,15 @@ targets:
         CFBundleDisplayName: Satie Widgets
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleLocalizations:
+          - en
+          - ja
+          - fr
+          - zh-Hans
+          - zh-Hant
+          - es
+          - de
+          - ko
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
@@ -238,6 +281,8 @@ targets:
     sources:
       - path: Sources/SatieWatch
       - path: Sources/AcousticCore/Audio/HRVResonanceController.swift
+      - path: Sources/AcousticCore/Localization/SatieL10n.swift
+      - path: Sources/AcousticCore/Resources/Localization
     dependencies:
       - sdk: SwiftUI.framework
       - sdk: WatchKit.framework
@@ -249,6 +294,15 @@ targets:
         CFBundleDisplayName: Satie
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleLocalizations:
+          - en
+          - ja
+          - fr
+          - zh-Hans
+          - zh-Hant
+          - es
+          - de
+          - ko
         WKApplication: true
         NSHealthShareUsageDescription: "Satie reads your live heart rate and HRV on-device to smoothly tune Deep Dive's breath pacing to your nervous system. Zero data ever leaves your device."
     settings:
@@ -273,6 +327,7 @@ targets:
       - path: Sources/AcousticCore
         excludes:
           - Resources/Samples/**
+          - Resources/Localization/**
     dependencies:
       - sdk: AVFoundation.framework
       - sdk: AudioToolbox.framework
@@ -296,6 +351,7 @@ targets:
     sources:
       - path: Sources/SatieTV
       - path: Sources/AcousticCircuit/Renderer/Shaders.metal
+      - path: Sources/AcousticCore/Resources/Localization
       - path: Sources/AcousticCore/Resources/Samples
         type: folder
         buildPhase: resources
@@ -316,6 +372,15 @@ targets:
         CFBundleDisplayName: Satie
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleLocalizations:
+          - en
+          - ja
+          - fr
+          - zh-Hans
+          - zh-Hant
+          - es
+          - de
+          - ko
         ITSAppUsesNonExemptEncryption: false
     settings:
       base:
@@ -340,6 +405,7 @@ targets:
       - path: Sources/AcousticCore
         excludes:
           - Resources/Samples/**
+          - Resources/Localization/**
     dependencies:
       - sdk: AVFoundation.framework
       - sdk: AudioToolbox.framework
@@ -362,6 +428,7 @@ targets:
     deploymentTarget: "2.0"
     sources:
       - path: Sources/SatieVision
+      - path: Sources/AcousticCore/Resources/Localization
       - path: Sources/AcousticCore/Resources/Samples
         type: folder
         buildPhase: resources
@@ -378,6 +445,15 @@ targets:
         CFBundleDisplayName: Satie
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleLocalizations:
+          - en
+          - ja
+          - fr
+          - zh-Hans
+          - zh-Hant
+          - es
+          - de
+          - ko
         ITSAppUsesNonExemptEncryption: false
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true

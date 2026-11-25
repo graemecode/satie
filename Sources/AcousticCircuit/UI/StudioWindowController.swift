@@ -37,7 +37,7 @@ final class StudioStageNSView: NSView {
             guard now - self.lastOverlayUpdate >= (1.0 / 30.0) else { return }
             self.lastOverlayUpdate = now
             let state = AppState.shared
-            let label = state.isFocusPlaying ? state.focusMode.title.uppercased() : "STANDBY"
+            let label = state.isFocusPlaying ? state.focusMode.title.uppercased() : SatieL10n.string("common.standby")
             self.overlayView.update(snapshot: snap, preset: state.preset, sourceLabel: label)
         }
     }
@@ -135,7 +135,7 @@ struct StudioContentView: View {
                     }
                     .overlay(alignment: .bottom) {
                         if immersionMode && showImmersionHint {
-                            Text("CLICK ANYWHERE TO SHOW CONTROLS")
+                            Text(SatieL10n.string("studio.click_to_show_controls"))
                                 .font(.system(size: 9.5, weight: .medium, design: .monospaced))
                                 .tracking(0.8)
                                 .foregroundColor(Color.white.opacity(0.78))
@@ -205,7 +205,9 @@ struct StudioContentView: View {
                     } label: {
                         Text(mode.shortLabel)
                             .font(.system(size: 10, weight: selected ? .semibold : .medium, design: .monospaced))
-                            .tracking(0.5)
+                            .tracking(0.4)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                             .foregroundColor(selected ? .black : inkSoft)
                             .padding(.horizontal, 11)
                             .frame(height: 24)
@@ -232,15 +234,15 @@ struct StudioContentView: View {
 
             Spacer()
 
-            // Quiet Visual World Override Menu (Auto by default, or pin any of the 5 visuals)
+            // Quiet Visual World Override Menu (Auto by default, or pin any of the 6 visuals)
             Menu {
                 Button {
                     state.setVisualOverride(nil)
                 } label: {
                     if state.visualFollowsSoundscape {
-                        Label("Auto (Paired to Sound)", systemImage: "checkmark")
+                        Label(SatieL10n.string("options.visual_auto"), systemImage: "checkmark")
                     } else {
-                        Text("Auto (Paired to Sound)")
+                        Text(SatieL10n.string("options.visual_auto"))
                     }
                 }
                 Divider()
@@ -257,7 +259,7 @@ struct StudioContentView: View {
                 }
                 if state.preset == .phosphor {
                     Divider()
-                    Button(state.amberPhosphor ? "Switch to P31 Emerald" : "Switch to P39 Amber") {
+                    Button(state.amberPhosphor ? SatieL10n.string("options.switch_emerald") : SatieL10n.string("options.switch_amber")) {
                         state.amberPhosphor.toggle()
                         state.performHaptic()
                     }
@@ -266,8 +268,11 @@ struct StudioContentView: View {
                 HStack(spacing: 5) {
                     Image(systemName: "sparkles")
                         .font(.system(size: 9.5))
-                    Text(state.visualFollowsSoundscape ? state.preset.cleanName.uppercased() : "PIN · \(state.preset.cleanName.uppercased())")
+                    Text(state.visualFollowsSoundscape
+                         ? state.preset.cleanName.uppercased()
+                         : SatieL10n.format("studio.pin_badge", state.preset.cleanName.uppercased()))
                         .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                        .lineLimit(1)
                 }
                 .foregroundColor(inkSoft)
                 .padding(.horizontal, 10)
@@ -279,7 +284,7 @@ struct StudioContentView: View {
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
-            .help("Choose or pin visual (keys 1–5)")
+            .help(SatieL10n.string("studio.visual_menu_help"))
 
             Button {
                 toggleImmersion(true)
@@ -289,7 +294,7 @@ struct StudioContentView: View {
                     .frame(width: 26, height: 26)
             }
             .buttonStyle(HairlineIconButtonStyle())
-            .help("Immersion Mode (click stage to exit)")
+            .help(SatieL10n.string("studio.immersion_help"))
 
             if !state.isFullscreen {
                 Button(action: onSwitchToMiniHUD) {
@@ -298,7 +303,7 @@ struct StudioContentView: View {
                         .frame(width: 26, height: 26)
                 }
                 .buttonStyle(HairlineIconButtonStyle())
-                .help("Shrink to Floating Mini HUD (⌘M)")
+                .help(SatieL10n.string("studio.mini_hud_help"))
             }
 
             Button(action: onToggleFullscreen) {
@@ -307,7 +312,7 @@ struct StudioContentView: View {
                     .frame(width: 26, height: 26)
             }
             .buttonStyle(HairlineIconButtonStyle())
-            .help(state.isFullscreen ? "Exit Fullscreen (Esc)" : "Fullscreen Wall (⌘F)")
+            .help(state.isFullscreen ? SatieL10n.string("studio.exit_fullscreen_help") : SatieL10n.string("studio.enter_fullscreen_help"))
         }
         .padding(.horizontal, 16)
         .padding(.top, 10)
@@ -329,8 +334,8 @@ struct StudioContentView: View {
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .help(state.isFocusPlaying ? "Pause \(state.focusMode.title) (Space)" : "Play \(state.focusMode.title) (Space)")
-                .accessibilityLabel(state.isFocusPlaying ? "Pause \(state.focusMode.title)" : "Play \(state.focusMode.title)")
+                .help(state.isFocusPlaying ? SatieL10n.format("common.pause_mode_space", state.focusMode.title) : SatieL10n.format("common.play_mode_space", state.focusMode.title))
+                .accessibilityLabel(state.isFocusPlaying ? SatieL10n.format("common.pause_mode", state.focusMode.title) : SatieL10n.format("common.play_mode", state.focusMode.title))
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(state.activeTitle)
@@ -373,7 +378,7 @@ struct StudioContentView: View {
                             .foregroundColor(state.isSystemMuted ? Color(red: 1.0, green: 0.65, blue: 0.58) : inkSoft)
                     }
                     .buttonStyle(.plain)
-                    .help(state.isSystemMuted ? "Unmute Mac audio (⌥⌘M)" : "Mute Mac audio (⌥⌘M)")
+                    .help(state.isSystemMuted ? SatieL10n.string("studio.unmute_help") : SatieL10n.string("studio.mute_help"))
 
                     Slider(
                         value: Binding(

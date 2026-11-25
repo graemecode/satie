@@ -14,34 +14,34 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
 
     public var title: String {
         switch self {
-        case .focus: return "Soft Light"
-        case .pulse: return "Kinetic Pulse"
-        case .rain:  return "Rain & Glass"
-        case .still: return "Still"
-        case .dive:  return "Deep Dive"
-        case .drift: return "Gymnopédie"
+        case .focus: return SatieL10n.string("soundscape.focus.title", fallback: "Soft Light")
+        case .pulse: return SatieL10n.string("soundscape.pulse.title", fallback: "Kinetic Pulse")
+        case .rain:  return SatieL10n.string("soundscape.rain.title", fallback: "Rain & Glass")
+        case .still: return SatieL10n.string("soundscape.still.title", fallback: "Still")
+        case .dive:  return SatieL10n.string("soundscape.dive.title", fallback: "Deep Dive")
+        case .drift: return SatieL10n.string("soundscape.drift.title", fallback: "Gymnopédie")
         }
     }
 
     public var shortLabel: String {
         switch self {
-        case .focus: return "FOCUS"
-        case .pulse: return "PULSE"
-        case .rain:  return "RAIN"
-        case .still: return "STILL"
-        case .dive:  return "DIVE"
-        case .drift: return "NIGHT"
+        case .focus: return SatieL10n.string("soundscape.focus.short", fallback: "FOCUS")
+        case .pulse: return SatieL10n.string("soundscape.pulse.short", fallback: "PULSE")
+        case .rain:  return SatieL10n.string("soundscape.rain.short", fallback: "RAIN")
+        case .still: return SatieL10n.string("soundscape.still.short", fallback: "STILL")
+        case .dive:  return SatieL10n.string("soundscape.dive.short", fallback: "DIVE")
+        case .drift: return SatieL10n.string("soundscape.drift.short", fallback: "NIGHT")
         }
     }
 
     public var subtitle: String {
         switch self {
-        case .focus: return "Deep Work · Felt Piano & Vibe"
-        case .pulse: return "Flow Momentum · Silky Analog"
-        case .rain:  return "Kyoto Rain · Singing Glass"
-        case .still: return "Deep Reading · Zero Melody"
-        case .dive:  return "Meditation · Breath & Bowls"
-        case .drift: return "Late Night · Piano & Cello"
+        case .focus: return SatieL10n.string("soundscape.focus.subtitle", fallback: "Deep Work · Felt Piano & Vibe")
+        case .pulse: return SatieL10n.string("soundscape.pulse.subtitle", fallback: "Flow Momentum · Silky Analog")
+        case .rain:  return SatieL10n.string("soundscape.rain.subtitle", fallback: "Kyoto Rain · Singing Glass")
+        case .still: return SatieL10n.string("soundscape.still.subtitle", fallback: "Deep Reading · Zero Melody")
+        case .dive:  return SatieL10n.string("soundscape.dive.subtitle", fallback: "Meditation · Breath & Bowls")
+        case .drift: return SatieL10n.string("soundscape.drift.subtitle", fallback: "Late Night · Piano & Cello")
         }
     }
 }
@@ -64,9 +64,9 @@ public enum SoundIntensity: String, CaseIterable, Identifiable, Sendable {
 
     public var label: String {
         switch self {
-        case .still: return "STILL"
-        case .flow: return "FLOW"
-        case .deep: return "DEEP"
+        case .still: return SatieL10n.string("intensity.still", fallback: "STILL")
+        case .flow: return SatieL10n.string("intensity.flow", fallback: "FLOW")
+        case .deep: return SatieL10n.string("intensity.deep", fallback: "DEEP")
         }
     }
 }
@@ -89,9 +89,9 @@ public enum MaskingBed: String, CaseIterable, Identifiable, Sendable {
 
     public var label: String {
         switch self {
-        case .off: return "None"
-        case .rain: return "Rain"
-        case .brown: return "Brown Noise"
+        case .off: return SatieL10n.string("masking.off", fallback: "None")
+        case .rain: return SatieL10n.string("masking.rain", fallback: "Rain")
+        case .brown: return SatieL10n.string("masking.brown", fallback: "Brown Noise")
         }
     }
 }
@@ -106,9 +106,9 @@ public enum CircadianOverride: String, CaseIterable, Identifiable, Sendable {
 
     public var label: String {
         switch self {
-        case .auto: return "AUTO"
-        case .crisp: return "CRISP"
-        case .warm: return "WARM"
+        case .auto: return SatieL10n.string("circadian.override.auto", fallback: "AUTO")
+        case .crisp: return SatieL10n.string("circadian.override.crisp", fallback: "CRISP")
+        case .warm: return SatieL10n.string("circadian.override.warm", fallback: "WARM")
         }
     }
 
@@ -135,17 +135,17 @@ public enum CircadianPhase: Int, Sendable {
 
     public var label: String {
         switch self {
-        case .morning: return "MORNING"
-        case .afternoon: return "DAY"
-        case .night: return "NIGHT"
+        case .morning: return SatieL10n.string("circadian.phase.morning", fallback: "MORNING")
+        case .afternoon: return SatieL10n.string("circadian.phase.afternoon", fallback: "DAY")
+        case .night: return SatieL10n.string("circadian.phase.night", fallback: "NIGHT")
         }
     }
 
     public var detailedLabel: String {
         switch self {
-        case .morning: return "MORNING RISE"
-        case .afternoon: return "DAY FLOW"
-        case .night: return "NOCTURNAL · WARM"
+        case .morning: return SatieL10n.string("circadian.detail.morning", fallback: "MORNING RISE")
+        case .afternoon: return SatieL10n.string("circadian.detail.afternoon", fallback: "DAY FLOW")
+        case .night: return SatieL10n.string("circadian.detail.night", fallback: "NOCTURNAL · WARM")
         }
     }
 

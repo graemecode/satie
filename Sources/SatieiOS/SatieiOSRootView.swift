@@ -170,7 +170,7 @@ struct SatieiOSRootView: View {
                                 .transition(.opacity)
                                 .allowsHitTesting(false)
                         } else if showImmersionHint {
-                            Text("TAP ANYWHERE TO SHOW CONTROLS")
+                            Text(SatieL10n.string("ios.tap_to_show_controls"))
                                 .font(.system(size: 10, weight: .medium, design: .monospaced))
                                 .tracking(0.8)
                                 .foregroundColor(Color.white.opacity(0.76))
@@ -185,8 +185,8 @@ struct SatieiOSRootView: View {
                                 .allowsHitTesting(false)
                         }
                     }
-                    .accessibilityLabel("Exit immersion mode")
-                    .accessibilityHint("Double tap to show Satie controls")
+                    .accessibilityLabel(SatieL10n.string("ios.exit_immersion"))
+                    .accessibilityHint(SatieL10n.string("ios.exit_immersion_hint"))
             }
         }
         .statusBarHidden(immersionMode)
@@ -234,7 +234,7 @@ struct SatieiOSRootView: View {
                 .background(Color.white.opacity(0.07))
                 .clipShape(Circle())
                 .overlay(Circle().stroke(hairSoft, lineWidth: 1))
-                .accessibilityLabel("Audio Output and AirPlay")
+                .accessibilityLabel(SatieL10n.string("ios.airplay_a11y"))
         }
     }
 
@@ -304,14 +304,16 @@ struct SatieiOSRootView: View {
                 Text(mode.shortLabel)
                     .font(.system(size: isCompactLandscape ? 8.5 : 9.5, weight: isActive ? .semibold : .regular, design: .monospaced))
                     .foregroundColor(isActive ? .white : (isSelected ? inkSoft : inkDim))
-                    .tracking(0.6)
+                    .tracking(0.4)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
             .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }
         .buttonStyle(BraunPressButtonStyle(pressedScale: 0.92, reduceMotion: reduceMotion))
         .accessibilityLabel("\(mode.title), \(mode.subtitle)")
-        .accessibilityHint(isActive ? "Double tap to pause" : "Double tap to play")
+        .accessibilityHint(isActive ? SatieL10n.string("ios.double_tap_pause") : SatieL10n.string("ios.double_tap_play"))
         .accessibilityAddTraits(isActive ? [.isSelected] : [])
     }
 
@@ -329,7 +331,7 @@ struct SatieiOSRootView: View {
                 .shadow(color: Color.white.opacity(state.isFocusPlaying ? 0.24 : 0.08), radius: 18)
         }
         .buttonStyle(BraunPressButtonStyle(pressedScale: 0.91, reduceMotion: reduceMotion))
-        .accessibilityLabel(state.isFocusPlaying ? "Pause \(state.focusMode.title)" : "Play \(state.focusMode.title)")
+        .accessibilityLabel(state.isFocusPlaying ? SatieL10n.format("common.pause_mode", state.focusMode.title) : SatieL10n.format("common.play_mode", state.focusMode.title))
     }
 
     private func optionsButton(diameter: CGFloat, iconSize: CGFloat) -> some View {
@@ -355,7 +357,7 @@ struct SatieiOSRootView: View {
             }
         }
         .buttonStyle(BraunPressButtonStyle(pressedScale: 0.92, reduceMotion: reduceMotion))
-        .accessibilityLabel("Options")
+        .accessibilityLabel(SatieL10n.string("popover.options"))
     }
 
     private func countdownPill(_ countdown: String) -> some View {
@@ -377,7 +379,7 @@ struct SatieiOSRootView: View {
             .overlay(Capsule().stroke(hairSoft, lineWidth: 1))
         }
         .buttonStyle(BraunPressButtonStyle(pressedScale: 0.94, reduceMotion: reduceMotion))
-        .accessibilityLabel("Sleep timer, \(countdown) remaining")
+        .accessibilityLabel(SatieL10n.format("common.timer_remaining_a11y", countdown))
     }
 
     private var stageSwipeGesture: some Gesture {
@@ -430,7 +432,7 @@ struct SatieiOSRootView: View {
                 // Sleep / Focus Timer
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("TIMER")
+                        Text(SatieL10n.string("options.timer"))
                             .font(.caption2.monospaced().weight(.semibold))
                             .foregroundColor(inkSoft)
                             .tracking(0.8)
@@ -447,16 +449,18 @@ struct SatieiOSRootView: View {
                                 state.setFlowMinutes(mins)
                                 state.performHaptic()
                             } label: {
-                                Text(mins == 0 ? "∞" : "\(mins)m")
+                                Text(mins == 0 ? "∞" : SatieL10n.format("common.minutes_short", mins))
                                     .font(.caption.monospaced().weight(on ? .semibold : .regular))
                                     .foregroundColor(on ? .black : inkSoft)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
                                     .frame(maxWidth: .infinity)
                                     .frame(minHeight: 36)
                                     .background(on ? Color.white : Color.white.opacity(0.07))
                                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                             }
                             .buttonStyle(BraunPressButtonStyle(pressedScale: 0.95, reduceMotion: reduceMotion))
-                            .accessibilityLabel(mins == 0 ? "No timer limit" : "\(mins) minute timer")
+                            .accessibilityLabel(mins == 0 ? SatieL10n.string("common.timer_no_limit_a11y") : SatieL10n.format("common.timer_minutes_a11y", mins))
                             .accessibilityAddTraits(on ? [.isSelected] : [])
                         }
                     }
@@ -465,11 +469,11 @@ struct SatieiOSRootView: View {
                 // Optional Background Noise Layer
                 VStack(alignment: .leading, spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("BACKGROUND NOISE")
+                        Text(SatieL10n.string("options.background_noise"))
                             .font(.caption2.monospaced().weight(.semibold))
                             .foregroundColor(inkSoft)
                             .tracking(0.8)
-                        Text("Layer gentle rain or brown noise under any mode")
+                        Text(SatieL10n.string("options.layer_under_any_mode_desc"))
                             .font(.caption)
                             .foregroundColor(inkDim)
                     }
@@ -484,6 +488,9 @@ struct SatieiOSRootView: View {
                                 Text(bed.label)
                                     .font(.footnote.weight(on ? .semibold : .regular))
                                     .foregroundColor(on ? .black : inkSoft)
+                                    .lineLimit(1)
+                                    .minimumScaleFactor(0.75)
+                                    .padding(.horizontal, 4)
                                     .frame(maxWidth: .infinity)
                                     .frame(minHeight: 36)
                                     .background(on ? Color.white : Color.white.opacity(0.07))
@@ -498,17 +505,19 @@ struct SatieiOSRootView: View {
                 // Visual World Pairing / Override (Auto by default; swipe canvas anytime)
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Text("VISUAL")
+                        Text(SatieL10n.string("options.visual"))
                             .font(.caption2.monospaced().weight(.semibold))
                             .foregroundColor(inkSoft)
                             .tracking(0.8)
                         Spacer()
-                        Text(state.visualFollowsSoundscape ? "PAIRED · \(state.preset.cleanName.uppercased())" : "PINNED · \(state.preset.cleanName.uppercased())")
+                        Text(state.visualFollowsSoundscape
+                             ? SatieL10n.format("options.visual_paired", state.preset.cleanName.uppercased())
+                             : SatieL10n.format("options.visual_pinned", state.preset.cleanName.uppercased()))
                             .font(.caption2.monospaced().weight(.medium))
                             .foregroundColor(inkDim)
                     }
 
-                    visualOptionChip(label: "Auto (Paired to Sound)", selected: state.visualFollowsSoundscape) {
+                    visualOptionChip(label: SatieL10n.string("options.visual_auto"), selected: state.visualFollowsSoundscape) {
                         state.setVisualOverride(nil)
                     }
 
@@ -527,13 +536,13 @@ struct SatieiOSRootView: View {
 
                 if state.preset == .phosphor {
                     HStack {
-                        Text("CRT PHOSPHOR")
+                        Text(SatieL10n.string("options.crt_phosphor"))
                             .font(.caption2.monospaced().weight(.semibold))
                             .foregroundColor(inkSoft)
                             .tracking(0.8)
                         Spacer()
                         HStack(spacing: 6) {
-                            ForEach([(false, "P31 Emerald"), (true, "P39 Amber")], id: \.0) { isAmber, label in
+                            ForEach([(false, SatieL10n.string("options.phosphor_emerald")), (true, SatieL10n.string("options.phosphor_amber"))], id: \.0) { isAmber, label in
                                 let on = state.amberPhosphor == isAmber
                                 Button {
                                     state.amberPhosphor = isAmber
@@ -542,6 +551,8 @@ struct SatieiOSRootView: View {
                                     Text(label)
                                         .font(.caption2.monospaced().weight(on ? .semibold : .regular))
                                         .foregroundColor(on ? .black : inkSoft)
+                                        .lineLimit(1)
+                                        .minimumScaleFactor(0.8)
                                         .padding(.horizontal, 10)
                                         .frame(minHeight: 28)
                                         .background(on ? Color.white : Color.white.opacity(0.07))
@@ -558,11 +569,11 @@ struct SatieiOSRootView: View {
 
                 Toggle(isOn: $state.mixWithOthers) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("MIX WITH OTHER AUDIO")
+                        Text(SatieL10n.string("ios.mix_audio"))
                             .font(.caption2.monospaced().weight(.semibold))
                             .foregroundColor(inkSoft)
                             .tracking(0.8)
-                        Text("Play Satie underneath podcasts, videos, or other music")
+                        Text(SatieL10n.string("ios.mix_audio_desc"))
                             .font(.caption)
                             .foregroundColor(inkDim)
                     }
@@ -571,11 +582,11 @@ struct SatieiOSRootView: View {
 
                 Toggle(isOn: $state.keepScreenAwake) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("KEEP SCREEN AWAKE")
+                        Text(SatieL10n.string("ios.keep_awake"))
                             .font(.caption2.monospaced().weight(.semibold))
                             .foregroundColor(inkSoft)
                             .tracking(0.8)
-                        Text("Keep the visual display glowing on a desk or stand")
+                        Text(SatieL10n.string("ios.keep_awake_desc"))
                             .font(.caption)
                             .foregroundColor(inkDim)
                     }
@@ -585,12 +596,12 @@ struct SatieiOSRootView: View {
                 Divider().overlay(hairSoft)
 
                 HStack {
-                    Text("100% OFFLINE · ZERO TRACKING")
+                    Text(SatieL10n.string("ios.offline_badge"))
                         .font(.caption2.monospaced())
                         .foregroundColor(inkDim)
                     Spacer()
                     if let privacyPolicyURL = URL(string: "https://strangechances.com/satie/privacy/") {
-                        Link("Privacy Policy", destination: privacyPolicyURL)
+                        Link(SatieL10n.string("ios.privacy_policy"), destination: privacyPolicyURL)
                             .font(.caption.weight(.medium))
                             .foregroundColor(inkSoft)
                     }
@@ -608,6 +619,9 @@ struct SatieiOSRootView: View {
             Text(label)
                 .font(.footnote.weight(selected ? .semibold : .regular))
                 .foregroundColor(selected ? .black : inkSoft)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .padding(.horizontal, 4)
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 34)
                 .background(selected ? Color.white : Color.white.opacity(0.07))
@@ -635,9 +649,11 @@ struct SatieiOSRootView: View {
 
     private var timerStatusLabel: String {
         if let countdown = compactCountdown {
-            return "\(countdown) REMAINING"
+            return SatieL10n.format("common.minutes_remaining", countdown)
         }
-        return state.flowMinutes > 0 ? "FADES OUT AFTER \(state.flowMinutes)M" : "NO LIMIT"
+        return state.flowMinutes > 0
+            ? SatieL10n.format("common.fades_after_minutes", state.flowMinutes)
+            : SatieL10n.string("common.no_limit")
     }
 
     private var soundscapeAuraColor: Color {

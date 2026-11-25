@@ -14,8 +14,8 @@ enum FlowDuration: Int, CaseIterable, Sendable {
     var label: String {
         switch self {
         case .infinite: return "∞"
-        case .min25: return "25M"
-        case .min50: return "50M"
+        case .min25: return SatieL10n.format("common.minutes_upper", 25)
+        case .min50: return SatieL10n.format("common.minutes_upper", 50)
         }
     }
 
@@ -112,7 +112,7 @@ final class AppState: ObservableObject {
     @Published var scoreTelemetry: ScoreTelemetry = .empty
 
     private(set) var snapshot: AcousticSnapshot = .empty
-    @Published var displayKey: String = "STANDBY"
+    @Published var displayKey: String = SatieL10n.string("common.standby")
     @Published var displayEnergy: Float = 0
 
     let focusRingBuffer: StereoRingBuffer
@@ -147,15 +147,17 @@ final class AppState: ObservableObject {
         if isFocusPlaying {
             let barNum = String(format: "%02d", scoreTelemetry.barInForm + 1)
             let passTag = scoreTelemetry.pass > 0
-                ? (scoreTelemetry.didSwapFigure ? "PASS \(scoreTelemetry.pass + 1) · VARIED" : "PASS \(scoreTelemetry.pass + 1)")
+                ? (scoreTelemetry.didSwapFigure
+                    ? SatieL10n.format("common.pass_varied", scoreTelemetry.pass + 1)
+                    : SatieL10n.format("common.pass", scoreTelemetry.pass + 1))
                 : effectiveCircadianPhase.label
-            return "BAR \(barNum)/32 · \(passTag)"
+            return SatieL10n.format("common.bar_progress", barNum, passTag)
         }
         return focusMode.subtitle.uppercased()
     }
 
     var effectiveKeyBadge: String {
-        isFocusPlaying ? scoreTelemetry.chordLabel : "STANDBY"
+        isFocusPlaying ? scoreTelemetry.chordLabel : SatieL10n.string("common.standby")
     }
 
     var canTogglePrimaryPlayback: Bool {
@@ -576,7 +578,7 @@ final class AppState: ObservableObject {
             uiThrottleAccum += dt
             if uiThrottleAccum >= 0.25 {
                 uiThrottleAccum = 0
-                let nextKey = snap.detectedKey
+                let nextKey = SatieL10n.displayKey(snap.detectedKey)
                 let qEnergy = (snap.energy * 100).rounded() / 100
                 if displayKey != nextKey || displayEnergy != qEnergy {
                     if drivenByMetal {

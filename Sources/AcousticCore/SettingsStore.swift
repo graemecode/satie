@@ -16,34 +16,34 @@ public enum VisualPreset: Int, CaseIterable, Identifiable, Sendable {
 
     public var title: String {
         switch self {
-        case .circuit:  return "01 The Circuit"
-        case .ecology:  return "02 Ecology Wall"
-        case .phosphor: return "03 Phosphor Scope"
-        case .liquid:   return "04 Nocturne Silk"
-        case .horizon:  return "05 Horizon"
-        case .oculus:   return "06 Oculus"
+        case .circuit:  return SatieL10n.string("visual.circuit.title", fallback: "01 The Circuit")
+        case .ecology:  return SatieL10n.string("visual.ecology.title", fallback: "02 Ecology Wall")
+        case .phosphor: return SatieL10n.string("visual.phosphor.title", fallback: "03 Phosphor Scope")
+        case .liquid:   return SatieL10n.string("visual.liquid.title", fallback: "04 Nocturne Silk")
+        case .horizon:  return SatieL10n.string("visual.horizon.title", fallback: "05 Horizon")
+        case .oculus:   return SatieL10n.string("visual.oculus.title", fallback: "06 Oculus")
         }
     }
 
     public var shortTitle: String {
         switch self {
-        case .circuit:  return "01 Circuit"
-        case .ecology:  return "02 Ecology"
-        case .phosphor: return "03 Scope"
-        case .liquid:   return "04 Nocturne"
-        case .horizon:  return "05 Horizon"
-        case .oculus:   return "06 Oculus"
+        case .circuit:  return SatieL10n.string("visual.circuit.short", fallback: "01 Circuit")
+        case .ecology:  return SatieL10n.string("visual.ecology.short", fallback: "02 Ecology")
+        case .phosphor: return SatieL10n.string("visual.phosphor.short", fallback: "03 Scope")
+        case .liquid:   return SatieL10n.string("visual.liquid.short", fallback: "04 Nocturne")
+        case .horizon:  return SatieL10n.string("visual.horizon.short", fallback: "05 Horizon")
+        case .oculus:   return SatieL10n.string("visual.oculus.short", fallback: "06 Oculus")
         }
     }
 
     public var cleanName: String {
         switch self {
-        case .circuit:  return "Circuit"
-        case .ecology:  return "Ecology"
-        case .phosphor: return "Scope"
-        case .liquid:   return "Nocturne"
-        case .horizon:  return "Horizon"
-        case .oculus:   return "Oculus"
+        case .circuit:  return SatieL10n.string("visual.circuit.clean", fallback: "Circuit")
+        case .ecology:  return SatieL10n.string("visual.ecology.clean", fallback: "Ecology")
+        case .phosphor: return SatieL10n.string("visual.phosphor.clean", fallback: "Scope")
+        case .liquid:   return SatieL10n.string("visual.liquid.clean", fallback: "Nocturne")
+        case .horizon:  return SatieL10n.string("visual.horizon.clean", fallback: "Horizon")
+        case .oculus:   return SatieL10n.string("visual.oculus.clean", fallback: "Oculus")
         }
     }
 
@@ -69,9 +69,9 @@ public enum SensitivityMode: String, CaseIterable, Identifiable, Sendable {
 
     public var label: String {
         switch self {
-        case .calm: return "Calm"
-        case .balanced: return "Balanced"
-        case .vivid: return "Vivid"
+        case .calm: return SatieL10n.string("sensitivity.calm", fallback: "Calm")
+        case .balanced: return SatieL10n.string("sensitivity.balanced", fallback: "Balanced")
+        case .vivid: return SatieL10n.string("sensitivity.vivid", fallback: "Vivid")
         }
     }
 

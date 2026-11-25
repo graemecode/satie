@@ -163,24 +163,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // App Menu
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(NSMenuItem(title: "About Satie", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: ""))
+        appMenu.addItem(NSMenuItem(title: SatieL10n.string("menu.about"), action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: ""))
         appMenu.addItem(.separator())
-        appMenu.addItem(NSMenuItem(title: "Quit Satie", action: #selector(menuQuit), keyEquivalent: "q"))
+        appMenu.addItem(NSMenuItem(title: SatieL10n.string("menu.quit"), action: #selector(menuQuit), keyEquivalent: "q"))
         appItem.submenu = appMenu
         mainMenu.addItem(appItem)
 
         // Window / View Menu
         let viewItem = NSMenuItem()
-        let viewMenu = NSMenu(title: "View")
+        let viewMenu = NSMenu(title: SatieL10n.string("menu.view"))
 
-        let closeItem = NSMenuItem(title: "Close Window", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        let closeItem = NSMenuItem(title: SatieL10n.string("menu.close_window"), action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
         viewMenu.addItem(closeItem)
 
-        let miniItem = NSMenuItem(title: "Floating Mini HUD", action: #selector(menuOpenMiniHUD), keyEquivalent: "m")
+        let miniItem = NSMenuItem(title: SatieL10n.string("menu.floating_mini_hud"), action: #selector(menuOpenMiniHUD), keyEquivalent: "m")
         miniItem.target = self
         viewMenu.addItem(miniItem)
 
-        let fsItem = NSMenuItem(title: "Toggle Fullscreen", action: #selector(menuOpenFullscreen), keyEquivalent: "f")
+        let fsItem = NSMenuItem(title: SatieL10n.string("menu.toggle_fullscreen"), action: #selector(menuOpenFullscreen), keyEquivalent: "f")
         fsItem.target = self
         viewMenu.addItem(fsItem)
 
@@ -212,7 +212,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.target = self
         button.action = #selector(handleStatusBarClick(_:))
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        button.toolTip = "Satie — Click to open · ⌥-Click to stop/mute · Right-click for menu"
+        button.toolTip = SatieL10n.string("statusbar.tooltip")
     }
 
     private func setupFloatingPanel() {
@@ -418,13 +418,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let state = AppState.shared
 
         let playTitle = state.isFocusPlaying
-            ? "Pause \(state.focusMode.title)"
-            : "Play \(state.focusMode.title)"
+            ? SatieL10n.format("common.pause_mode", state.focusMode.title)
+            : SatieL10n.format("common.play_mode", state.focusMode.title)
         let playItem = NSMenuItem(title: "\(playTitle)  (⌥⌘Space)", action: #selector(menuTogglePlay), keyEquivalent: "")
         playItem.target = self
         menu.addItem(playItem)
 
-        let soundItem = NSMenuItem(title: "Soundscape", action: nil, keyEquivalent: "")
+        let soundItem = NSMenuItem(title: SatieL10n.string("menu.soundscape"), action: nil, keyEquivalent: "")
         let soundMenu = NSMenu()
         for mode in FocusSoundscape.allCases {
             let sItem = NSMenuItem(title: mode.title, action: #selector(menuToggleSoundscape(_:)), keyEquivalent: "")
@@ -438,26 +438,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
-        let studioItem = NSMenuItem(title: "Studio Window", action: #selector(menuOpenStudio), keyEquivalent: "")
+        let studioItem = NSMenuItem(title: SatieL10n.string("menu.studio_window"), action: #selector(menuOpenStudio), keyEquivalent: "")
         studioItem.target = self
         menu.addItem(studioItem)
 
-        let miniItem = NSMenuItem(title: "Mini HUD", action: #selector(menuOpenMiniHUD), keyEquivalent: "")
+        let miniItem = NSMenuItem(title: SatieL10n.string("menu.mini_hud"), action: #selector(menuOpenMiniHUD), keyEquivalent: "")
         miniItem.target = self
         menu.addItem(miniItem)
 
-        let fsItem = NSMenuItem(title: "Fullscreen", action: #selector(menuOpenFullscreen), keyEquivalent: "")
+        let fsItem = NSMenuItem(title: SatieL10n.string("menu.fullscreen"), action: #selector(menuOpenFullscreen), keyEquivalent: "")
         fsItem.target = self
         menu.addItem(fsItem)
 
         menu.addItem(.separator())
 
-        let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(menuToggleLaunchAtLogin), keyEquivalent: "")
+        let loginItem = NSMenuItem(title: SatieL10n.string("menu.launch_at_login"), action: #selector(menuToggleLaunchAtLogin), keyEquivalent: "")
         loginItem.target = self
         loginItem.state = state.launchAtLogin ? .on : .off
         menu.addItem(loginItem)
 
-        let quitItem = NSMenuItem(title: "Quit Satie", action: #selector(menuQuit), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: SatieL10n.string("menu.quit"), action: #selector(menuQuit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
 

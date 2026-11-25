@@ -32,7 +32,7 @@ final class SatieLiveActivityManager {
         let contentState = SatieSessionAttributes.ContentState(
             soundscapeRaw: mode.rawValue,
             soundscapeTitle: mode.title,
-            subtitle: mode == .dive ? String(format: "%.1f bpm breath", breathBPM) : mode.subtitle,
+            subtitle: mode == .dive ? SatieL10n.format("common.breath_bpm", breathBPM) : mode.subtitle,
             isPlaying: isPlaying,
             endDate: endDate,
             breathBPM: breathBPM,

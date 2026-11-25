@@ -136,7 +136,7 @@ struct SatieVisionApp: App {
     @StateObject private var state = SatieVisionState.shared
 
     var body: some Scene {
-        WindowGroup("Satie Skyspace") {
+        WindowGroup(SatieL10n.string("vision.window_title")) {
             VisionOculusSkyspaceView(state: state)
                 .preferredColorScheme(.dark)
         }

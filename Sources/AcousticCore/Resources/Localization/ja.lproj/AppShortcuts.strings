@@ -1,0 +1,8 @@
+/* Generated Satie localization (ja) */
+"Play ${soundscape} in ${applicationName}" = "${applicationName}で${soundscape}を再生";
+"Start ${soundscape} with ${applicationName}" = "${applicationName}で${soundscape}を開始";
+"Open ${soundscape} in ${applicationName}" = "${applicationName}で${soundscape}を開く";
+"Toggle ${applicationName}" = "${applicationName}を切り替え";
+"Start ${applicationName}" = "${applicationName}を開始";
+"Pause ${applicationName}" = "${applicationName}を一時停止";
+"Stop ${applicationName}" = "${applicationName}を停止";

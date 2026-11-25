@@ -1,0 +1,8 @@
+/* Generated Satie localization (ko) */
+"Play ${soundscape} in ${applicationName}" = "${applicationName}에서 ${soundscape} 재생";
+"Start ${soundscape} with ${applicationName}" = "${applicationName}로 ${soundscape} 시작";
+"Open ${soundscape} in ${applicationName}" = "${applicationName}에서 ${soundscape} 열기";
+"Toggle ${applicationName}" = "${applicationName} 전환";
+"Start ${applicationName}" = "${applicationName} 시작";
+"Pause ${applicationName}" = "${applicationName} 일시 정지";
+"Stop ${applicationName}" = "${applicationName} 정지";

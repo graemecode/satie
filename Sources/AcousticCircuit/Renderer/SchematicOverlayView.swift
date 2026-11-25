@@ -73,10 +73,10 @@ final class SchematicOverlayView: NSView {
         let hairStrong = NSColor(calibratedRed: 0.86, green: 0.91, blue: 0.98, alpha: 0.44).cgColor
 
         // Top section heading
-        drawText("24 BANDS INTO THE CIRCUIT", at: CGPoint(x: padX, y: h * 0.038), font: titleFont, color: white)
+        drawText(SatieL10n.string("schematic.circuit_title"), at: CGPoint(x: padX, y: h * 0.038), font: titleFont, color: white)
         let rateKhz = Int(round(a.sampleRate / 1000.0))
         drawText(
-            "GENERATIVE ENGINE · \(rateKhz) KHZ · 35 HZ → 14 KHZ · LIVE IMPULSE ROUTING",
+            SatieL10n.format("schematic.circuit_subtitle", rateKhz),
             at: CGPoint(x: padX, y: h * 0.038 + 18),
             font: subFont,
             color: soft
@@ -90,7 +90,13 @@ final class SchematicOverlayView: NSView {
         ctx.addLine(to: CGPoint(x: w - padX, y: axisY))
         ctx.strokePath()
 
-        let scaleLabels = ["SUB", "BASS", "LOW-MID", "HIGH-MID", "AIR"]
+        let scaleLabels = [
+            SatieL10n.string("schematic.band_sub"),
+            SatieL10n.string("schematic.band_bass"),
+            SatieL10n.string("schematic.band_lowmid"),
+            SatieL10n.string("schematic.band_highmid"),
+            SatieL10n.string("schematic.band_air")
+        ]
         for (idx, lbl) in scaleLabels.enumerated() {
             let frac = CGFloat(idx) / CGFloat(scaleLabels.count - 1)
             let lx = padX + frac * usableW
@@ -178,8 +184,8 @@ final class SchematicOverlayView: NSView {
         ctx.addLine(to: CGPoint(x: coreX, y: boxY))
         ctx.strokePath()
 
-        drawText("SOUND FROM THE CIRCUIT", at: CGPoint(x: w * 0.5, y: boxY + 6), font: sectionFont, color: white, align: .center)
-        drawText("REAL-TIME CHROMAGRAM · KEY ESTIMATOR · 24-BAND LEVEL READOUT", at: CGPoint(x: w * 0.5, y: boxY + 20), font: microFont, color: dim, align: .center)
+        drawText(SatieL10n.string("schematic.output_title"), at: CGPoint(x: w * 0.5, y: boxY + 6), font: sectionFont, color: white, align: .center)
+        drawText(SatieL10n.string("schematic.output_subtitle"), at: CGPoint(x: w * 0.5, y: boxY + 20), font: microFont, color: dim, align: .center)
 
         // Circle of Fifths chromagram wheel (left inside box)
         let wheelR = min(26.0, boxH * 0.185)
@@ -226,9 +232,9 @@ final class SchematicOverlayView: NSView {
 
         // Detected key & energy/tension telemetry beside wheel
         let metaX = wheelX + wheelR + 28.0
-        drawText(a.detectedKey, at: CGPoint(x: metaX, y: wheelY - 19), font: keyFont, color: white)
-        drawText(String(format: "ENERGY  %.2f", a.energy), at: CGPoint(x: metaX, y: wheelY - 2), font: microFont, color: soft)
-        drawText(String(format: "TENSION %.2f", a.tension), at: CGPoint(x: metaX, y: wheelY + 11), font: microFont, color: soft)
+        drawText(SatieL10n.displayKey(a.detectedKey), at: CGPoint(x: metaX, y: wheelY - 19), font: keyFont, color: white)
+        drawText(String(format: "%@  %.2f", SatieL10n.string("schematic.energy"), a.energy), at: CGPoint(x: metaX, y: wheelY - 2), font: microFont, color: soft)
+        drawText(String(format: "%@ %.2f", SatieL10n.string("schematic.tension"), a.tension), at: CGPoint(x: metaX, y: wheelY + 11), font: microFont, color: soft)
 
         // Middle PC1 / PC2 sliders
         if w > 640 {
@@ -243,7 +249,7 @@ final class SchematicOverlayView: NSView {
             let rtX = w * 0.69
             drawText(String(format: "BASS   %.3f · MID %.3f", a.bass, a.mid), at: CGPoint(x: rtX, y: wheelY - 16), font: microFont, color: soft)
             drawText(String(format: "TREBLE %.3f · FLX %.3f", a.treble, a.flux), at: CGPoint(x: rtX, y: wheelY - 3), font: microFont, color: soft)
-            drawText("SOURCE \(sourceLabel)", at: CGPoint(x: rtX, y: wheelY + 10), font: microFont, color: dim)
+            drawText("\(SatieL10n.string("schematic.source")) \(sourceLabel)", at: CGPoint(x: rtX, y: wheelY + 10), font: microFont, color: dim)
         }
 
         // 24 stark-white architectural dB bars + hanging output stems
@@ -317,11 +323,11 @@ final class SchematicOverlayView: NSView {
 
         // Center frame around the Metal 5,000-agent colony (transparent interior!)
         let midRect = CGRect(x: midX, y: h * 0.055, width: midW, height: h * 0.89)
-        drawPanel(midRect, title: "ACTIVE CROP / ACOUSTIC COLONY (5,000 GPU AGENTS)", fillOpaque: false)
+        drawPanel(midRect, title: SatieL10n.string("schematic.ecology_crop"), fillOpaque: false)
 
         // Left Top: FULL VIEW minimap
         let miniRect = CGRect(x: pad, y: h * 0.055, width: leftW, height: h * 0.30)
-        drawPanel(miniRect, title: "FULL VIEW")
+        drawPanel(miniRect, title: SatieL10n.string("schematic.full_view"))
         let palette: [CGColor] = [
             CGColor(red: 0.91, green: 0.93, blue: 0.96, alpha: 0.85),
             CGColor(red: 0.85, green: 0.55, blue: 0.37, alpha: 0.85),
@@ -350,17 +356,17 @@ final class SchematicOverlayView: NSView {
         // Left Bottom: ACOUSTIC ANALYTICS table
         let anaTop = miniRect.maxY + 12
         let anaRect = CGRect(x: pad, y: anaTop, width: leftW, height: midRect.maxY - anaTop)
-        drawPanel(anaRect, title: "ACOUSTIC ANALYTICS")
+        drawPanel(anaRect, title: SatieL10n.string("schematic.analytics"))
         let rows: [(String, String)] = [
-            ("DETECTED KEY", a.detectedKey),
-            ("RMS ENERGY", String(format: "%.3f", a.energy)),
+            (SatieL10n.string("schematic.detected_key"), SatieL10n.displayKey(a.detectedKey)),
+            (SatieL10n.string("schematic.rms_energy"), String(format: "%.3f", a.energy)),
             ("BASS 35-180HZ", String(format: "%.3f", a.bass)),
             ("MID 180-2.4K", String(format: "%.3f", a.mid)),
             ("AIR 2.4K-14K", String(format: "%.3f", a.treble)),
-            ("SPECTRAL FLUX", String(format: "%.3f", a.flux)),
-            ("STEREO PHASE", String(format: "%+.2f", a.stereoCorrelation)),
-            ("SAMPLE RATE", "\(Int(a.sampleRate)) HZ"),
-            ("GPU AGENTS", "5,000")
+            (SatieL10n.string("schematic.spectral_flux"), String(format: "%.3f", a.flux)),
+            (SatieL10n.string("schematic.stereo_phase"), String(format: "%+.2f", a.stereoCorrelation)),
+            (SatieL10n.string("schematic.sample_rate"), "\(Int(a.sampleRate)) HZ"),
+            (SatieL10n.string("schematic.gpu_agents"), "5,000")
         ]
         for (idx, (k, v)) in rows.enumerated() {
             let ry = anaRect.minY + 30 + CGFloat(idx) * 23
@@ -376,7 +382,7 @@ final class SchematicOverlayView: NSView {
 
         // Right Top: SPECTRAL HEATMAP (48 x 24 scrolling thermal magma spectrogram)
         let hmRect = CGRect(x: rightX, y: h * 0.055, width: rightW, height: h * 0.30)
-        drawPanel(hmRect, title: "SPECTRAL HEATMAP")
+        drawPanel(hmRect, title: SatieL10n.string("schematic.heatmap"))
         let hx = hmRect.minX + 10, hy = hmRect.minY + 26
         let hw = hmRect.width - 20, hh = hmRect.height - 36
         let cols = a.heatHistory.count
@@ -397,9 +403,9 @@ final class SchematicOverlayView: NSView {
         // Right Bottom: SIGNAL EVENT LOG
         let logTop = hmRect.maxY + 12
         let logRect = CGRect(x: rightX, y: logTop, width: rightW, height: midRect.maxY - logTop)
-        drawPanel(logRect, title: "SIGNAL EVENT LOG")
+        drawPanel(logRect, title: SatieL10n.string("schematic.event_log"))
         let logLines = [
-            "[KEY]  \(a.detectedKey)",
+            "[KEY]  \(SatieL10n.displayKey(a.detectedKey))",
             String(format: "[BEAT] %.0f%% ONSET LOCK", a.beat * 100),
             String(format: "[BASS] 35-180HZ @ %.0f%%", a.bass * 100),
             String(format: "[MIDS] DENSITY %.0f%%", a.mid * 100),

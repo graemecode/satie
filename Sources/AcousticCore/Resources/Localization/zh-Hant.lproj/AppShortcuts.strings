@@ -1,0 +1,8 @@
+/* Generated Satie localization (zh-Hant) */
+"Play ${soundscape} in ${applicationName}" = "在${applicationName}播放${soundscape}";
+"Start ${soundscape} with ${applicationName}" = "用${applicationName}開始${soundscape}";
+"Open ${soundscape} in ${applicationName}" = "在${applicationName}開啟${soundscape}";
+"Toggle ${applicationName}" = "切換${applicationName}";
+"Start ${applicationName}" = "開始${applicationName}";
+"Pause ${applicationName}" = "暫停${applicationName}";
+"Stop ${applicationName}" = "停止${applicationName}";

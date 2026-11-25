@@ -61,7 +61,7 @@ struct SatieWidgetProvider: TimelineProvider {
     func placeholder(in context: Context) -> SatieWidgetEntry {
         SatieWidgetEntry(
             date: Date(),
-            snapshot: SatieWidgetSnapshot(soundscapeRaw: FocusSoundscape.dive.rawValue, soundscapeTitle: "Deep Dive", isPlaying: true),
+            snapshot: SatieWidgetSnapshot(soundscapeRaw: FocusSoundscape.dive.rawValue, soundscapeTitle: FocusSoundscape.dive.title, isPlaying: true),
             isNight: CircadianPhase.current() == .night
         )
     }
@@ -131,8 +131,10 @@ struct SatieStandByWidgetView: View {
                     Spacer(minLength: 0)
                     HStack(spacing: 8) {
                         Button(intent: PlaySatieSoundscapeIntent(soundscape: .focus)) {
-                            Text("FOCUS")
+                            Text(FocusSoundscape.focus.shortLabel)
                                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
                                 .background(.white.opacity(0.10), in: Capsule())
@@ -140,8 +142,10 @@ struct SatieStandByWidgetView: View {
                         .buttonStyle(.plain)
 
                         Button(intent: PlaySatieSoundscapeIntent(soundscape: .dive, durationMinutes: 20)) {
-                            Text("DIVE 20M")
+                            Text(SatieL10n.string("widget.dive_20m"))
                                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 6)
                                 .background(accent.opacity(0.24), in: Capsule())
@@ -206,7 +210,7 @@ struct SatieStandByWidgetView: View {
                         .lineLimit(1)
                     Spacer()
                     Button(intent: PlaySatieSoundscapeIntent(soundscape: .dive, durationMinutes: 20)) {
-                        Text("DIVE")
+                        Text(FocusSoundscape.dive.shortLabel)
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
                             .foregroundStyle(accent)
                     }
@@ -226,8 +230,8 @@ struct SatieStandByWidget: Widget {
         StaticConfiguration(kind: kind, provider: SatieWidgetProvider()) { entry in
             SatieStandByWidgetView(entry: entry)
         }
-        .configurationDisplayName("Satie Oculus")
-        .description("Pure OLED StandBy and Lock Screen acoustic control for Focus and Deep Dive.")
+        .configurationDisplayName(SatieL10n.string("widget.display_name"))
+        .description(SatieL10n.string("widget.description"))
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular])
     }
 }
@@ -303,7 +307,7 @@ struct SatieSessionLiveActivity: Widget {
                             .monospacedDigit()
                             .padding(.trailing, 4)
                     } else {
-                        Text("LIVE")
+                        Text(SatieL10n.string("common.live"))
                             .font(.system(size: 10, weight: .semibold, design: .monospaced))
                             .foregroundStyle(accent)
                             .padding(.trailing, 4)
@@ -321,13 +325,13 @@ struct SatieSessionLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     HStack {
-                        Text("SATIE ACOUSTIC INSTRUMENT")
+                        Text(SatieL10n.string("widget.instrument_tagline"))
                             .font(.system(size: 9, weight: .semibold, design: .monospaced))
                             .tracking(1.2)
                             .foregroundStyle(.white.opacity(0.45))
                         Spacer()
                         Button(intent: PauseSatieIntent()) {
-                            Label("Pause", systemImage: "pause.fill")
+                            Label(SatieL10n.string("common.pause"), systemImage: "pause.fill")
                                 .font(.system(size: 11, weight: .semibold))
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 5)
@@ -352,7 +356,7 @@ struct SatieSessionLiveActivity: Widget {
                         .monospacedDigit()
                         .frame(maxWidth: 44)
                 } else {
-                    Text(context.state.soundscapeRaw.uppercased())
+                    Text((FocusSoundscape(rawValue: context.state.soundscapeRaw)?.shortLabel ?? context.state.soundscapeRaw.uppercased()))
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
                         .foregroundStyle(accent)
                 }
