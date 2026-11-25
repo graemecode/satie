@@ -34,27 +34,15 @@ final class AppState: ObservableObject {
 
     let settings = SettingsStore()
 
-    @Published var preset: VisualPreset {
-        didSet { settings.presetRaw = preset.rawValue }
-    }
-    @Published var visualFollowsSoundscape: Bool {
-        didSet { settings.visualFollowsSoundscape = visualFollowsSoundscape }
-    }
-    @Published var amberPhosphor: Bool {
-        didSet { settings.amberPhosphor = amberPhosphor }
-    }
-    @Published var sensitivity: SensitivityMode {
-        didSet { settings.sensitivity = sensitivity }
-    }
+    /// The visual always belongs to the soundscape; choosing a soundscape chooses its visual.
+    @Published private(set) var preset: VisualPreset
     @Published var focusMode: FocusSoundscape {
         didSet {
             settings.focusMode = focusMode
             focusSound.setMode(focusMode)
-            if visualFollowsSoundscape {
-                let target = VisualPreset.paired(for: focusMode)
-                if preset != target {
-                    preset = target
-                }
+            let target = VisualPreset.paired(for: focusMode)
+            if preset != target {
+                preset = target
             }
         }
     }
@@ -62,18 +50,6 @@ final class AppState: ObservableObject {
         didSet {
             settings.focusVolume = focusVolume
             focusSound.setVolume(focusVolume)
-        }
-    }
-    @Published var soundIntensity: SoundIntensity {
-        didSet {
-            settings.soundIntensity = soundIntensity
-            focusSound.setIntensity(soundIntensity)
-        }
-    }
-    @Published var maskingBed: MaskingBed {
-        didSet {
-            settings.maskingBed = maskingBed
-            focusSound.setMaskingBed(maskingBed)
         }
     }
     @Published var circadianOverride: CircadianOverride {
@@ -170,17 +146,9 @@ final class AppState: ObservableObject {
 
     private init() {
         let initialMode = settings.focusMode
-        let autoVisual = settings.visualFollowsSoundscape
-        self.visualFollowsSoundscape = autoVisual
-        self.preset = autoVisual
-            ? VisualPreset.paired(for: initialMode)
-            : (VisualPreset(rawValue: settings.presetRaw) ?? VisualPreset.paired(for: initialMode))
-        self.amberPhosphor = settings.amberPhosphor
-        self.sensitivity = settings.sensitivity
+        self.preset = VisualPreset.paired(for: initialMode)
         self.focusMode = initialMode
         self.focusVolume = settings.focusVolume
-        self.soundIntensity = .flow
-        self.maskingBed = settings.maskingBed
         self.circadianOverride = .auto
         self.flowMinutes = settings.flowMinutes
         self.launchAtLogin = settings.launchAtLogin
@@ -190,7 +158,7 @@ final class AppState: ObservableObject {
         self.focusSound.setMode(settings.focusMode)
         self.focusSound.setVolume(settings.focusVolume)
         self.focusSound.setIntensity(.flow)
-        self.focusSound.setMaskingBed(settings.maskingBed)
+        self.focusSound.setMaskingBed(.off)
         let initPhase = CircadianOverride.auto.resolvedPhase()
         self.circadianPhase = initPhase
         self.focusSound.setCircadianPhase(initPhase)
@@ -246,18 +214,6 @@ final class AppState: ObservableObject {
 
     func performHaptic() {
         NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
-    }
-
-    /// Pin a specific visual across all soundscapes, or pass `nil` for Auto (paired audiovisual worlds).
-    func setVisualOverride(_ override: VisualPreset?) {
-        performHaptic()
-        if let pinned = override {
-            visualFollowsSoundscape = false
-            preset = pinned
-        } else {
-            visualFollowsSoundscape = true
-            preset = VisualPreset.paired(for: focusMode)
-        }
     }
 
     /// Idempotent start for Shortcuts, Focus Filters, and Spotlight actions (never accidentally toggles off).
@@ -350,6 +306,22 @@ final class AppState: ObservableObject {
                 flowEndDate = nil
             }
         }
+    }
+
+    /// Move to the neighboring soundscape (and its visual) without starting or stopping playback.
+    func stepFocusMode(forward: Bool) {
+        let all = FocusSoundscape.allCases
+        guard let idx = all.firstIndex(of: focusMode) else { return }
+        performHaptic()
+        focusMode = all[(idx + (forward ? 1 : all.count - 1)) % all.count]
+        if isFocusPlaying { syncNowPlaying() }
+    }
+
+    /// Number keys and the View menu: choose a soundscape by position (1 = Focus … 6 = Night).
+    func selectFocusMode(number: Int) {
+        let all = FocusSoundscape.allCases
+        guard (1...all.count).contains(number) else { return }
+        startFocusSound(all[number - 1])
     }
 
     func cycleFocusMode(forward: Bool = true) {
@@ -541,7 +513,7 @@ final class AppState: ObservableObject {
             sampleRate: 48_000.0,
             dt: dt,
             demoMode: false,
-            sensitivity: sensitivity
+            sensitivity: .balanced
         )
         snapshot = snap
 

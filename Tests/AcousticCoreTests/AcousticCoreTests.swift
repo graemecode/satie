@@ -181,27 +181,22 @@ struct AcousticCoreTests {
         let ud = UserDefaults(suiteName: suiteName)!
         defer { ud.removePersistentDomain(forName: suiteName) }
 
+        // Values left by earlier versions are cleared on load.
+        ud.set("brown", forKey: "ac.maskingBed")
+        ud.set(false, forKey: "ac.visualFollowsSoundscape")
+
         let store = SettingsStore(defaults: ud)
-        store.presetRaw = 2
-        store.amberPhosphor = true
-        store.sensitivity = .vivid
+        #expect(ud.object(forKey: "ac.maskingBed") == nil)
+        #expect(ud.object(forKey: "ac.visualFollowsSoundscape") == nil)
         store.focusMode = .rain
         store.focusVolume = 0.62
-        #expect(store.visualFollowsSoundscape == true)
-        store.visualFollowsSoundscape = false
-        store.keepScreenAwake = true
         store.mixWithOthers = true
         store.miniHUDOrigin = NSPoint(x: 420, y: 180)
         store.studioFrame = NSRect(x: 100, y: 120, width: 1280, height: 820)
 
         let reloaded = SettingsStore(defaults: ud)
-        #expect(reloaded.presetRaw == 2)
-        #expect(reloaded.amberPhosphor == true)
-        #expect(reloaded.sensitivity == .vivid)
         #expect(reloaded.focusMode == .rain)
         #expect(abs(reloaded.focusVolume - 0.62) < 0.001)
-        #expect(reloaded.visualFollowsSoundscape == false)
-        #expect(reloaded.keepScreenAwake == true)
         #expect(reloaded.mixWithOthers == true)
         #expect(reloaded.miniHUDOrigin == NSPoint(x: 420, y: 180))
         #expect(reloaded.studioFrame == NSRect(x: 100, y: 120, width: 1280, height: 820))

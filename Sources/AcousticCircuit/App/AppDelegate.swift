@@ -203,12 +203,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         viewMenu.addItem(fsItem)
 
         viewMenu.addItem(.separator())
-        for preset in VisualPreset.allCases {
-            let pItem = NSMenuItem(title: preset.title, action: #selector(menuSelectPreset(_:)), keyEquivalent: "\(preset.rawValue + 1)")
-            pItem.keyEquivalentModifierMask = [.command]
-            pItem.target = self
-            pItem.tag = preset.rawValue
-            viewMenu.addItem(pItem)
+        for (index, mode) in FocusSoundscape.allCases.enumerated() {
+            let item = NSMenuItem(title: mode.title, action: #selector(menuSelectSoundscape(_:)), keyEquivalent: "\(index + 1)")
+            item.keyEquivalentModifierMask = [.command]
+            item.target = self
+            item.tag = index + 1
+            viewMenu.addItem(item)
         }
 
         viewItem.submenu = viewMenu
@@ -281,12 +281,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             if mods.isEmpty {
                 switch chars {
-                case "1": AppState.shared.preset = .circuit; AppState.shared.performHaptic(); return true
-                case "2": AppState.shared.preset = .ecology; AppState.shared.performHaptic(); return true
-                case "3": AppState.shared.preset = .phosphor; AppState.shared.performHaptic(); return true
-                case "4": AppState.shared.preset = .liquid; AppState.shared.performHaptic(); return true
-                case "5": AppState.shared.preset = .horizon; AppState.shared.performHaptic(); return true
-                case "6": AppState.shared.preset = .oculus; AppState.shared.performHaptic(); return true
+                case "1", "2", "3", "4", "5", "6": AppState.shared.selectFocusMode(number: Int(chars) ?? 0); return true
                 case "m": AppState.shared.toggleSystemMute(); return true
                 default: break
                 }
@@ -546,10 +541,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func menuOpenStudio() { openStudio(fullscreen: false) }
     @objc private func menuOpenMiniHUD() { openMiniHUD() }
     @objc private func menuOpenFullscreen() { openStudio(fullscreen: true) }
-    @objc private func menuSelectPreset(_ sender: NSMenuItem) {
-        if let p = VisualPreset(rawValue: sender.tag) {
-            AppState.shared.preset = p
-        }
+    @objc private func menuSelectSoundscape(_ sender: NSMenuItem) {
+        AppState.shared.selectFocusMode(number: sender.tag)
     }
     @objc private func menuToggleSoundscape(_ sender: NSMenuItem) {
         if let raw = sender.representedObject as? String, let mode = FocusSoundscape(rawValue: raw) {

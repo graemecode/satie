@@ -10,24 +10,15 @@ final class SatieiOSState: ObservableObject {
 
     let settings = SettingsStore()
 
-    @Published var preset: VisualPreset {
-        didSet { settings.presetRaw = preset.rawValue }
-    }
-    @Published var visualFollowsSoundscape: Bool {
-        didSet { settings.visualFollowsSoundscape = visualFollowsSoundscape }
-    }
-    @Published var amberPhosphor: Bool {
-        didSet { settings.amberPhosphor = amberPhosphor }
-    }
+    /// The visual always belongs to the soundscape; swiping the stage changes the soundscape, not the visual.
+    @Published private(set) var preset: VisualPreset
     @Published var focusMode: FocusSoundscape {
         didSet {
             settings.focusMode = focusMode
             focusSound.setMode(focusMode)
-            if visualFollowsSoundscape {
-                let target = VisualPreset.paired(for: focusMode)
-                if preset != target {
-                    preset = target
-                }
+            let target = VisualPreset.paired(for: focusMode)
+            if preset != target {
+                preset = target
             }
             if isFocusPlaying {
                 syncNowPlaying()
@@ -35,17 +26,9 @@ final class SatieiOSState: ObservableObject {
             }
         }
     }
-    @Published var maskingBed: MaskingBed {
-        didSet {
-            settings.maskingBed = maskingBed
-            focusSound.setMaskingBed(maskingBed)
-        }
-    }
-    @Published var keepScreenAwake: Bool {
-        didSet {
-            settings.keepScreenAwake = keepScreenAwake
-            updateIdleTimer()
-        }
+    /// Set by the view while the phone is in landscape (a desk stand) or Immersion Mode. Not a setting.
+    @Published var wantsScreenAwake: Bool = false {
+        didSet { updateIdleTimer() }
     }
     @Published var mixWithOthers: Bool {
         didSet {
@@ -99,16 +82,9 @@ final class SatieiOSState: ObservableObject {
 
     private init() {
         let initialMode = settings.focusMode
-        let autoVisual = settings.visualFollowsSoundscape
-        self.visualFollowsSoundscape = autoVisual
-        self.preset = autoVisual
-            ? VisualPreset.paired(for: initialMode)
-            : (VisualPreset(rawValue: settings.presetRaw) ?? VisualPreset.paired(for: initialMode))
-        self.amberPhosphor = settings.amberPhosphor
+        self.preset = VisualPreset.paired(for: initialMode)
         self.focusMode = initialMode
-        self.maskingBed = settings.maskingBed
         self.flowMinutes = settings.flowMinutes
-        self.keepScreenAwake = settings.keepScreenAwake
         self.mixWithOthers = settings.mixWithOthers
         self.circadianOverride = settings.circadianOverride
 
@@ -118,7 +94,7 @@ final class SatieiOSState: ObservableObject {
         // On iOS, hardware volume buttons control output level, so keep internal engine unity-matched cleanly
         self.focusSound.setVolume(0.88)
         self.focusSound.setIntensity(.flow)
-        self.focusSound.setMaskingBed(settings.maskingBed)
+        self.focusSound.setMaskingBed(.off)
         self.focusSound.setMixWithOthers(settings.mixWithOthers)
         self.focusSound.setCircadianPhase(settings.circadianOverride.resolvedPhase())
         self.dsp = AcousticDSP()
@@ -263,6 +239,14 @@ final class SatieiOSState: ObservableObject {
         syncLiveActivity()
     }
 
+    /// Swipe on the stage: move to the neighboring soundscape (and its visual) without starting or stopping playback.
+    func stepFocusMode(forward: Bool) {
+        let all = FocusSoundscape.allCases
+        guard let idx = all.firstIndex(of: focusMode) else { return }
+        performHaptic()
+        focusMode = all[(idx + (forward ? 1 : all.count - 1)) % all.count]
+    }
+
     func cycleFocusMode(forward: Bool = true) {
         let all = FocusSoundscape.allCases
         guard let idx = all.firstIndex(of: focusMode) else { return }
@@ -275,24 +259,6 @@ final class SatieiOSState: ObservableObject {
         }
     }
 
-    func cycleVisual(forward: Bool = true) {
-        let all = VisualPreset.allCases
-        let next = all[(preset.rawValue + (forward ? 1 : all.count - 1)) % all.count]
-        preset = next
-        performHaptic()
-    }
-
-    /// Pin a specific visual across all soundscapes, or pass `nil` for Auto (paired audiovisual worlds).
-    func setVisualOverride(_ override: VisualPreset?) {
-        if let pinned = override {
-            visualFollowsSoundscape = false
-            preset = pinned
-        } else {
-            visualFollowsSoundscape = true
-            preset = VisualPreset.paired(for: focusMode)
-        }
-        performHaptic()
-    }
 
     func setForeground(_ foreground: Bool) {
         isForeground = foreground
@@ -335,7 +301,7 @@ final class SatieiOSState: ObservableObject {
     // MARK: - Private
 
     private func updateIdleTimer() {
-        UIApplication.shared.isIdleTimerDisabled = keepScreenAwake && isFocusPlaying && isForeground
+        UIApplication.shared.isIdleTimerDisabled = wantsScreenAwake && isFocusPlaying && isForeground
     }
 
     private func syncNowPlaying() {

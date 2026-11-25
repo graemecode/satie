@@ -99,46 +99,31 @@ public final class SettingsStore: @unchecked Sendable {
     private let defaults: UserDefaults
 
     private enum Keys {
-        static let presetRaw = "ac.preset"
-        static let amberPhosphor = "ac.amberPhosphor"
-        static let sensitivity = "ac.sensitivity"
         static let focusMode = "ac.focusMode"
         static let focusVolume = "ac.focusVolume"
-        static let soundIntensity = "ac.soundIntensity"
-        static let maskingBed = "ac.maskingBed"
         static let circadianOverride = "ac.circadianOverride"
         static let flowMinutes = "ac.flowMinutes"
-        static let autoDuck = "ac.autoDuck"
         static let miniHUDFrame = "ac.miniHUDFrame"
         static let studioFrame = "ac.studioFrame"
         static let completedFocusSessions = "ac.completedFocusSessions"
         static let lastReviewPromptVersion = "ac.lastReviewPromptVersion"
-        static let keepScreenAwake = "ac.keepScreenAwake"
         static let mixWithOthers = "ac.mixWithOthers"
-        static let visualFollowsSoundscape = "ac.visualFollowsSoundscape"
     }
+
+    /// Settings that existed in earlier versions. The visual now always follows the soundscape, the scope is
+    /// emerald by day and amber at night, and the screen stays awake on its own in landscape or immersion,
+    /// so these values are no longer read. Clearing them keeps an old choice (such as a background noise bed)
+    /// from lingering in the defaults database.
+    private static let retiredKeys = [
+        "ac.preset", "ac.amberPhosphor", "ac.sensitivity", "ac.soundIntensity", "ac.maskingBed",
+        "ac.autoDuck", "ac.keepScreenAwake", "ac.visualFollowsSoundscape",
+    ]
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-    }
-
-    public var presetRaw: Int {
-        get { defaults.object(forKey: Keys.presetRaw) as? Int ?? 0 }
-        set { defaults.set(newValue, forKey: Keys.presetRaw) }
-    }
-
-    public var amberPhosphor: Bool {
-        get { defaults.bool(forKey: Keys.amberPhosphor) }
-        set { defaults.set(newValue, forKey: Keys.amberPhosphor) }
-    }
-
-    public var sensitivity: SensitivityMode {
-        get {
-            guard let raw = defaults.string(forKey: Keys.sensitivity),
-                  let mode = SensitivityMode(rawValue: raw) else { return .balanced }
-            return mode
+        for key in Self.retiredKeys where defaults.object(forKey: key) != nil {
+            defaults.removeObject(forKey: key)
         }
-        set { defaults.set(newValue.rawValue, forKey: Keys.sensitivity) }
     }
 
     public var focusMode: FocusSoundscape {
@@ -158,24 +143,6 @@ public final class SettingsStore: @unchecked Sendable {
         set { defaults.set(max(0.05, min(1.0, newValue)), forKey: Keys.focusVolume) }
     }
 
-    public var soundIntensity: SoundIntensity {
-        get {
-            guard let raw = defaults.string(forKey: Keys.soundIntensity),
-                  let val = SoundIntensity(rawValue: raw) else { return .flow }
-            return val
-        }
-        set { defaults.set(newValue.rawValue, forKey: Keys.soundIntensity) }
-    }
-
-    public var maskingBed: MaskingBed {
-        get {
-            guard let raw = defaults.string(forKey: Keys.maskingBed),
-                  let val = MaskingBed(rawValue: raw) else { return .off }
-            return val
-        }
-        set { defaults.set(newValue.rawValue, forKey: Keys.maskingBed) }
-    }
-
     public var circadianOverride: CircadianOverride {
         get {
             guard let raw = defaults.string(forKey: Keys.circadianOverride),
@@ -190,30 +157,9 @@ public final class SettingsStore: @unchecked Sendable {
         set { defaults.set(max(0, min(120, newValue)), forKey: Keys.flowMinutes) }
     }
 
-    public var autoDuck: Bool {
-        get {
-            if defaults.object(forKey: Keys.autoDuck) == nil { return true }
-            return defaults.bool(forKey: Keys.autoDuck)
-        }
-        set { defaults.set(newValue, forKey: Keys.autoDuck) }
-    }
-
-    public var keepScreenAwake: Bool {
-        get { defaults.bool(forKey: Keys.keepScreenAwake) }
-        set { defaults.set(newValue, forKey: Keys.keepScreenAwake) }
-    }
-
     public var mixWithOthers: Bool {
         get { defaults.bool(forKey: Keys.mixWithOthers) }
         set { defaults.set(newValue, forKey: Keys.mixWithOthers) }
-    }
-
-    public var visualFollowsSoundscape: Bool {
-        get {
-            if defaults.object(forKey: Keys.visualFollowsSoundscape) == nil { return true }
-            return defaults.bool(forKey: Keys.visualFollowsSoundscape)
-        }
-        set { defaults.set(newValue, forKey: Keys.visualFollowsSoundscape) }
     }
 
     #if os(macOS)

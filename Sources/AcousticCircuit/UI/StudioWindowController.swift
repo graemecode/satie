@@ -234,57 +234,22 @@ struct StudioContentView: View {
 
             Spacer()
 
-            // Quiet Visual World Override Menu (Auto by default, or pin any of the 6 visuals)
-            Menu {
-                Button {
-                    state.setVisualOverride(nil)
-                } label: {
-                    if state.visualFollowsSoundscape {
-                        Label(SatieL10n.string("options.visual_auto"), systemImage: "checkmark")
-                    } else {
-                        Text(SatieL10n.string("options.visual_auto"))
-                    }
-                }
-                Divider()
-                ForEach(VisualPreset.allCases) { p in
-                    Button {
-                        state.setVisualOverride(p)
-                    } label: {
-                        if !state.visualFollowsSoundscape && state.preset == p {
-                            Label(p.cleanName, systemImage: "checkmark")
-                        } else {
-                            Text(p.cleanName)
-                        }
-                    }
-                }
-                if state.preset == .phosphor {
-                    Divider()
-                    Button(state.amberPhosphor ? SatieL10n.string("options.switch_emerald") : SatieL10n.string("options.switch_amber")) {
-                        state.amberPhosphor.toggle()
-                        state.performHaptic()
-                    }
-                }
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 9.5))
-                    Text(state.visualFollowsSoundscape
-                         ? state.preset.cleanName.uppercased()
-                         : SatieL10n.format("studio.pin_badge", state.preset.cleanName.uppercased()))
-                        .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                        .lineLimit(1)
-                }
-                .foregroundColor(inkSoft)
-                .padding(.horizontal, 10)
-                .frame(height: 26)
-                .background(Color.black.opacity(0.40))
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
-                .overlay(Capsule().stroke(hairSoft, lineWidth: 0.8))
+            // The visual always follows the soundscape; this quietly names it.
+            HStack(spacing: 5) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 9.5))
+                Text(state.preset.cleanName.uppercased())
+                    .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                    .lineLimit(1)
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .help(SatieL10n.string("studio.visual_menu_help"))
+            .foregroundColor(inkSoft)
+            .padding(.horizontal, 10)
+            .frame(height: 26)
+            .background(Color.black.opacity(0.40))
+            .background(.ultraThinMaterial)
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(hairSoft, lineWidth: 0.8))
+            .accessibilityElement(children: .combine)
 
             Button {
                 toggleImmersion(true)
@@ -452,12 +417,7 @@ final class StudioNSWindow: NSWindow {
             }
         }
         switch chars.lowercased() {
-        case "1": AppState.shared.preset = .circuit; AppState.shared.performHaptic(); return
-        case "2": AppState.shared.preset = .ecology; AppState.shared.performHaptic(); return
-        case "3": AppState.shared.preset = .phosphor; AppState.shared.performHaptic(); return
-        case "4": AppState.shared.preset = .liquid; AppState.shared.performHaptic(); return
-        case "5": AppState.shared.preset = .horizon; AppState.shared.performHaptic(); return
-        case "6": AppState.shared.preset = .oculus; AppState.shared.performHaptic(); return
+        case "1", "2", "3", "4", "5", "6": AppState.shared.selectFocusMode(number: Int(chars) ?? 0); return
         case " ": AppState.shared.togglePlayOrStartFocus(); return
         case "m": AppState.shared.toggleSystemMute(); return
         default: break
