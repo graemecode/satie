@@ -1062,6 +1062,14 @@ struct AcousticCoreTests {
                 let enSpecs = extractSpecs(enVal)
                 let langSpecs = extractSpecs(val)
                 #expect(langSpecs == enSpecs, "Format specifier mismatch for '\(key)' in \(lang): \(langSpecs) != \(enSpecs)")
+
+                // ITMS-90626 guard: AppIntents / Siri metadata keys and values must never reference Apple/Siri trademarks
+                if !key.contains(".") {
+                    for forbidden in ["apple", "siri"] {
+                        #expect(!key.lowercased().contains(forbidden), "ITMS-90626 violation in AppIntents key '\(key)'")
+                        #expect(!val.lowercased().contains(forbidden), "ITMS-90626 violation in \(lang) value for '\(key)': \(val)")
+                    }
+                }
             }
 
             // Verify AppShortcuts.strings & InfoPlist.strings exist for every shipped locale

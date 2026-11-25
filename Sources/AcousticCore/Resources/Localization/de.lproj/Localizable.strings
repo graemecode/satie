@@ -199,7 +199,7 @@
 "Toggle Satie Playback" = "Satie-Wiedergabe umschalten";
 "Play or pause Satie's current soundscape." = "Spielt die aktuelle Satie-Klangwelt ab oder pausiert sie.";
 "Set Satie Soundscape" = "Satie-Klangwelt festlegen";
-"Automatically align Satie's soundscape and session timer with your active Apple Focus mode." = "Passt Klangwelt und Timer von Satie automatisch an deinen Apple-Fokus an.";
+"Automatically align Satie's soundscape and session timer with your active Focus." = "Passt Klangwelt und Timer von Satie automatisch an deinen aktiven Fokus an.";
 "Start Playing Automatically" = "Wiedergabe automatisch starten";
 "Session Timer (Minutes)" = "Sitzungstimer (Minuten)";
 "Optional countdown timer (0 for continuous, 1–120 minutes)." = "Optionaler Countdown (0 für durchgehend, 1–120 Minuten).";

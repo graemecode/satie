@@ -128,7 +128,7 @@ struct ToggleSatiePlaybackIntent: AudioPlaybackIntent {
 /// Reading Focus -> Still, or Sleep Focus -> Deep Dive (30m) directly in System Settings.
 struct SatieFocusFilter: SetFocusFilterIntent {
     static let title: LocalizedStringResource = "Set Satie Soundscape"
-    static let description = IntentDescription("Automatically align Satie's soundscape and session timer with your active Apple Focus mode.")
+    static let description = IntentDescription("Automatically align Satie's soundscape and session timer with your active Focus.")
 
     @Parameter(title: "Soundscape")
     var soundscape: SoundscapeAppEnum?

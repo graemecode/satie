@@ -199,7 +199,7 @@
 "Toggle Satie Playback" = "切換 Satie 播放狀態";
 "Play or pause Satie's current soundscape." = "播放或暫停 Satie 目前的聲景。";
 "Set Satie Soundscape" = "設定 Satie 聲景";
-"Automatically align Satie's soundscape and session timer with your active Apple Focus mode." = "依據目前的 Apple 專注模式自動切換 Satie 聲景與計時器。";
+"Automatically align Satie's soundscape and session timer with your active Focus." = "依據目前的專注模式自動切換 Satie 聲景與計時器。";
 "Start Playing Automatically" = "自動開始播放";
 "Session Timer (Minutes)" = "工作階段計時器（分鐘）";
 "Optional countdown timer (0 for continuous, 1–120 minutes)." = "選用倒數計時（0 表示持續播放，1–120 分鐘）。";

@@ -108,7 +108,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: AppStore/Satie-AppStore.entitlements
         MARKETING_VERSION: "4.1.1"
-        CURRENT_PROJECT_VERSION: "23"
+        CURRENT_PROJECT_VERSION: "24"
         SWIFT_VERSION: "6.0"
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APP_STORE"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
@@ -223,7 +223,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: AppStore/Satie-iOS.entitlements
         MARKETING_VERSION: "4.1.1"
-        CURRENT_PROJECT_VERSION: "23"
+        CURRENT_PROJECT_VERSION: "24"
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_VERSION: "6.0"
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APP_STORE"
@@ -278,7 +278,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_ENTITLEMENTS: AppStore/Satie-Widgets.entitlements
         MARKETING_VERSION: "4.1.1"
-        CURRENT_PROJECT_VERSION: "23"
+        CURRENT_PROJECT_VERSION: "24"
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_VERSION: "6.0"
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APP_STORE SATIE_WIDGET_EXTENSION"
@@ -325,7 +325,7 @@ targets:
         DEVELOPMENT_TEAM: 6KM3577ETV
         CODE_SIGN_STYLE: Automatic
         MARKETING_VERSION: "4.1.1"
-        CURRENT_PROJECT_VERSION: "23"
+        CURRENT_PROJECT_VERSION: "24"
         SWIFT_VERSION: "6.0"
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APP_STORE"
       configs:
@@ -402,7 +402,7 @@ targets:
         DEVELOPMENT_TEAM: 6KM3577ETV
         CODE_SIGN_STYLE: Automatic
         MARKETING_VERSION: "4.1.1"
-        CURRENT_PROJECT_VERSION: "23"
+        CURRENT_PROJECT_VERSION: "24"
         SWIFT_VERSION: "6.0"
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APP_STORE"
       configs:
@@ -477,7 +477,7 @@ targets:
         DEVELOPMENT_TEAM: 6KM3577ETV
         CODE_SIGN_STYLE: Automatic
         MARKETING_VERSION: "4.1.1"
-        CURRENT_PROJECT_VERSION: "23"
+        CURRENT_PROJECT_VERSION: "24"
         SWIFT_VERSION: "6.0"
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APP_STORE"
       configs:

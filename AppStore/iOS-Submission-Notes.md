@@ -2,7 +2,7 @@
 
 - **App Store Connect Record:** `6837572453` (`com.strangechances.Satie`, universal with macOS)
 - **Live App Store URL:** https://apps.apple.com/us/app/satie-focus-soundscapes/id6837572453
-- **Version / Build:** `4.1.1` (Build `23`) — major upgrade from live `3.1.0` (Build `18`)
+- **Version / Build:** `4.1.1` (Build `24`) — major upgrade from live `3.1.0` (Build `18`)
 - **Screenshots:**
   - iPhone 6.9" (`1320×2868`): `AppStore/Screenshots-iOS/iPhone/` (`01-dive-oculus.png` through `05-night-nocturne.png`)
   - iPad 13" (`2064×2752`): `AppStore/Screenshots-iOS/iPad/` (`01-dive-oculus.png` through `03-night-nocturne.png`)

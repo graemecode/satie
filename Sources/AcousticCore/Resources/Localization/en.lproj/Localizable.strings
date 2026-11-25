@@ -199,7 +199,7 @@
 "Toggle Satie Playback" = "Toggle Satie Playback";
 "Play or pause Satie's current soundscape." = "Play or pause Satie's current soundscape.";
 "Set Satie Soundscape" = "Set Satie Soundscape";
-"Automatically align Satie's soundscape and session timer with your active Apple Focus mode." = "Automatically align Satie's soundscape and session timer with your active Apple Focus mode.";
+"Automatically align Satie's soundscape and session timer with your active Focus." = "Automatically align Satie's soundscape and session timer with your active Focus.";
 "Start Playing Automatically" = "Start Playing Automatically";
 "Session Timer (Minutes)" = "Session Timer (Minutes)";
 "Optional countdown timer (0 for continuous, 1–120 minutes)." = "Optional countdown timer (0 for continuous, 1–120 minutes).";

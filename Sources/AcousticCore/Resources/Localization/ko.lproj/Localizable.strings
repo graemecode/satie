@@ -199,7 +199,7 @@
 "Toggle Satie Playback" = "Satie 재생 전환";
 "Play or pause Satie's current soundscape." = "현재 Satie 사운드스케이프를 재생하거나 일시 정지합니다.";
 "Set Satie Soundscape" = "Satie 사운드스케이프 설정";
-"Automatically align Satie's soundscape and session timer with your active Apple Focus mode." = "활성 Apple 집중 모드에 맞춰 Satie 사운드스케이프와 타이머를 자동으로 맞춥니다.";
+"Automatically align Satie's soundscape and session timer with your active Focus." = "활성 집중 모드에 맞춰 Satie 사운드스케이프와 타이머를 자동으로 맞춥니다.";
 "Start Playing Automatically" = "자동으로 재생 시작";
 "Session Timer (Minutes)" = "세션 타이머 (분)";
 "Optional countdown timer (0 for continuous, 1–120 minutes)." = "선택적 카운트다운 타이머 (0은 연속, 1–120분).";
