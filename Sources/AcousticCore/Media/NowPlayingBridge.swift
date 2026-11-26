@@ -7,8 +7,11 @@ import Foundation
 import MediaPlayer
 
 /// Native Apple MediaPlayer bridge so physical MacBook media keys (Play/Pause, Next, Previous),
-/// AirPods stem taps, Lock Screen, Dynamic Island, and Control Center control Satie seamlessly
-/// while focus audio is active, and release Control Center cleanly when stopped.
+/// AirPods stem taps, Lock Screen, Dynamic Island, and Control Center control Satie seamlessly.
+///
+/// A pause keeps Satie as the Now Playing app, marked paused, the way Music and Podcasts do. iOS only sends
+/// remote commands to the Now Playing app, so clearing it on pause meant putting AirPods back in (which sends
+/// "play"), the Lock Screen play button, or a Mac's play key could no longer resume Satie. `clear()` is for quitting.
 ///
 /// IMPORTANT (Swift 6 concurrency): MediaPlayer invokes BOTH `MPMediaItemArtwork`'s `requestHandler`
 /// and `MPRemoteCommandCenter`'s `addTarget` blocks on its private background `accessQueue`.
@@ -82,11 +85,6 @@ public final class NowPlayingBridge: @unchecked Sendable {
     @MainActor
     public func update(isPlaying: Bool, title: String, subtitle: String) {
         let infoCenter = MPNowPlayingInfoCenter.default()
-        guard isPlaying else {
-            infoCenter.playbackState = .stopped
-            infoCenter.nowPlayingInfo = nil
-            return
-        }
 
         lock.lock()
         var art = cachedArtwork
@@ -121,13 +119,13 @@ public final class NowPlayingBridge: @unchecked Sendable {
             MPMediaItemPropertyArtist: "Satie",
             MPMediaItemPropertyAlbumTitle: subtitle,
             MPNowPlayingInfoPropertyIsLiveStream: true,
-            MPNowPlayingInfoPropertyPlaybackRate: 1.0,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
         ]
         if let art {
             info[MPMediaItemPropertyArtwork] = art
         }
         infoCenter.nowPlayingInfo = info
-        infoCenter.playbackState = .playing
+        infoCenter.playbackState = isPlaying ? .playing : .paused
     }
 
     public func clear() {

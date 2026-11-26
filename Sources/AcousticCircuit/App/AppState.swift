@@ -382,16 +382,13 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Paused stays in Now Playing (marked paused) so AirPods, the Lock Screen and media keys can resume it.
     private func syncNowPlaying() {
-        if isFocusPlaying {
-            nowPlaying.update(
-                isPlaying: true,
-                title: focusMode.title,
-                subtitle: focusMode.subtitle
-            )
-        } else {
-            nowPlaying.clear()
-        }
+        nowPlaying.update(
+            isPlaying: isFocusPlaying,
+            title: focusMode.title,
+            subtitle: focusMode.subtitle
+        )
     }
 
     func cycleFlowDuration() {

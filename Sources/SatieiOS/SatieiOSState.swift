@@ -338,16 +338,13 @@ final class SatieiOSState: ObservableObject {
         UIApplication.shared.isIdleTimerDisabled = keepScreenAwake && isFocusPlaying && isForeground
     }
 
+    /// Paused stays in Now Playing (marked paused) so AirPods, the Lock Screen and media keys can resume it.
     private func syncNowPlaying() {
-        if isFocusPlaying {
-            nowPlaying.update(
-                isPlaying: true,
-                title: focusMode.title,
-                subtitle: focusMode.subtitle
-            )
-        } else {
-            nowPlaying.clear()
-        }
+        nowPlaying.update(
+            isPlaying: isFocusPlaying,
+            title: focusMode.title,
+            subtitle: focusMode.subtitle
+        )
     }
 
     private func configureMediaControls() {
