@@ -175,33 +175,47 @@ struct AcousticCoreTests {
         #expect(eBal < eVivid)
     }
 
+    @Test("Handoff payload round-trips the soundscape and timer, and ignores finished or malformed sessions")
+    func handoffPayload() {
+        let end = Date(timeIntervalSince1970: 1_800_000_000)
+        let timed = SatieHandoff(mode: .dive, flowMinutes: 45, endDate: end)
+        #expect(SatieHandoff(userInfo: timed.userInfo) == timed)
+
+        let open = SatieHandoff(mode: .rain, flowMinutes: 0, endDate: end)
+        #expect(open.endDate == nil)
+        #expect(SatieHandoff(userInfo: open.userInfo) == open)
+        #expect(!open.isFinished(at: end.addingTimeInterval(3600)))
+
+        #expect(!timed.isFinished(at: end.addingTimeInterval(-1)))
+        #expect(timed.isFinished(at: end))
+
+        #expect(SatieHandoff(userInfo: nil) == nil)
+        #expect(SatieHandoff(userInfo: ["mode": "unknown-world"]) == nil)
+        #expect(SatieHandoff(userInfo: ["minutes": 25]) == nil)
+    }
+
     @Test("SettingsStore round-trips preferences cleanly")
     func settingsPersistence() {
         let suiteName = "com.strangechances.Satie.test.\(UUID().uuidString)"
         let ud = UserDefaults(suiteName: suiteName)!
         defer { ud.removePersistentDomain(forName: suiteName) }
 
+        // Values left by earlier versions are cleared on load.
+        ud.set("brown", forKey: "ac.maskingBed")
+        ud.set(false, forKey: "ac.visualFollowsSoundscape")
+
         let store = SettingsStore(defaults: ud)
-        store.presetRaw = 2
-        store.amberPhosphor = true
-        store.sensitivity = .vivid
+        #expect(ud.object(forKey: "ac.maskingBed") == nil)
+        #expect(ud.object(forKey: "ac.visualFollowsSoundscape") == nil)
         store.focusMode = .rain
         store.focusVolume = 0.62
-        #expect(store.visualFollowsSoundscape == true)
-        store.visualFollowsSoundscape = false
-        store.keepScreenAwake = true
         store.mixWithOthers = true
         store.miniHUDOrigin = NSPoint(x: 420, y: 180)
         store.studioFrame = NSRect(x: 100, y: 120, width: 1280, height: 820)
 
         let reloaded = SettingsStore(defaults: ud)
-        #expect(reloaded.presetRaw == 2)
-        #expect(reloaded.amberPhosphor == true)
-        #expect(reloaded.sensitivity == .vivid)
         #expect(reloaded.focusMode == .rain)
         #expect(abs(reloaded.focusVolume - 0.62) < 0.001)
-        #expect(reloaded.visualFollowsSoundscape == false)
-        #expect(reloaded.keepScreenAwake == true)
         #expect(reloaded.mixWithOthers == true)
         #expect(reloaded.miniHUDOrigin == NSPoint(x: 420, y: 180))
         #expect(reloaded.studioFrame == NSRect(x: 100, y: 120, width: 1280, height: 820))

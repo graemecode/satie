@@ -24,11 +24,18 @@ struct SatieiOSRootView: View {
     @State private var immersionMode: Bool = false
     @State private var showImmersionHint: Bool = false
     @State private var immersionHintTask: Task<Void, Never>? = nil
-    @State private var visualToastLabel: String? = nil
-    @State private var visualToastTask: Task<Void, Never>? = nil
+    @State private var worldToastLabel: String? = nil
+    @State private var worldToastTask: Task<Void, Never>? = nil
     @State private var presetTransitionVeil: Double = 0.0
+    /// Fade length for entering or leaving Immersion Mode: quick when tapped, slow when it happens on its own.
+    @State private var immersionFade: Double = 0.28
+    @State private var autoImmersionTask: Task<Void, Never>? = nil
+    @State private var lastInteraction: Date = .distantPast
 
-    private let timerPresets: [Int] = [0, 15, 25, 45, 60, 90]
+    /// After this long without a touch while playing, the controls fade away and the visual fills the screen.
+    private let autoImmersionDelay: Duration = .seconds(10)
+
+    private let timerPresets: [Int] = [0, 25, 45, 90]
     private let hair = Color.white.opacity(0.14)
     private let hairSoft = Color.white.opacity(0.09)
     private let inkSoft = Color.white.opacity(0.74)
@@ -90,7 +97,7 @@ struct SatieiOSRootView: View {
             }
             .ignoresSafeArea()
             .opacity(immersionMode ? 0.12 : 1.0)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.3), value: immersionMode)
+            .animation(.easeInOut(duration: immersionFade), value: immersionMode)
             .allowsHitTesting(false)
 
             // 2. Floating Editorial HUD (hides cleanly in Immersion Mode)
@@ -101,7 +108,7 @@ struct SatieiOSRootView: View {
                     .padding(.horizontal, 22)
                     .padding(.top, isCompactLandscape ? 10 : (isRegularCanvas ? 22 : 14))
 
-                // Interactive open stage surface: tap for Immersion Mode, swipe left/right to explore visuals.
+                // Interactive open stage surface: tap for Immersion Mode, swipe left/right to change soundscape.
                 // Scoped to the open canvas (not behind dock buttons) so a 2px mis-tap near a glyph never hides the HUD.
                 Color.clear
                     .contentShape(Rectangle())
@@ -110,7 +117,7 @@ struct SatieiOSRootView: View {
                     }
                     .gesture(stageSwipeGesture)
                     .overlay(alignment: .bottom) {
-                        if let label = visualToastLabel {
+                        if let label = worldToastLabel {
                             Text(label)
                                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
                                 .tracking(1.0)
@@ -142,7 +149,8 @@ struct SatieiOSRootView: View {
                 }
             }
             .opacity(immersionMode ? 0.0 : 1.0)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.28), value: immersionMode)
+            .offset(y: immersionMode && !reduceMotion ? 10 : 0)
+            .animation(.easeInOut(duration: immersionFade), value: immersionMode)
             .allowsHitTesting(!immersionMode)
 
             // 3. Full-screen tap/swipe catcher ONLY while in Immersion Mode
@@ -155,7 +163,7 @@ struct SatieiOSRootView: View {
                     }
                     .gesture(stageSwipeGesture)
                     .overlay(alignment: .bottom) {
-                        if let label = visualToastLabel {
+                        if let label = worldToastLabel {
                             Text(label)
                                 .font(.system(size: 10, weight: .semibold, design: .monospaced))
                                 .tracking(1.0)
@@ -190,6 +198,26 @@ struct SatieiOSRootView: View {
             }
         }
         .statusBarHidden(immersionMode)
+        // Keep the screen on while it is being watched: on its side in a stand, or in Immersion Mode.
+        .onAppear { syncScreenAwake() }
+        .onChange(of: immersionMode) { _, entered in
+            syncScreenAwake()
+            if !entered { scheduleAutoImmersion() }
+        }
+        // Any touch postpones the automatic fade; it never blocks the touch itself.
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0).onChanged { _ in noteInteraction() }
+        )
+        .onChange(of: state.isFocusPlaying) { _, playing in
+            if !playing && immersionMode {
+                // Music stopped (paused elsewhere or the timer ended): bring the controls back.
+                exitImmersion()
+            }
+            scheduleAutoImmersion()
+        }
+        .onChange(of: state.focusMode) { _, _ in scheduleAutoImmersion() }
+        .onChange(of: showOptions) { _, _ in scheduleAutoImmersion() }
+        .onChange(of: verticalSizeClass) { _, _ in syncScreenAwake() }
         .onChange(of: state.preset) { _, _ in
             guard !reduceMotion else { return }
             presetTransitionVeil = 0.55
@@ -200,7 +228,7 @@ struct SatieiOSRootView: View {
         .sheet(isPresented: $showOptions) {
             optionsSheet
                 .presentationDetents([
-                    .height(state.preset == .phosphor ? 615 : 570),
+                    .height(250),
                     .large
                 ])
                 .presentationDragIndicator(.visible)
@@ -350,7 +378,7 @@ struct SatieiOSRootView: View {
                     .clipShape(Circle())
                     .overlay(Circle().stroke(hair, lineWidth: 1))
 
-                if state.maskingBed != .off || state.flowMinutes > 0 || state.mixWithOthers || !state.visualFollowsSoundscape {
+                if state.flowMinutes > 0 || state.mixWithOthers {
                     Circle()
                         .fill(Color.white)
                         .frame(width: 6, height: 6)
@@ -388,29 +416,66 @@ struct SatieiOSRootView: View {
         DragGesture(minimumDistance: 36, coordinateSpace: .local)
             .onEnded { value in
                 if abs(value.translation.width) > abs(value.translation.height) * 1.4 {
-                    state.cycleVisual(forward: value.translation.width < 0)
-                    flashVisualToast(state.preset.cleanName.uppercased())
+                    state.stepFocusMode(forward: value.translation.width < 0)
+                    flashWorldToast(state.focusMode.title.uppercased())
                 }
             }
     }
 
-    private func flashVisualToast(_ text: String) {
-        visualToastTask?.cancel()
+    private func flashWorldToast(_ text: String) {
+        worldToastTask?.cancel()
         withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
-            visualToastLabel = text
+            worldToastLabel = text
         }
-        visualToastTask = Task { @MainActor in
+        worldToastTask = Task { @MainActor in
             try? await Task.sleep(for: .seconds(1.3))
             guard !Task.isCancelled else { return }
             withAnimation(reduceMotion ? nil : .easeOut(duration: 0.35)) {
-                visualToastLabel = nil
+                worldToastLabel = nil
             }
+        }
+    }
+
+    private func syncScreenAwake() {
+        state.wantsScreenAwake = immersionMode || isCompactLandscape
+    }
+
+    private func noteInteraction() {
+        let now = Date()
+        guard now.timeIntervalSince(lastInteraction) > 0.5 else { return }
+        lastInteraction = now
+        scheduleAutoImmersion()
+    }
+
+    /// Restart the countdown to Immersion Mode. It only runs while music plays and nothing else needs the controls.
+    private func scheduleAutoImmersion() {
+        autoImmersionTask?.cancel()
+        guard state.isFocusPlaying, !immersionMode, !showOptions, !UIAccessibility.isVoiceOverRunning else { return }
+        autoImmersionTask = Task { @MainActor in
+            try? await Task.sleep(for: autoImmersionDelay)
+            guard !Task.isCancelled, state.isFocusPlaying, state.isForeground, !immersionMode, !showOptions,
+                  !UIAccessibility.isVoiceOverRunning else { return }
+            immersionFade = 1.6
+            withAnimation(.easeInOut(duration: 1.6)) {
+                immersionMode = true
+            }
+        }
+    }
+
+    private func exitImmersion() {
+        immersionHintTask?.cancel()
+        immersionFade = 0.45
+        withAnimation(.easeOut(duration: 0.45)) {
+            immersionMode = false
+            showImmersionHint = false
         }
     }
 
     private func toggleImmersion(_ enter: Bool) {
         state.performHaptic()
         immersionHintTask?.cancel()
+        autoImmersionTask?.cancel()
+        immersionFade = 0.28
         withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.28)) {
             immersionMode = enter
             showImmersionHint = enter
@@ -468,105 +533,6 @@ struct SatieiOSRootView: View {
                     }
                 }
 
-                // Optional Background Noise Layer
-                VStack(alignment: .leading, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(SatieL10n.string("options.background_noise"))
-                            .font(.caption2.monospaced().weight(.semibold))
-                            .foregroundColor(inkSoft)
-                            .tracking(0.8)
-                        Text(SatieL10n.string("options.layer_under_any_mode_desc"))
-                            .font(.caption)
-                            .foregroundColor(inkDim)
-                    }
-
-                    HStack(spacing: 6) {
-                        ForEach(MaskingBed.allCases) { bed in
-                            let on = state.maskingBed == bed
-                            Button {
-                                state.maskingBed = bed
-                                state.performHaptic()
-                            } label: {
-                                Text(bed.label)
-                                    .font(.footnote.weight(on ? .semibold : .regular))
-                                    .foregroundColor(on ? .black : inkSoft)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.75)
-                                    .padding(.horizontal, 4)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(minHeight: 36)
-                                    .background(on ? Color.white : Color.white.opacity(0.07))
-                                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            }
-                            .buttonStyle(BraunPressButtonStyle(pressedScale: 0.95, reduceMotion: reduceMotion))
-                            .accessibilityAddTraits(on ? [.isSelected] : [])
-                        }
-                    }
-                }
-
-                // Visual World Pairing / Override (Auto by default; swipe canvas anytime)
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text(SatieL10n.string("options.visual"))
-                            .font(.caption2.monospaced().weight(.semibold))
-                            .foregroundColor(inkSoft)
-                            .tracking(0.8)
-                        Spacer()
-                        Text(state.visualFollowsSoundscape
-                             ? SatieL10n.format("options.visual_paired", state.preset.cleanName.uppercased())
-                             : SatieL10n.format("options.visual_pinned", state.preset.cleanName.uppercased()))
-                            .font(.caption2.monospaced().weight(.medium))
-                            .foregroundColor(inkDim)
-                    }
-
-                    visualOptionChip(label: SatieL10n.string("options.visual_auto"), selected: state.visualFollowsSoundscape) {
-                        state.setVisualOverride(nil)
-                    }
-
-                    let gridColumns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 3)
-                    LazyVGrid(columns: gridColumns, spacing: 6) {
-                        ForEach(VisualPreset.allCases) { p in
-                            visualOptionChip(
-                                label: p.cleanName,
-                                selected: !state.visualFollowsSoundscape && state.preset == p
-                            ) {
-                                state.setVisualOverride(p)
-                            }
-                        }
-                    }
-                }
-
-                if state.preset == .phosphor {
-                    HStack {
-                        Text(SatieL10n.string("options.crt_phosphor"))
-                            .font(.caption2.monospaced().weight(.semibold))
-                            .foregroundColor(inkSoft)
-                            .tracking(0.8)
-                        Spacer()
-                        HStack(spacing: 6) {
-                            ForEach([(false, SatieL10n.string("options.phosphor_emerald")), (true, SatieL10n.string("options.phosphor_amber"))], id: \.0) { isAmber, label in
-                                let on = state.amberPhosphor == isAmber
-                                Button {
-                                    state.amberPhosphor = isAmber
-                                    state.performHaptic()
-                                } label: {
-                                    Text(label)
-                                        .font(.caption2.monospaced().weight(on ? .semibold : .regular))
-                                        .foregroundColor(on ? .black : inkSoft)
-                                        .lineLimit(1)
-                                        .minimumScaleFactor(0.8)
-                                        .padding(.horizontal, 10)
-                                        .frame(minHeight: 28)
-                                        .background(on ? Color.white : Color.white.opacity(0.07))
-                                        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-                                }
-                                .buttonStyle(BraunPressButtonStyle(pressedScale: 0.95, reduceMotion: reduceMotion))
-                                .accessibilityAddTraits(on ? [.isSelected] : [])
-                            }
-                        }
-                    }
-                }
-
                 Divider().overlay(hairSoft)
 
                 Toggle(isOn: $state.mixWithOthers) {
@@ -582,27 +548,9 @@ struct SatieiOSRootView: View {
                 }
                 .tint(.white)
 
-                Toggle(isOn: $state.keepScreenAwake) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(SatieL10n.string("ios.keep_awake"))
-                            .font(.caption2.monospaced().weight(.semibold))
-                            .foregroundColor(inkSoft)
-                            .tracking(0.8)
-                        Text(SatieL10n.string("ios.keep_awake_desc"))
-                            .font(.caption)
-                            .foregroundColor(inkDim)
-                    }
-                }
-                .tint(.white)
-
                 Divider().overlay(hairSoft)
 
                 HStack(spacing: 8) {
-                    Text(SatieL10n.string("ios.offline_badge"))
-                        .font(.caption2.monospaced())
-                        .foregroundColor(inkDim)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
                     Spacer(minLength: 4)
                     if let privacyPolicyURL = URL(string: "https://strangechances.com/satie/privacy/") {
                         Link(SatieL10n.string("ios.privacy_policy"), destination: privacyPolicyURL)
@@ -620,31 +568,10 @@ struct SatieiOSRootView: View {
         }
     }
 
-    private func visualOptionChip(label: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(.footnote.weight(selected ? .semibold : .regular))
-                .foregroundColor(selected ? .black : inkSoft)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .padding(.horizontal, 4)
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 34)
-                .background(selected ? Color.white : Color.white.opacity(0.07))
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        }
-        .buttonStyle(BraunPressButtonStyle(pressedScale: 0.95, reduceMotion: reduceMotion))
-        .accessibilityAddTraits(selected ? [.isSelected] : [])
-    }
-
     // MARK: - Helpers
 
     private var heroSubtitle: String {
-        let base = state.focusMode.subtitle.uppercased()
-        if state.isFocusPlaying && state.maskingBed != .off {
-            return "\(base) · +\(state.maskingBed.label.uppercased())"
-        }
-        return base
+        state.focusMode.subtitle.uppercased()
     }
 
     private var compactCountdown: String? {

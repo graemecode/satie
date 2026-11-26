@@ -43,10 +43,9 @@ struct MiniHUDContentView: View {
                         }
 
                         Button {
-                            let nextRaw = (state.preset.rawValue + 1) % VisualPreset.allCases.count
-                            state.preset = VisualPreset(rawValue: nextRaw) ?? .circuit
+                            state.stepFocusMode(forward: true)
                         } label: {
-                            Text(state.preset.shortTitle)
+                            Text(state.focusMode.title)
                                 .font(.system(size: 9, weight: .medium, design: .monospaced))
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.75)

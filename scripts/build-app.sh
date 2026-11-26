@@ -146,6 +146,10 @@ cat > "$CONTENTS/Info.plist" << EOF
   <true/>
   <key>NSHumanReadableCopyright</key>
   <string>Copyright © 2026 Graeme Boy. All rights reserved.</string>
+  <key>NSUserActivityTypes</key>
+  <array>
+    <string>com.strangechances.Satie.playing</string>
+  </array>
 </dict>
 </plist>
 EOF

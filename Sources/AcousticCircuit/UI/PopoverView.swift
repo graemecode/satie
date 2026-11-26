@@ -25,11 +25,9 @@ struct PopoverView: View {
     var onContentHeightChange: ((CGFloat) -> Void)? = nil
 
     @State private var showOptions: Bool = false
-    @State private var visualToastLabel: String? = nil
-    @State private var visualToastTask: Task<Void, Never>? = nil
     @State private var presetTransitionVeil: Double = 0.0
 
-    private let timerPresets: [Int] = [0, 15, 25, 45, 60, 90]
+    private let timerPresets: [Int] = [0, 25, 45, 90]
 
     private let hair = Color.white.opacity(0.14)
     private let hairSoft = Color.white.opacity(0.08)
@@ -71,17 +69,6 @@ struct PopoverView: View {
                 }
                 .allowsHitTesting(false)
 
-                // Click stage to quietly cycle visuals (zero chrome at rest, brief fading badge)
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        let all = VisualPreset.allCases
-                        let next = all[(state.preset.rawValue + 1) % all.count]
-                        state.preset = next
-                        state.performHaptic()
-                        flashVisualToast(next.cleanName.uppercased())
-                    }
-
                 VStack(spacing: 0) {
                     // Floating Header: Soundscape Title + Instruments on left, ONE quiet Studio expand button on right
                     HStack(alignment: .top, spacing: 8) {
@@ -114,21 +101,6 @@ struct PopoverView: View {
 
                     Spacer()
 
-                    if let label = visualToastLabel {
-                        Text(label)
-                            .font(.system(size: 9.0, weight: .semibold, design: .monospaced))
-                            .tracking(0.9)
-                            .foregroundColor(Color.white.opacity(0.88))
-                            .padding(.horizontal, 11)
-                            .padding(.vertical, 5)
-                            .background(Color.black.opacity(0.58))
-                            .background(.ultraThinMaterial)
-                            .clipShape(Capsule())
-                            .overlay(Capsule().stroke(hair, lineWidth: 0.75))
-                            .padding(.bottom, 10)
-                            .transition(.opacity)
-                            .allowsHitTesting(false)
-                    }
                 }
             }
             .frame(height: 192)
@@ -228,9 +200,9 @@ struct PopoverView: View {
                     CircularControlButton(
                         systemName: "slider.horizontal.3",
                         isActive: showOptions,
-                        hasIndicatorDot: state.maskingBed != .off || state.flowMinutes > 0 || !state.visualFollowsSoundscape,
+                        hasIndicatorDot: state.flowMinutes > 0,
                         reduceMotion: reduceMotion,
-                        help: SatieL10n.string("popover.options_help")
+                        help: SatieL10n.string("popover.options")
                     ) {
                         toggleOptions()
                     }
@@ -333,109 +305,6 @@ struct PopoverView: View {
                 }
             }
 
-            // Optional Background Noise Layer
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(SatieL10n.string("options.background_noise"))
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                        .foregroundColor(inkSoft)
-                        .lineLimit(1)
-                    Spacer()
-                    Text(SatieL10n.string("options.layer_under_any_mode"))
-                        .font(.system(size: 8.5, design: .monospaced))
-                        .foregroundColor(inkDim)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.75)
-                }
-
-                HStack(spacing: 4) {
-                    ForEach(MaskingBed.allCases) { bed in
-                        let on = state.maskingBed == bed
-                        Button {
-                            state.maskingBed = bed
-                            state.performHaptic()
-                        } label: {
-                            Text(bed.label)
-                                .font(.system(size: 10, weight: on ? .semibold : .regular))
-                                .foregroundColor(on ? .black : inkSoft)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.72)
-                                .padding(.horizontal, 4)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 25)
-                                .background(on ? Color.white : Color.white.opacity(0.05))
-                                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        }
-                        .buttonStyle(MacBraunPressButtonStyle(pressedScale: 0.95, reduceMotion: reduceMotion))
-                        .accessibilityAddTraits(on ? [.isSelected] : [])
-                    }
-                }
-            }
-
-            // Visual World Pairing / Override (Auto by default; click stage anytime)
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(SatieL10n.string("options.visual"))
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                        .foregroundColor(inkSoft)
-                    Spacer()
-                    Text(state.visualFollowsSoundscape
-                         ? SatieL10n.format("options.visual_paired", state.preset.cleanName.uppercased())
-                         : SatieL10n.format("options.visual_pinned", state.preset.cleanName.uppercased()))
-                        .font(.system(size: 8.5, design: .monospaced))
-                        .foregroundColor(inkDim)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-
-                visualOptionChip(label: SatieL10n.string("options.visual_auto"), selected: state.visualFollowsSoundscape) {
-                    state.setVisualOverride(nil)
-                }
-
-                let cols = Array(repeating: GridItem(.flexible(), spacing: 4), count: 3)
-                LazyVGrid(columns: cols, spacing: 4) {
-                    ForEach(VisualPreset.allCases) { p in
-                        visualOptionChip(
-                            label: p.cleanName,
-                            selected: !state.visualFollowsSoundscape && state.preset == p
-                        ) {
-                            state.setVisualOverride(p)
-                        }
-                    }
-                }
-            }
-
-            if state.preset == .phosphor {
-                HStack {
-                    Text(SatieL10n.string("options.crt_phosphor"))
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                        .foregroundColor(inkSoft)
-                        .lineLimit(1)
-                    Spacer()
-                    HStack(spacing: 4) {
-                        ForEach([(false, SatieL10n.string("options.phosphor_emerald")), (true, SatieL10n.string("options.phosphor_amber"))], id: \.0) { isAmber, label in
-                            let on = state.amberPhosphor == isAmber
-                            Button {
-                                state.amberPhosphor = isAmber
-                                state.performHaptic()
-                            } label: {
-                                Text(label)
-                                    .font(.system(size: 9.5, weight: on ? .semibold : .regular, design: .monospaced))
-                                    .foregroundColor(on ? .black : inkSoft)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.78)
-                                    .padding(.horizontal, 8)
-                                    .frame(height: 22)
-                                    .background(on ? Color.white : Color.white.opacity(0.05))
-                                    .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-                            }
-                            .buttonStyle(MacBraunPressButtonStyle(pressedScale: 0.95, reduceMotion: reduceMotion))
-                            .accessibilityAddTraits(on ? [.isSelected] : [])
-                        }
-                    }
-                }
-            }
-
             Divider().background(hairSoft)
 
             volumeSliderRow
@@ -518,20 +387,6 @@ struct PopoverView: View {
         }
     }
 
-    private func flashVisualToast(_ text: String) {
-        visualToastTask?.cancel()
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.18)) {
-            visualToastLabel = text
-        }
-        visualToastTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(1300))
-            guard !Task.isCancelled else { return }
-            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.32)) {
-                visualToastLabel = nil
-            }
-        }
-    }
-
     private var timerStatusLabel: String {
         if let countdown = compactCountdown {
             return SatieL10n.format("common.minutes_remaining", countdown)
@@ -546,11 +401,7 @@ struct PopoverView: View {
     }
 
     private var heroSubtitle: String {
-        let base = state.focusMode.subtitle.uppercased()
-        if state.isFocusPlaying && state.maskingBed != .off {
-            return "\(base) · +\(state.maskingBed.label.uppercased())"
-        }
-        return base
+        state.focusMode.subtitle.uppercased()
     }
 
     private var heroPlayIcon: String {

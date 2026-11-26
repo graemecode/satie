@@ -96,6 +96,8 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         NSHighResolutionCapable: true
         NSHumanReadableCopyright: "Copyright © 2026 Graeme Boy. All rights reserved."
+        NSUserActivityTypes:
+          - com.strangechances.Satie.playing
     entitlements:
       path: AppStore/Satie-AppStore.entitlements
       properties:
@@ -196,6 +198,8 @@ targets:
         LSApplicationCategoryType: public.app-category.music
         ITSAppUsesNonExemptEncryption: false
         NSSupportsLiveActivities: true
+        NSUserActivityTypes:
+          - com.strangechances.Satie.playing
         UIBackgroundModes:
           - audio
         UILaunchScreen:

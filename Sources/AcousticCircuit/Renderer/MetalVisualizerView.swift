@@ -546,7 +546,7 @@ final class AcousticMetalView: NSView {
         uniforms.beat = snap.beat
         uniforms.stereoCorr = snap.stereoCorrelation
         uniforms.centroid = snap.centroid
-        uniforms.amberMode = state.amberPhosphor ? 1.0 : 0.0
+        uniforms.amberMode = 0.0 // Emerald by day; the shader shifts the scope to amber at night on its own.
         uniforms.isCompact = compactMode ? 1.0 : 0.0
         let music = state.focusSound.snapshotVisualMusicalFrame()
         uniforms.chordAge = music.chordAge
