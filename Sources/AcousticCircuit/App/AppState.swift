@@ -102,6 +102,7 @@ final class AppState: ObservableObject {
     private var currentMenuBarHz: Double = 24.0
     private var housekeepingTimer: Timer?
     private var flowEndDate: Date? = nil
+    private let handoff = SatieHandoffPublisher()
     private var isSleeping: Bool = false
     private var sleepObservers: [NSObjectProtocol] = []
 
@@ -163,6 +164,11 @@ final class AppState: ObservableObject {
         self.circadianPhase = initPhase
         self.focusSound.setCircadianPhase(initPhase)
         self.dsp = AcousticDSP()
+        // When an iPhone or iPad continues this session, fade out here.
+        handoff.onContinuedElsewhere = { [weak self] in
+            guard let self, self.isFocusPlaying else { return }
+            self.stopFocusSound()
+        }
     }
 
     func boot() {
@@ -268,6 +274,24 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Continue a session handed over from another device: same soundscape, and the timer ends at the same moment.
+    func continueHandoff(_ session: SatieHandoff) {
+        guard !session.isFinished() else { return }
+        flowMinutes = session.flowMinutes
+        settings.flowMinutes = session.flowMinutes
+        flowDuration = session.flowMinutes == 0 ? .infinite : (session.flowMinutes == 50 ? .min50 : .min25)
+        flowEndDate = session.endDate
+        flowRemainingSeconds = session.endDate?.timeIntervalSinceNow
+        if isFocusPlaying {
+            focusMode = session.mode
+            refreshCountdownFromWallClock()
+            focusSound.setSessionProgress(sessionProgress)
+            syncNowPlaying()
+        } else {
+            toggleFocusSound(session.mode)
+        }
+    }
+
     func stopFocusSound() {
         focusSound.stop()
         focusSound.setSessionProgress(nil)
@@ -306,6 +330,7 @@ final class AppState: ObservableObject {
                 flowEndDate = nil
             }
         }
+        syncHandoff()
     }
 
     /// Move to the neighboring soundscape (and its visual) without starting or stopping playback.
@@ -354,7 +379,12 @@ final class AppState: ObservableObject {
         }
     }
 
+    private func syncHandoff() {
+        handoff.update(isFocusPlaying ? SatieHandoff(mode: focusMode, flowMinutes: flowMinutes, endDate: flowEndDate) : nil)
+    }
+
     private func syncNowPlaying() {
+        syncHandoff()
         if isFocusPlaying {
             nowPlaying.update(
                 isPlaying: true,

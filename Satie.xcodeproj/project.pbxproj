@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0111A42EB6778EDA8CAF254E /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F11DC059A529B02BC4CB6506 /* CoreAudio.framework */; };
+		0296673A9B9A8BFFBA6CE6BF /* SatieHandoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F18FA34997337CDF5AAEB8E /* SatieHandoff.swift */; };
 		03A1BE3410451A93E5FFFB17 /* MediaPlayer.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BAB00A878553F903199C632D /* MediaPlayer.framework */; };
 		03BED7A7C766531CA2539C20 /* SatieWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 730E6319F797089B9E003756 /* SatieWatchApp.swift */; };
 		03D6E6B2483E1F81217E715F /* SatieL10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70131DB0063D98F949E97F24 /* SatieL10n.swift */; };
@@ -93,6 +94,7 @@
 		55A5D7EBDB7E4AAE2D8C881B /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 71A2B62B6AD05A4D5D72E2F1 /* Localizable.strings */; };
 		5657BA8D152CE57064BBF1B3 /* StudioWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6A77F0F102AD2689782C533 /* StudioWindowController.swift */; };
 		59C43D5FC24773E0BDD29662 /* AcousticDSP.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28203EBA3E3674D8B8D6BFCF /* AcousticDSP.swift */; };
+		5A90F0D60A6CE0E24A435204 /* SatieHandoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F18FA34997337CDF5AAEB8E /* SatieHandoff.swift */; };
 		5F7481F0B61E82761EE0A4F2 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 00BEA76C32250875AAF7523A /* WidgetKit.framework */; };
 		61B6462273099D4E518EE6AD /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 00D042F2C3F30E94ECF157F5 /* AVFoundation.framework */; };
 		633CD7A5B44E799A66077676 /* DeepMeditationEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BAAE580701A189444B0BECF /* DeepMeditationEngine.swift */; };
@@ -140,6 +142,7 @@
 		96CF2C5AF1F0454F06EEA3C4 /* SatieWatchBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 957F1295AE661C4F1BF588E1 /* SatieWatchBridge.swift */; };
 		9710F406EB420E78DDDC1C29 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 07ABB3440DE0092F8D5289CC /* UIKit.framework */; };
 		97CE96B78B5D3A3AF976489B /* AppKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 81FA047C9BB90CDE3BCB41AA /* AppKit.framework */; };
+		97DF859D62688C275FDF6332 /* SatieHandoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F18FA34997337CDF5AAEB8E /* SatieHandoff.swift */; };
 		9868CC73A7A45ECEED79DEB2 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2081B71872082F0D71876F09 /* SettingsStore.swift */; };
 		9882E95E27C57C48142B0FBD /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2E99D8026CE501ABDECE5557 /* IOKit.framework */; };
 		98BE43CBA4E938FAE33764A7 /* NowPlayingBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8880E9DB01723F8D1CF71269 /* NowPlayingBridge.swift */; };
@@ -173,6 +176,7 @@
 		C27B8AB861B5A50A67E7AA49 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 5BC0F50041072BA8E97BAEFE /* InfoPlist.strings */; };
 		C488B2DFAFA75BA649EB8376 /* StudioLifecycleMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BEE7BA98A1F7854BC616FB /* StudioLifecycleMachine.swift */; };
 		C4F420D28FD4848C2137D557 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2E99D8026CE501ABDECE5557 /* IOKit.framework */; };
+		C5567BC0BA6D6DB2F806F553 /* SatieHandoff.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F18FA34997337CDF5AAEB8E /* SatieHandoff.swift */; };
 		C649FA911EE9CECF88B59984 /* WatchConnectivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5F772CBA73D9F9B09CE098B0 /* WatchConnectivity.framework */; };
 		C65B7FA7A6BE1F825DA93689 /* BlueNoise64.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1129A70CC12ED837F0058059 /* BlueNoise64.swift */; };
 		C6EED60B803A9F67F1492CD8 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C09B2662313A4B98C2FDB60B /* AudioToolbox.framework */; };
@@ -320,6 +324,7 @@
 		3A0F85FC7EE31C6793001FAB /* ja */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ja; path = ja.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		3AE56AA95B7F634CF67EE7D0 /* SatieiOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SatieiOSApp.swift; sourceTree = "<group>"; };
 		3EDC67035BD454BB902EEE81 /* AVKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVKit.framework; path = System/Library/Frameworks/AVKit.framework; sourceTree = SDKROOT; };
+		3F18FA34997337CDF5AAEB8E /* SatieHandoff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SatieHandoff.swift; sourceTree = "<group>"; };
 		405EF5203A09F5E86431B0F1 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/AppShortcuts.strings; sourceTree = "<group>"; };
 		40CC447EB9A17B2B2E70A325 /* ModularAlchemy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModularAlchemy.swift; sourceTree = "<group>"; };
 		440ED3310416F607260F337C /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
@@ -703,6 +708,7 @@
 				399F9D5D17214E97E233F23E /* GlobalHotKeys.swift */,
 				99D7F0DD8AEB2D15C2A63885 /* Log.swift */,
 				ECF78C003BD8651395C98184 /* MenuBarPositioner.swift */,
+				3F18FA34997337CDF5AAEB8E /* SatieHandoff.swift */,
 				3696F32DCB8894D577FB32DE /* SatieLiveActivityAttributes.swift */,
 				2081B71872082F0D71876F09 /* SettingsStore.swift */,
 				B9BEE7BA98A1F7854BC616FB /* StudioLifecycleMachine.swift */,
@@ -783,7 +789,7 @@
 			path = Renderer;
 			sourceTree = "<group>";
 		};
-		"TEMP_3CEA3582-57E3-4196-BD18-6E89B57B9DAE" /* Resources */ = {
+		"TEMP_D9338F4F-CBD3-4D97-99B5-8AA8B317F6BC" /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -1218,6 +1224,7 @@
 				1E7B6A2E044AFC90E8E4133F /* NowPlayingBridge.swift in Sources */,
 				DC62F69E36A9F79F6D343094 /* PhysicalInstruments.swift in Sources */,
 				A6A8C039392338FBB5C50E31 /* RingBuffer.swift in Sources */,
+				5A90F0D60A6CE0E24A435204 /* SatieHandoff.swift in Sources */,
 				03D6E6B2483E1F81217E715F /* SatieL10n.swift in Sources */,
 				6AE7D4530A0D031D283EAC69 /* SatieLiveActivityAttributes.swift in Sources */,
 				49F30A0595CBC1046F357205 /* SatieScore.swift in Sources */,
@@ -1254,6 +1261,7 @@
 				98BE43CBA4E938FAE33764A7 /* NowPlayingBridge.swift in Sources */,
 				41A29C56C498E36D78AC94B6 /* PhysicalInstruments.swift in Sources */,
 				EEF3F07C256B483950958CEE /* RingBuffer.swift in Sources */,
+				C5567BC0BA6D6DB2F806F553 /* SatieHandoff.swift in Sources */,
 				5509CB8BAB9C2B95BF908EA3 /* SatieL10n.swift in Sources */,
 				D223B98E9E8DD013F1AADDC0 /* SatieLiveActivityAttributes.swift in Sources */,
 				6CFABD9C631E46077F82AB59 /* SatieScore.swift in Sources */,
@@ -1311,6 +1319,7 @@
 				1475188A488C4E885C0F0CBD /* NowPlayingBridge.swift in Sources */,
 				E72EEC7EDBE6345A4319AD03 /* PhysicalInstruments.swift in Sources */,
 				BD610A83FD38B644F9F19AE0 /* RingBuffer.swift in Sources */,
+				0296673A9B9A8BFFBA6CE6BF /* SatieHandoff.swift in Sources */,
 				34CD5C08899FB62C4B1EAE27 /* SatieL10n.swift in Sources */,
 				D0AE6B4888F401BD2BA3631F /* SatieLiveActivityAttributes.swift in Sources */,
 				27BCD328DD52D5B82E249404 /* SatieScore.swift in Sources */,
@@ -1348,6 +1357,7 @@
 				79EDE79CED644678A5474F13 /* NowPlayingBridge.swift in Sources */,
 				238C416FDE155A3549AFB7E3 /* PhysicalInstruments.swift in Sources */,
 				09B4FDDDF92F85648245D900 /* RingBuffer.swift in Sources */,
+				97DF859D62688C275FDF6332 /* SatieHandoff.swift in Sources */,
 				319B7FE56296E16DF98B2F82 /* SatieL10n.swift in Sources */,
 				EBB3F8584D0AACDB004DC2C6 /* SatieLiveActivityAttributes.swift in Sources */,
 				CC1BD19E8983F1BF4E2DD82B /* SatieScore.swift in Sources */,

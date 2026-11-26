@@ -37,6 +37,10 @@
 	<string>public.app-category.music</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>com.strangechances.Satie.playing</string>
+	</array>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>

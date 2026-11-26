@@ -1,3 +1,4 @@
+import AcousticCore
 import SwiftUI
 
 @main
@@ -11,6 +12,11 @@ struct SatieiOSApp: App {
                 .preferredColorScheme(.dark)
                 .onChange(of: scenePhase) { _, phase in
                     state.setForeground(phase == .active)
+                }
+                .onContinueUserActivity(SatieHandoff.activityType) { activity in
+                    if let session = SatieHandoff(userInfo: activity.userInfo) {
+                        state.continueHandoff(session)
+                    }
                 }
         }
     }

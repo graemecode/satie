@@ -175,6 +175,25 @@ struct AcousticCoreTests {
         #expect(eBal < eVivid)
     }
 
+    @Test("Handoff payload round-trips the soundscape and timer, and ignores finished or malformed sessions")
+    func handoffPayload() {
+        let end = Date(timeIntervalSince1970: 1_800_000_000)
+        let timed = SatieHandoff(mode: .dive, flowMinutes: 45, endDate: end)
+        #expect(SatieHandoff(userInfo: timed.userInfo) == timed)
+
+        let open = SatieHandoff(mode: .rain, flowMinutes: 0, endDate: end)
+        #expect(open.endDate == nil)
+        #expect(SatieHandoff(userInfo: open.userInfo) == open)
+        #expect(!open.isFinished(at: end.addingTimeInterval(3600)))
+
+        #expect(!timed.isFinished(at: end.addingTimeInterval(-1)))
+        #expect(timed.isFinished(at: end))
+
+        #expect(SatieHandoff(userInfo: nil) == nil)
+        #expect(SatieHandoff(userInfo: ["mode": "unknown-world"]) == nil)
+        #expect(SatieHandoff(userInfo: ["minutes": 25]) == nil)
+    }
+
     @Test("SettingsStore round-trips preferences cleanly")
     func settingsPersistence() {
         let suiteName = "com.strangechances.Satie.test.\(UUID().uuidString)"

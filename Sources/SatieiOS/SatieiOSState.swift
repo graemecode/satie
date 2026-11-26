@@ -67,6 +67,7 @@ final class SatieiOSState: ObservableObject {
 
     private var housekeepingTimer: Timer?
     private var flowEndDate: Date? = nil
+    private let handoff = SatieHandoffPublisher()
     private var lastFrameTime: CFTimeInterval = CACurrentMediaTime()
     private var wasPlayingBeforeInterruption: Bool = false
     private let lightHaptic = UIImpactFeedbackGenerator(style: .light)
@@ -104,6 +105,11 @@ final class SatieiOSState: ObservableObject {
         configureMediaControls()
         installAudioSessionObservers()
         SatieWatchBridge.shared.activate()
+        // When the Mac (or another iPhone or iPad) continues this session, fade out here.
+        handoff.onContinuedElsewhere = { [weak self] in
+            guard let self, self.isFocusPlaying else { return }
+            self.stopFocusSound()
+        }
         lightHaptic.prepare()
         mediumHaptic.prepare()
     }
@@ -185,6 +191,24 @@ final class SatieiOSState: ObservableObject {
         syncLiveActivity()
     }
 
+    /// Continue a session handed over from another device: same soundscape, and the timer ends at the same moment.
+    func continueHandoff(_ session: SatieHandoff) {
+        guard !session.isFinished() else { return }
+        flowMinutes = session.flowMinutes
+        settings.flowMinutes = session.flowMinutes
+        flowEndDate = session.endDate
+        flowRemainingSeconds = session.endDate?.timeIntervalSinceNow
+        if isFocusPlaying {
+            focusMode = session.mode
+            refreshCountdownFromWallClock()
+            focusSound.setSessionProgress(sessionProgress)
+            syncNowPlaying()
+            syncLiveActivity()
+        } else {
+            toggleFocusSound(session.mode)
+        }
+    }
+
     func stopFocusSound() {
         focusSound.stop()
         focusSound.setSessionProgress(nil)
@@ -208,6 +232,7 @@ final class SatieiOSState: ObservableObject {
     }
 
     private func syncLiveActivity() {
+        handoff.update(isFocusPlaying ? SatieHandoff(mode: focusMode, flowMinutes: flowMinutes, endDate: flowEndDate) : nil)
         liveActivity.sync(
             mode: focusMode,
             isPlaying: isFocusPlaying,

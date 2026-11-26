@@ -164,6 +164,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppState.shared.shutdown()
     }
 
+    // MARK: - Handoff: continue a session started on an iPhone or iPad
+
+    func application(_ application: NSApplication, willContinueUserActivityWithType userActivityType: String) -> Bool {
+        userActivityType == SatieHandoff.activityType
+    }
+
+    func application(_ application: NSApplication, continue userActivity: NSUserActivity,
+                     restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void) -> Bool {
+        guard userActivity.activityType == SatieHandoff.activityType,
+              let session = SatieHandoff(userInfo: userActivity.userInfo) else { return false }
+        AppState.shared.continueHandoff(session)
+        return true
+    }
+
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         showPopover()
         return true
