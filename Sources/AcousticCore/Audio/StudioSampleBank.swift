@@ -264,8 +264,8 @@ struct AcousticSamplerVoice: @unchecked Sendable {
             self.releaseAt = max(0.9, duration * 1.45)
             self.releaseTau = feltMuffle ? 1.55 : 1.15
             let cut = feltMuffle
-                ? (640.0 + velocity * 1450.0)   // Intimate Sakamoto / Nils Frahm velvet felt damper
-                : (1800.0 + velocity * 3400.0)  // Luminous open upright
+                ? (900.0 + velocity * 1900.0)   // Intimate Sakamoto / Nils Frahm velvet felt damper
+                : (2600.0 + velocity * 4600.0)  // Luminous open upright
             lpL.reset(); lpR.reset()
             lpL.set(cutoffHz: cut, q: 0.68, sampleRate: sampleRate)
             lpR.set(cutoffHz: cut, q: 0.68, sampleRate: sampleRate)
@@ -278,7 +278,7 @@ struct AcousticSamplerVoice: @unchecked Sendable {
             self.attackSec = 0.004
             self.releaseAt = max(0.8, duration * 1.35)
             self.releaseTau = 1.25
-            let cut = 1400.0 + velocity * 3600.0
+            let cut = 2100.0 + velocity * 4900.0
             lpL.reset(); lpR.reset()
             lpL.set(cutoffHz: cut, q: 0.70, sampleRate: sampleRate)
             lpR.set(cutoffHz: cut, q: 0.70, sampleRate: sampleRate)
@@ -288,7 +288,7 @@ struct AcousticSamplerVoice: @unchecked Sendable {
             self.attackSec = 0.003
             self.releaseAt = max(1.0, duration * 1.6)
             self.releaseTau = 1.45
-            let cut = 2200.0 + velocity * 4200.0
+            let cut = 3200.0 + velocity * 5600.0
             lpL.reset(); lpR.reset()
             lpL.set(cutoffHz: cut, q: 0.70, sampleRate: sampleRate)
             lpR.set(cutoffHz: cut, q: 0.70, sampleRate: sampleRate)
@@ -298,7 +298,7 @@ struct AcousticSamplerVoice: @unchecked Sendable {
             self.attackSec = min(1.35, max(0.55, duration * 0.35))
             self.releaseAt = max(1.2, duration * 0.85)
             self.releaseTau = 1.35
-            let cut = 1900.0 + velocity * 2200.0
+            let cut = 2400.0 + velocity * 2800.0
             lpL.reset(); lpR.reset()
             lpL.set(cutoffHz: cut, q: 0.68, sampleRate: sampleRate)
             lpR.set(cutoffHz: cut, q: 0.68, sampleRate: sampleRate)
@@ -309,8 +309,8 @@ struct AcousticSamplerVoice: @unchecked Sendable {
             self.releaseAt = max(1.5, duration * 1.1)
             self.releaseTau = 1.6
             lpL.reset(); lpR.reset()
-            lpL.set(cutoffHz: 4600.0, q: 0.70, sampleRate: sampleRate)
-            lpR.set(cutoffHz: 4600.0, q: 0.70, sampleRate: sampleRate)
+            lpL.set(cutoffHz: 6400.0, q: 0.70, sampleRate: sampleRate)
+            lpR.set(cutoffHz: 6400.0, q: 0.70, sampleRate: sampleRate)
             self.feltWarmthMix = 0.0
         }
 

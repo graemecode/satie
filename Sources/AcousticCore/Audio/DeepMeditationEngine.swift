@@ -213,8 +213,8 @@ struct OrganicHarmonicBed: @unchecked Sendable {
         let celloL = lpL.lowpass((c1L * 0.82 + c1R * 0.18) * 0.084 + (c2L * 0.38 + c2R * 0.62) * 0.056 * breathSwell)
         let celloR = lpR.lowpass((c1R * 0.82 + c1L * 0.18) * 0.084 + (c2R * 0.38 + c2L * 0.62) * 0.056 * breathSwell)
 
-        let veilL = glassBpL.lowpass(gL) * 0.032 * glassMacro * breathSwell
-        let veilR = glassBpR.lowpass(gR) * 0.032 * glassMacro * breathSwell
+        let veilL = glassBpL.lowpass(gL) * 0.046 * glassMacro * breathSwell
+        let veilR = glassBpR.lowpass(gR) * 0.046 * glassMacro * breathSwell
 
         return ((celloL + veilL + sub) * fadeIn, (celloR + veilR + sub) * fadeIn)
     }

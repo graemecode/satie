@@ -943,7 +943,7 @@ struct AcousticCoreTests {
             (.focus, [9, 11, 1, 2, 4, 6, 8], 2),   // A Major (max hold = 2)
             (.pulse, [2, 4, 5, 7, 9, 11, 0], 2),   // D Dorian (max hold = 2)
             (.rain,  [0, 2, 4, 5, 7, 9, 11], 3),   // F Lydian / C Major (max hold = 3)
-            (.still, [0, 2, 4, 5, 7, 9, 11], 3),   // C Major9 (max hold = 3)
+            (.still, [2, 4, 6, 7, 9, 11, 1], 3),   // D pentatonic sus / quartal (max hold = 3)
             (.drift, [2, 4, 6, 7, 9, 11, 1], 3),   // D Major / G Lydian (max hold = 3)
         ]
 

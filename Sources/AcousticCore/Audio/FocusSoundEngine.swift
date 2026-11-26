@@ -1384,11 +1384,11 @@ private final class FocusRenderState: @unchecked Sendable {
 
         let baseAirHz: Double
         switch circadian {
-        case .morning:   baseAirHz = 7800.0
-        case .afternoon: baseAirHz = 6800.0
-        case .night:     baseAirHz = 5000.0
+        case .morning:   baseAirHz = 9400.0
+        case .afternoon: baseAirHz = 8600.0
+        case .night:     baseAirHz = 6400.0
         }
-        let airCeilingHz = max(2600.0, min(9200.0, baseAirHz * intBrightScale * arcBrightness))
+        let airCeilingHz = max(2600.0, min(11000.0, baseAirHz * intBrightScale * arcBrightness))
 
         let figDelayL = 0.75 * spb
         let figDelayR = 0.75 * spb * 1.014 // Slight stereo head offset for natural width
@@ -1468,7 +1468,7 @@ private final class FocusRenderState: @unchecked Sendable {
                 let diveMakeup: Float = 5.4
                 var (finalL, finalR) = masterBus.process(
                     mL, mR,
-                    airCeilingHz: min(airCeilingHz, 6400.0),
+                    airCeilingHz: min(airCeilingHz, 8200.0),
                     stereoWidthBoost: 0.10,
                     outputGain: diveMakeup * masterEnv * smoothVol * arcGainScale,
                     postMatrixInjectL: med.postMatrixL,
@@ -1883,17 +1883,17 @@ private final class FocusRenderState: @unchecked Sendable {
             // Mode-matched gain calibration (~ -18.5 to -16.0 dBFS RMS across all 4 modes at 75% volume)
             let modeMakeup: Float
             switch mode {
-            case .focus: modeMakeup = 4.1
-            case .pulse: modeMakeup = 5.4
-            case .rain:  modeMakeup = 7.4
-            case .drift: modeMakeup = 6.2
-            case .still: modeMakeup = 7.1
+            case .focus: modeMakeup = 2.80
+            case .pulse: modeMakeup = 4.55
+            case .rain:  modeMakeup = 7.49
+            case .drift: modeMakeup = 6.06
+            case .still: modeMakeup = 7.61
             case .dive:  modeMakeup = 6.3
             }
             var (finalL, finalR) = masterBus.process(
                 mixL, mixR,
                 airCeilingHz: airCeilingHz,
-                stereoWidthBoost: (mode == .drift || mode == .still) ? 0.15 : 0.11,
+                stereoWidthBoost: (mode == .drift || mode == .still) ? 0.15 : (mode == .pulse ? 0.24 : 0.11),
                 outputGain: modeMakeup * masterEnv * smoothVol * arcGainScale,
                 sampleRate: sampleRate
             )

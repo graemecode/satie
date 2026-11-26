@@ -199,7 +199,7 @@ public enum SatieScore {
 
     // MARK: - Rain & Glass (60 BPM Hiroshi Yoshimura 'Green' F Lydian / C Major9 kankyō ongaku)
 
-    private static let chordFmaj9 = ChordDef(name: "Fmaj7", root: 41, figure: [53, 60, 64, 67, 72, 69, 64, 60], held: [53, 60, 64, 67], role: .tonic)
+    private static let chordFmaj9 = ChordDef(name: "Fmaj7#11", root: 41, figure: [53, 60, 64, 67, 71, 72, 64, 60], held: [53, 60, 64, 67], role: .tonic)
     private static let chordCmaj9 = ChordDef(name: "Cadd9", root: 48, figure: [55, 60, 62, 67, 71, 67, 64, 60], held: [55, 60, 62, 67], role: .suspended)
     private static let chordDm11  = ChordDef(name: "Dm9",   root: 38, figure: [50, 57, 60, 64, 67, 64, 60, 57], held: [50, 57, 60, 64], role: .subdominant)
     private static let chordAm9   = ChordDef(name: "Am7",   root: 45, figure: [57, 60, 64, 67, 71, 67, 64, 60], held: [57, 60, 64, 67], role: .mediant)
@@ -241,19 +241,26 @@ public enum SatieScore {
 
     // MARK: - Still (58 BPM Zero-Ego Study: Non-Resolving Pentatonic & Suspended 9ths — Dmitry Evgrafov / Endel Study)
 
+    // Still has its own D-pentatonic sus/quartal palette, so it never shares chords with Rain.
+    private static let stillDsus2 = ChordDef(name: "Dsus2", root: 38, figure: [50, 57, 62, 64, 69, 64, 62, 57], held: [50, 57, 62, 64], role: .tonic)
+    private static let stillBm11  = ChordDef(name: "Bm11",  root: 47, figure: [59, 64, 66, 69, 71, 69, 66, 64], held: [54, 57, 64, 66], role: .mediant)
+    private static let stillGadd9 = ChordDef(name: "Gadd9", root: 43, figure: [55, 59, 62, 64, 69, 64, 62, 59], held: [55, 62, 64, 69], role: .subdominant)
+    private static let stillAsus4 = ChordDef(name: "Asus4", root: 45, figure: [57, 62, 64, 69, 71, 69, 64, 62], held: [57, 62, 64, 69], role: .suspended)
+    private static let stillEm11  = ChordDef(name: "Em11",  root: 40, figure: [52, 57, 59, 62, 66, 62, 59, 57], held: [52, 57, 62, 66], role: .mediant)
+
     private static let stillForm: [ChordDef] = [
-        chordCmaj9, chordCmaj9, chordG6, chordG6, chordAm9, chordAm9, chordFmaj9, chordFmaj9,
-        chordDm11, chordDm11, chordAm9, chordAm9, chordCmaj9, chordCmaj9, chordG6, chordG6,
-        chordFmaj9, chordFmaj9, chordCmaj9, chordCmaj9, chordAm9, chordAm9, chordG6, chordG6,
-        chordDm11, chordDm11, chordFmaj9, chordFmaj9, chordCmaj9, chordCmaj9, chordG6, chordCmaj9,
+        stillDsus2, stillDsus2, stillGadd9, stillGadd9, stillBm11, stillBm11, stillAsus4, stillAsus4,
+        stillEm11, stillEm11, stillGadd9, stillGadd9, stillDsus2, stillDsus2, stillAsus4, stillAsus4,
+        stillGadd9, stillGadd9, stillDsus2, stillDsus2, stillBm11, stillBm11, stillEm11, stillEm11,
+        stillAsus4, stillAsus4, stillGadd9, stillGadd9, stillDsus2, stillDsus2, stillEm11, stillDsus2,
     ]
     private static let stillClimateB: [ChordDef] = [
-        chordAm9, chordAm9, chordFmaj9, chordFmaj9, chordCmaj9, chordCmaj9, chordG6, chordDm11,
-        chordFmaj9, chordCmaj9, chordAm9, chordG6, chordDm11, chordAm9, chordFmaj9, chordCmaj9,
-        chordG6, chordFmaj9, chordAm9, chordDm11, chordCmaj9, chordG6, chordFmaj9, chordAm9,
-        chordDm11, chordCmaj9, chordG6, chordFmaj9, chordAm9, chordDm11, chordCmaj9, chordG6,
+        stillBm11, stillBm11, stillGadd9, stillGadd9, stillDsus2, stillDsus2, stillAsus4, stillEm11,
+        stillGadd9, stillDsus2, stillBm11, stillAsus4, stillEm11, stillBm11, stillGadd9, stillDsus2,
+        stillAsus4, stillGadd9, stillBm11, stillEm11, stillDsus2, stillAsus4, stillGadd9, stillBm11,
+        stillEm11, stillDsus2, stillAsus4, stillGadd9, stillBm11, stillEm11, stillDsus2, stillAsus4,
     ]
-    private static let stillGlints: [Int] = [72, 74, 76, 79, 81, 84]
+    private static let stillGlints: [Int] = [74, 76, 78, 81, 83, 86]
 
     // MARK: - Precomputed Multi-Climate Factor Oracles (64-bar corpus per world, built once in O(m))
 
@@ -589,7 +596,7 @@ public enum SatieScore {
                     duration: 0.42,
                     velocity: velocity,
                     level: 0.145 * velocity * fullness,
-                    pan: -0.36 + 0.12 * Double(step % 4)
+                    pan: -0.60 + 0.40 * Double(step % 4)
                 ))
             }
             // Polyrhythmic 3-against-4 Buchla LPG counter-plucks (displaced across the 4-beat bar)
