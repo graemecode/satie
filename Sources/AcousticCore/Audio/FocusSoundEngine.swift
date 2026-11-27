@@ -540,6 +540,7 @@ final class LockFreeBarQueue: @unchecked Sendable {
         dest.macroFilterHorizon = src.macroFilterHorizon
         dest.macroSpaceBloom = src.macroSpaceBloom
         dest.macroResonance = src.macroResonance
+        dest.repertoirePiece = src.repertoirePiece
         dest.bellCount = src.bellCount
         for i in 0..<src.bellCount { dest.bells[i] = src.bells[i] }
         dest.sustainCount = src.sustainCount
