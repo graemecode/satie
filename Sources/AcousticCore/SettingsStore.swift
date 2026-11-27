@@ -56,6 +56,7 @@ public enum VisualPreset: Int, CaseIterable, Identifiable, Sendable {
         switch mode {
         case .focus: return .circuit
         case .lateLight: return .circuit
+        case .soirDete: return .horizon
         case .pulse: return .phosphor
         case .rain:  return .ecology
         case .still: return .horizon

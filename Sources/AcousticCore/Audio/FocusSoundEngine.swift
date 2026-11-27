@@ -13,6 +13,7 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
     // Satie Lab only, until approved. Furniture Music composes new music in Satie's language;
     // the repertoire worlds below play the composers' own pieces and serve as Lab benchmarks.
     case lateLight
+    case soirDete
     case loops
     case furniture
     case gymnopedies
@@ -42,6 +43,7 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .drift: return SatieL10n.string("soundscape.drift.title", fallback: "Gymnopédie")
         case .groove: return SatieL10n.string("soundscape.groove.title", fallback: "Low Sun")
         case .lateLight: return "Late Light"
+        case .soirDete: return "Soir d'Été"
         case .loops: return "Loops"
         case .furniture: return "Furniture Music (generated)"
         case .gymnopedies: return "Gymnopédies"
@@ -63,6 +65,7 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .drift: return SatieL10n.string("soundscape.drift.short", fallback: "NIGHT")
         case .groove: return SatieL10n.string("soundscape.groove.short", fallback: "GROOVE")
         case .lateLight: return "LATE"
+        case .soirDete: return "SOIR"
         case .loops: return "LOOPS"
         case .furniture: return "SATIE"
         case .gymnopedies: return "GYMNO"
@@ -84,6 +87,7 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .drift: return SatieL10n.string("soundscape.drift.subtitle", fallback: "Late Night · Piano & Cello")
         case .groove: return SatieL10n.string("soundscape.groove.subtitle", fallback: "Steady Flow · Keys, Bass & Brushes")
         case .lateLight: return "Late Afternoon · Felt Piano & Vibe"
+        case .soirDete: return "Impressionist · Harp, Felt Piano & Cello"
         case .loops: return "Six piano phrases on unequal loops · never the same"
         case .furniture: return "New music in Satie's language · never the same"
         case .gymnopedies: return "Satie, 1888 · Nos. 1–3, endless"
@@ -1453,6 +1457,17 @@ private final class FocusRenderState: @unchecked Sendable {
             tapeWowMs = 1.15
             figEchoSend = 0.22
             melEchoSend = 0.24
+        case .soirDete:
+            // Impressionist salon: warm concert-room bloom, lighter tape echo so piano & harp stay limpid
+            preDelayMs = 20.0
+            roomDecay = Float(0.86 + 0.03 * spaceBloom)
+            roomDampLP = 0.34
+            roomWet = 0.36
+            erMix = 0.32
+            tapeToneHz = 3400.0
+            tapeWowMs = 0.95
+            figEchoSend = 0.16
+            melEchoSend = 0.20
         case .pulse:
             preDelayMs = 14.0
             roomDecay = Float(0.79 + 0.04 * spaceBloom)
@@ -1675,6 +1690,49 @@ private final class FocusRenderState: @unchecked Sendable {
                             // Subtle Buchla vactrol shimmer layered underneath melody notes for hybrid depth
                             if ev.kind == .melody {
                                 let hybridEv = ScoredBellEvent(kind: .melody, at: ev.at, midi: ev.midi, duration: ev.duration, velocity: ev.velocity * 0.7, level: ev.level * 0.24, pan: ev.pan)
+                                bells[nextBellSlot].trigger(event: hybridEv, rng: &noiseRNG, sampleRate: sampleRate)
+                                nextBellSlot = (nextBellSlot + 1) % bells.count
+                            }
+                        } else {
+                            bells[nextBellSlot].trigger(event: ev, rng: &noiseRNG, sampleRate: sampleRate)
+                            nextBellSlot = (nextBellSlot + 1) % bells.count
+                        }
+
+                    case .soirDete:
+                        // Impressionist Chamber: Velvet Felt Upright Piano + Concert Harp arabesques + Soft Vibraphone warmth
+                        if sampleBank.isAvailable {
+                            let inst: AcousticInstrumentID
+                            let felt: Bool
+                            let scale: Double
+                            switch ev.kind {
+                            case .figure:
+                                switch barBellCursor % 3 {
+                                case 0:
+                                    inst = .piano; felt = true; scale = 1.58
+                                case 1:
+                                    inst = .harp; felt = false; scale = 1.24
+                                default:
+                                    inst = .vibe; felt = false; scale = 1.20
+                                }
+                            case .melody:
+                                inst = .piano
+                                felt = false
+                                scale = 1.75
+                            case .glint, .comp, .bass, .drum:
+                                inst = .harp
+                                felt = false
+                                scale = 1.95
+                            }
+                            _ = samplerVoices[nextSamplerSlot].trigger(
+                                bank: sampleBank, instrument: inst, midi: ev.midi, rootMidi: root,
+                                velocity: ev.velocity, duration: ev.duration,
+                                level: ev.level * scale, pan: ev.pan,
+                                feltMuffle: felt, justSweeten: false, sustainedLayer: false,
+                                rng: &noiseRNG, sampleRate: sampleRate
+                            )
+                            nextSamplerSlot = (nextSamplerSlot + 1) % samplerVoices.count
+                            if ev.kind == .melody {
+                                let hybridEv = ScoredBellEvent(kind: .melody, at: ev.at, midi: ev.midi, duration: ev.duration, velocity: ev.velocity * 0.65, level: ev.level * 0.16, pan: ev.pan)
                                 bells[nextBellSlot].trigger(event: hybridEv, rng: &noiseRNG, sampleRate: sampleRate)
                                 nextBellSlot = (nextBellSlot + 1) % bells.count
                             }
@@ -2119,6 +2177,7 @@ private final class FocusRenderState: @unchecked Sendable {
             switch mode {
             case .focus: modeMakeup = 2.80
             case .lateLight: modeMakeup = 2.80
+            case .soirDete: modeMakeup = 3.40
             case .pulse: modeMakeup = 4.55
             case .rain:  modeMakeup = SoundCandidate.isOn ? 6.07 : 7.49
             case .drift: modeMakeup = 6.06
