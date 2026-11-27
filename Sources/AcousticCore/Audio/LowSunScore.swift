@@ -71,6 +71,8 @@ extension SatieScore {
             energy = barIndex < 4 ? 0 : 1 // intro: keys and bass first, then a light kit
         } else if pass % 12 == 11 && section >= 2 {
             energy = 0 // beatless breakdown, 16 bars every ~17 minutes
+        } else if SoundCandidate.isOn && pass % 12 == 5 && section == 3 {
+            energy = 0 // New: a second, shorter beatless stretch (8 bars) halfway between breakdowns
         } else if arcPass == 0 || (arcPass == 3 && section == 3) {
             energy = 1
         } else {
@@ -107,7 +109,9 @@ extension SatieScore {
                 }
             }
             // Hats: shaker 16ths at full energy, 8ths when light; drop the back half of every 8th bar
-            let hatSteps = energy == 2 ? Array(0..<16) : [0, 2, 4, 6, 8, 10, 12, 14]
+            // New: after ~20 minutes, every other full section plays 8th-note hats instead of 16ths
+            let longSessionLighten = SoundCandidate.isOn && barIndex >= 440 && sectionSerial % 2 == 1
+            let hatSteps = (energy == 2 && !longSessionLighten) ? Array(0..<16) : [0, 2, 4, 6, 8, 10, 12, 14]
             for step in hatSteps {
                 if isResetBar && step >= 8 { continue }
                 let accent = hatAccent[step]

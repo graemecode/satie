@@ -1911,8 +1911,11 @@ private final class FocusRenderState: @unchecked Sendable {
                 // Ultra-gentle modulation (+/-0.35 dB sheen, +/-0.75 dB pad/wet) with 36° stereo soften -> silky in headphones
                 betaAmPhase += 14.40 * dt
                 if betaAmPhase >= 1.0 { betaAmPhase -= floor(betaAmPhase) }
-                let padDepth: Float = intensity == .still ? 0.14 : (intensity == .deep ? 0.22 : 0.18)
-                let sheenDepth: Float = intensity == .still ? 0.05 : (intensity == .deep ? 0.11 : 0.08)
+                // New: the 14.4 Hz pad tremolo fades to 40% between minutes 20 and 30
+                let sessionSec = hasCurrentBar ? Double(currentBar.barIndex) * currentBar.secondsPerBar : clockSec
+                let tremoloFade: Float = (SoundCandidate.isOn && sessionSec > 1200) ? max(0.4, 1.0 - Float((sessionSec - 1200) / 600) * 0.6) : 1.0
+                let padDepth: Float = (intensity == .still ? 0.14 : (intensity == .deep ? 0.22 : 0.18)) * tremoloFade
+                let sheenDepth: Float = (intensity == .still ? 0.05 : (intensity == .deep ? 0.11 : 0.08)) * tremoloFade
                 let waveL = 0.5 - 0.5 * Float(cos(2.0 * Double.pi * betaAmPhase))
                 let waveR = 0.5 - 0.5 * Float(cos(2.0 * Double.pi * (betaAmPhase + 0.10)))
                 let padNorm = 1.0 / (1.0 - padDepth * 0.5)
@@ -1943,13 +1946,15 @@ private final class FocusRenderState: @unchecked Sendable {
             let wantRainBed = (mode == .rain && maskingBed != .brown) || (maskingBed == .rain)
             let wantBrownBed = (maskingBed == .brown) || (mode == .still && maskingBed == .off)
             if wantRainBed {
-                let rainGain: Float = (mode == .rain) ? 1.0 : 0.78
+                // New: in Rain & Glass the rain was ~30 dB under the instruments; bring it up to a real bed
+                let rainGain: Float = (mode == .rain) ? (SoundCandidate.isOn ? 2.6 : 1.0) : 0.78
                 if studioRain.isAvailable {
                     let (rL, rR) = courtyardRain.step(
                         elapsedSec: clockSec,
-                        depth01: 0.22 + 0.25 * spaceBloom,
+                        // New: narrower swells, so the rain stays a steady bed
+                        depth01: SoundCandidate.isOn ? 0.28 + 0.12 * spaceBloom : 0.22 + 0.25 * spaceBloom,
                         return01: 0.0,
-                        breath01: 0.5 + 0.25 * sin(clockSec * 0.11),
+                        breath01: 0.5 + (SoundCandidate.isOn ? 0.12 : 0.25) * sin(clockSec * 0.11),
                         dt: dt,
                         sampleRate: sampleRate,
                         sineTable: bank.sineTable
@@ -2010,7 +2015,7 @@ private final class FocusRenderState: @unchecked Sendable {
             switch mode {
             case .focus: modeMakeup = 2.80
             case .pulse: modeMakeup = 4.55
-            case .rain:  modeMakeup = 7.49
+            case .rain:  modeMakeup = SoundCandidate.isOn ? 6.07 : 7.49
             case .drift: modeMakeup = 6.06
             case .groove: modeMakeup = 1.9
             case .still: modeMakeup = 7.61

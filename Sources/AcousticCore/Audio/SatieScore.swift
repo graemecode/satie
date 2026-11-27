@@ -493,6 +493,7 @@ public enum SatieScore {
         for m in chord.held { allowed.insert(((m + shift) % 12 + 12) % 12) }
         for g in glints { allowed.insert(((g + shift) % 12 + 12) % 12) }
 
+        let candidate = SoundCandidate.isOn
         var bells: [ScoredBellEvent] = []
         var sustained: [ScoredSustainEvent] = []
         var figure = chord.figure
@@ -523,6 +524,8 @@ public enum SatieScore {
         case .focus:
             for (step, rawMidi) in figure.enumerated() {
                 if (section == 0 || section == 3) && (step == 2 || step == 5) { continue }
+                // New: after the first pass, the outer sections breathe a little more
+                if candidate && pass > 0 && section != 2 && bar % 2 == 1 && step == 7 { continue }
                 if extraSparse && (step == 1 || step == 4 || step == 7) { continue }
                 let accent = (step == 0 || step == 3 || step == 6) ? 1.0 : 0.68
                 let velocity = accent * rng.between(0.86, 1.0)
@@ -562,7 +565,10 @@ public enum SatieScore {
             }
 
             // Sparse lyrical melody (20% dropout, 12% octave lift, and Factor Oracle chord-tone harmonization on Pass 1+)
-            if pass == 0 || rng.nextUnit() >= 0.20 {
+            // New: the full melody plays on the first pass and returns every fourth pass; in between,
+            // only about one 4-bar phrase in three carries it, so the tune surfaces rather than loops.
+            let melodyPhraseOn = !candidate || pass == 0 || pass % 4 == 0 || ((bar / 4 + pass) % 3 == 0)
+            if melodyPhraseOn && (pass == 0 || rng.nextUnit() >= 0.20) {
                 let melodySlot = corpusIdx % barsPerForm
                 let chordPcs = Set(chord.figure.map { (($0 % 12) + 12) % 12 } + chord.held.map { (($0 % 12) + 12) % 12 })
                 for (beat, written, beats) in softLightMelody[melodySlot] {
@@ -618,8 +624,15 @@ public enum SatieScore {
 
         case .pulse:
             // Donato Dozzy / Floating Points hypnotic arpeggio + polyrhythmic 3:4 Buchla vactrol counter-plucks
+            // New: after the first pass the arpeggio rotates through full, open and sparse densities
+            // by 8-bar section, and every third pass ends with an 8-bar breath without it.
+            let pulseDensity = (candidate && pass > 0) ? (barIndex / 8 + pass) % 3 : 0
+            let pulseBreath = candidate && pass > 0 && pass % 3 == 2 && section == 3
             for (step, rawMidi) in figure.enumerated() {
                 if section == 0 && step == 7 { continue }
+                if pulseBreath { continue }
+                if pulseDensity == 1 && (step == 1 || step == 5) { continue }
+                if pulseDensity == 2 && !(step == 0 || step == 3 || step == 6) { continue }
                 let accent = (step == 0 || step == 3 || step == 6) ? 1.0 : 0.62
                 let velocity = accent * rng.between(0.84, 1.0)
                 // Subtle micro-swing (+10ms on odd 8ths) gives warm analog groove
@@ -736,6 +749,18 @@ public enum SatieScore {
             )
 
         case .still, .dive:
+            // New: a rare, soft two-note glow (root and fifth, an octave up) at the crest of every
+            // fourth 13-bar cycle (about every 3.5 minutes), so Still never goes fully static over hours
+            if candidate && mode == .still && !maSilenceWindow && cyc13 > 0.97 && bar % 2 == 0 && (barIndex / 13) % 4 == 1 {
+                let low = chord.figure[0] + 12 + shift
+                let fifth = low + 7
+                let fifthPc = ((fifth - shift) % 12 + 12) % 12
+                let partner = chord.figure.contains { (($0 % 12) + 12) % 12 == fifthPc } ? fifth : chord.figure[2] + 12 + shift
+                for (k, midi) in [low, partner].enumerated() {
+                    bells.append(ScoredBellEvent(kind: .melody, at: rng.between(0.2, 0.6) + Double(k) * 0.9 * spb, midi: midi,
+                                                 duration: 3.0, velocity: 0.45, level: 0.07, pan: k == 0 ? -0.2 : 0.2))
+                }
+            }
             // Zero-ego Study / Deep Reading: strictly non-resolving suspended pentatonic clouds,
             // zero melody hook, ultra-gentle harmonic presence so prefrontal cortex stays 100% on text/code
             if !maSilenceWindow && (bar % 2 == 0 || extraDeep) {
@@ -782,7 +807,7 @@ public enum SatieScore {
             ))
         }
 
-        let padScale: Double = (mode == .rain) ? 0.85 : (mode == .drift ? 1.15 : (mode == .groove ? 0.75 : 1.0))
+        let padScale: Double = (mode == .rain) ? (candidate ? 1.25 : 0.85) : (mode == .drift ? 1.15 : (mode == .groove ? 0.75 : 1.0))
         for rawMidi in chord.held {
             sustained.append(ScoredSustainEvent(
                 kind: .pad,

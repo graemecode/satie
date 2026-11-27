@@ -40,6 +40,7 @@ struct LabNote: Codable, Identifiable {
     var chord: String
     var listenedSeconds: Int
     var timeOfDay: String
+    var version: String?
     var rating: Int?
     var tags: [String]
     var note: String
@@ -61,6 +62,13 @@ final class LabModel: ObservableObject {
     @Published var draftTags: Set<String> = []
     @Published var draftRating: Int?
     @Published var markedBar: Int?
+    /// "Current" is what ships; "New" is the candidate under test.
+    @Published var useNew = false {
+        didSet {
+            SoundCandidate.isOn = useNew
+            if engine.isPlaying { engine.jumpToBar(bar) } // recompose from here so the switch is heard now
+        }
+    }
 
     static let tagChoices = [
         "Love it", "Would keep this on", "Good for deep work", "Groove feels good",
@@ -110,11 +118,28 @@ final class LabModel: ObservableObject {
         return "Full groove"
     }
 
+    /// What the New version changes in each world, so you know what to listen for.
+    var whatsNew: String {
+        switch world {
+        case .focus: return "New: the full melody plays on the first pass and every fourth pass; in between it only surfaces in fragments. The arpeggio breathes a little more outside the climax. Try Second or Third pass."
+        case .pulse: return "New: after the first pass the arpeggio rotates between full, open and sparse by section, and every third pass ends with an 8-bar breath. The fast pad tremolo fades after 20 minutes. Try Third pass and 25 minutes in."
+        case .rain: return "New: the rain is a real, audible bed (it was ~30 dB under the instruments) and the pad is a little fuller, so it swells half as much (6.3 → 3.3 LU)."
+        case .still: return "New: about every 4 minutes, a soft two-note glow rises and fades, so it never goes fully static."
+        case .groove: return "New: a second, 8-bar beatless break halfway between breakdowns, and after 20 minutes every other full section uses lighter 8th-note hats. Try Short break and 25 minutes in."
+        case .drift, .dive: return "No changes in New for this world."
+        }
+    }
+
     /// Places worth hearing in each world, as (label, bar).
     var jumps: [(String, Int)] {
+        let perMinute = 60.0 / SatieScore.secondsPerBar(for: world)
+        let minutes = { (m: Double) in Int(m * perMinute) }
         switch world {
-        case .groove: return [("Start", 0), ("Full groove", 40), ("Light section", 128), ("Breakdown", 11 * 32 + 14), ("20 minutes in", 440)]
-        default: return [("Start", 0), ("Second pass", 32), ("10 minutes in", 200), ("Much later", 640)]
+        case .groove:
+            return [("Start", 0), ("Full groove", 40), ("Light section", 128), ("Short break", 5 * 32 + 22),
+                    ("Breakdown", 11 * 32 + 14), ("25 minutes in", minutes(25))]
+        default:
+            return [("Start", 0), ("Second pass", 32), ("Third pass", 64), ("Fifth pass", 128), ("25 minutes in", minutes(25))]
         }
     }
 
@@ -149,7 +174,7 @@ final class LabModel: ObservableObject {
         let note = LabNote(
             time: Date(), build: build, world: world.rawValue, worldTitle: world.title,
             bar: bar, markedBar: markedBar, section: sectionLabel, chord: telemetry.chordLabel,
-            listenedSeconds: Int(listened), timeOfDay: timeOfDay.label,
+            listenedSeconds: Int(listened), timeOfDay: timeOfDay.label, version: useNew ? "new" : "current",
             rating: draftRating, tags: draftTags.sorted(), note: text
         )
         let enc = JSONEncoder()
@@ -245,7 +270,19 @@ struct LabView: View {
                     Text("Listened \(Self.clock(lab.listened))").font(.caption).foregroundStyle(.secondary).monospacedDigit()
                 }
                 Spacer()
-                meter
+                VStack(alignment: .trailing, spacing: 6) {
+                    Picker("", selection: $lab.useNew) {
+                        Text("Current").tag(false)
+                        Text("New").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 150)
+                    .help("Current is what ships. New is the candidate under test; switching keeps your place.")
+                    meter
+                }
+            }
+            if lab.useNew {
+                Text(lab.whatsNew).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: 6) {
                 Text("Jump to").foregroundStyle(.secondary)
@@ -317,7 +354,7 @@ struct LabView: View {
                 }
                 List(lab.notes.prefix(60)) { note in
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("\(note.worldTitle) · bar \((note.markedBar ?? note.bar) + 1) · \(note.section)")
+                        Text("\(note.worldTitle)\(note.version == "new" ? " (new)" : "") · bar \((note.markedBar ?? note.bar) + 1) · \(note.section)")
                             .font(.caption).foregroundStyle(.secondary)
                         let meta = ([note.rating.map { "\($0)/5" }].compactMap { $0 } + note.tags).joined(separator: " · ")
                         if !meta.isEmpty { Text(meta).font(.caption) }
