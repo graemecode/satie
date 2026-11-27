@@ -601,7 +601,7 @@ struct SatieiOSRootView: View {
         case .dive:  return Color(red: 0.62, green: 0.88, blue: 0.94)
         case .drift: return Color(red: 0.92, green: 0.84, blue: 0.74)
         case .groove: return Color(red: 1.00, green: 0.66, blue: 0.42)
-        case .furniture, .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin: return Color(red: 0.86, green: 0.82, blue: 0.94)
+        case .loops, .furniture, .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin: return Color(red: 0.86, green: 0.82, blue: 0.94)
         }
     }
 }

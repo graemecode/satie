@@ -55,6 +55,7 @@
 		28916DAFFFB43DCCA33E253A /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 440ED3310416F607260F337C /* MetalKit.framework */; };
 		296DB97959C3CE89FAE805D5 /* AudioToolbox.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C09B2662313A4B98C2FDB60B /* AudioToolbox.framework */; };
 		2A0B004B78831AEF67329237 /* StudioSampleBank.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3E006F291E4706B32DAC704 /* StudioSampleBank.swift */; };
+		2BCA086DAD58132EE1E2C163 /* SatieLoops.swift in Sources */ = {isa = PBXBuildFile; fileRef = 848BE20B596B751440A3F8D8 /* SatieLoops.swift */; };
 		2BECA9C70A67D3A57DB9BDAF /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 21174110F87B50E245729D03 /* Accelerate.framework */; };
 		2C9C92A5E36B516F21A8B96E /* AppIntents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FAE4363C458D97FB616C5E7D /* AppIntents.framework */; };
 		2D61049F8AEDAD4708EAE410 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 5BC0F50041072BA8E97BAEFE /* InfoPlist.strings */; };
@@ -164,12 +165,14 @@
 		9A4A80C973BDC2375FA0D221 /* AppShortcuts.strings in Resources */ = {isa = PBXBuildFile; fileRef = 501143801EBA23F5838A7E3D /* AppShortcuts.strings */; };
 		9E12D4B251D445E20899AC80 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 00BEA76C32250875AAF7523A /* WidgetKit.framework */; };
 		9EEDF69E2FF56864F086473C /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 5BC0F50041072BA8E97BAEFE /* InfoPlist.strings */; };
+		9F8FAB318F8FFC21BA948B13 /* SatieLoops.swift in Sources */ = {isa = PBXBuildFile; fileRef = 848BE20B596B751440A3F8D8 /* SatieLoops.swift */; };
 		A13524D2F9C1790D1A98A465 /* GrooveInstruments.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52412A268A8E494D463140CB /* GrooveInstruments.swift */; };
 		A149D0FBA086A4F7E51850FC /* HarmonicFactorOracle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C62579D60BAAB6B4EFCB6FBD /* HarmonicFactorOracle.swift */; };
 		A33671CE9BC09B2975645162 /* GlobalHotKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 399F9D5D17214E97E233F23E /* GlobalHotKeys.swift */; };
 		A583A54C4CC4ECF45FCF7C63 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B088A28104E37FB1C43B26EA /* StoreKit.framework */; };
 		A6A8C039392338FBB5C50E31 /* RingBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A19E78A66174C598734FA64 /* RingBuffer.swift */; };
 		A8209688E9AFD1D17FCB9226 /* AppShortcuts.strings in Resources */ = {isa = PBXBuildFile; fileRef = 501143801EBA23F5838A7E3D /* AppShortcuts.strings */; };
+		AA7FE4D82A65EBC4EFA1D3DD /* SatieLoops.swift in Sources */ = {isa = PBXBuildFile; fileRef = 848BE20B596B751440A3F8D8 /* SatieLoops.swift */; };
 		AAA336885D65C127D0AAAE6C /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 5BC0F50041072BA8E97BAEFE /* InfoPlist.strings */; };
 		ABEA7997A9CA9B0FAED0B62E /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 21174110F87B50E245729D03 /* Accelerate.framework */; };
 		AEB56A8A8FD28E1C6A61D6A2 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 00D042F2C3F30E94ECF157F5 /* AVFoundation.framework */; };
@@ -232,6 +235,7 @@
 		E72EEC7EDBE6345A4319AD03 /* PhysicalInstruments.swift in Sources */ = {isa = PBXBuildFile; fileRef = C36E1A9803E13EA8DAD1C9C2 /* PhysicalInstruments.swift */; };
 		E79CD6D5A6BE472DFEC7D1EB /* MenuBarPositioner.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECF78C003BD8651395C98184 /* MenuBarPositioner.swift */; };
 		E7E83BA8BD46A308891F2DD8 /* libAcousticCoreTV.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 552D75C3516D06F467950E1E /* libAcousticCoreTV.a */; };
+		EB210C95207470809ED22DB7 /* SatieLoops.swift in Sources */ = {isa = PBXBuildFile; fileRef = 848BE20B596B751440A3F8D8 /* SatieLoops.swift */; };
 		EBB3F8584D0AACDB004DC2C6 /* SatieLiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3696F32DCB8894D577FB32DE /* SatieLiveActivityAttributes.swift */; };
 		EBEC9B13757FD723B219C7D5 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5933F23D9460CA7B96DC9B /* AppState.swift */; };
 		ECB490906B8ABE1EC4081119 /* SatieRepertoire.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0DF35678932C61C047CE17 /* SatieRepertoire.swift */; };
@@ -371,6 +375,7 @@
 		7CEFFFB9D6FBA7E17D182837 /* ko */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ko; path = ko.lproj/Localizable.strings; sourceTree = "<group>"; };
 		7F4B6DD8C3A696F90ACD1DA8 /* libAcousticCoreVision.a */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = archive.ar; path = libAcousticCoreVision.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		81FA047C9BB90CDE3BCB41AA /* AppKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AppKit.framework; path = System/Library/Frameworks/AppKit.framework; sourceTree = SDKROOT; };
+		848BE20B596B751440A3F8D8 /* SatieLoops.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SatieLoops.swift; sourceTree = "<group>"; };
 		8880E9DB01723F8D1CF71269 /* NowPlayingBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingBridge.swift; sourceTree = "<group>"; };
 		8BFAB49447F9539F3DDDFD24 /* zh-Hant */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hant"; path = "zh-Hant.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		8DFCFBFDCE3AEF9A21749406 /* WatchKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WatchKit.framework; path = System/Library/Frameworks/WatchKit.framework; sourceTree = SDKROOT; };
@@ -765,6 +770,7 @@
 				C36E1A9803E13EA8DAD1C9C2 /* PhysicalInstruments.swift */,
 				7A19E78A66174C598734FA64 /* RingBuffer.swift */,
 				608936DEA3254AC2054CECC8 /* SatieLanguage.swift */,
+				848BE20B596B751440A3F8D8 /* SatieLoops.swift */,
 				AA0DF35678932C61C047CE17 /* SatieRepertoire.swift */,
 				53A25F054B868D77FDCDA52A /* SatieRepertoireData.swift */,
 				D9F0E70D2C1A26D3B9E6EF9D /* SatieScore.swift */,
@@ -825,7 +831,7 @@
 			path = Renderer;
 			sourceTree = "<group>";
 		};
-		"TEMP_9065B9D6-F60A-45B0-85F2-FBFE80879520" /* Resources */ = {
+		"TEMP_1B8A903C-219B-4C9B-9628-7717C30B843E" /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -1266,6 +1272,7 @@
 				03D6E6B2483E1F81217E715F /* SatieL10n.swift in Sources */,
 				308FB4B90E6446ABA571A8ED /* SatieLanguage.swift in Sources */,
 				6AE7D4530A0D031D283EAC69 /* SatieLiveActivityAttributes.swift in Sources */,
+				9F8FAB318F8FFC21BA948B13 /* SatieLoops.swift in Sources */,
 				16266DB8F8481CE56C43EEAD /* SatieRepertoire.swift in Sources */,
 				C930D661F6F4809EF811A102 /* SatieRepertoireData.swift in Sources */,
 				49F30A0595CBC1046F357205 /* SatieScore.swift in Sources */,
@@ -1309,6 +1316,7 @@
 				5509CB8BAB9C2B95BF908EA3 /* SatieL10n.swift in Sources */,
 				42B43AE1FC925DEDB92728EF /* SatieLanguage.swift in Sources */,
 				D223B98E9E8DD013F1AADDC0 /* SatieLiveActivityAttributes.swift in Sources */,
+				2BCA086DAD58132EE1E2C163 /* SatieLoops.swift in Sources */,
 				ECB490906B8ABE1EC4081119 /* SatieRepertoire.swift in Sources */,
 				B43A3FD9DFD2EF07CDB5728F /* SatieRepertoireData.swift in Sources */,
 				6CFABD9C631E46077F82AB59 /* SatieScore.swift in Sources */,
@@ -1373,6 +1381,7 @@
 				34CD5C08899FB62C4B1EAE27 /* SatieL10n.swift in Sources */,
 				E2E0ED36A469901D60D1F2C3 /* SatieLanguage.swift in Sources */,
 				D0AE6B4888F401BD2BA3631F /* SatieLiveActivityAttributes.swift in Sources */,
+				EB210C95207470809ED22DB7 /* SatieLoops.swift in Sources */,
 				F54E51D3E1A5674583FDF3AA /* SatieRepertoire.swift in Sources */,
 				1A26D971E5BF9E8B8C9BBA1D /* SatieRepertoireData.swift in Sources */,
 				27BCD328DD52D5B82E249404 /* SatieScore.swift in Sources */,
@@ -1417,6 +1426,7 @@
 				319B7FE56296E16DF98B2F82 /* SatieL10n.swift in Sources */,
 				B46E574CA0728CD68847EB01 /* SatieLanguage.swift in Sources */,
 				EBB3F8584D0AACDB004DC2C6 /* SatieLiveActivityAttributes.swift in Sources */,
+				AA7FE4D82A65EBC4EFA1D3DD /* SatieLoops.swift in Sources */,
 				B7CF0586921C9EE3E0682161 /* SatieRepertoire.swift in Sources */,
 				79DC02CDC8D93F1046EC73E9 /* SatieRepertoireData.swift in Sources */,
 				CC1BD19E8983F1BF4E2DD82B /* SatieScore.swift in Sources */,

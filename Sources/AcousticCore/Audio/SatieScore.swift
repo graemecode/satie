@@ -326,7 +326,7 @@ public enum SatieScore {
         case .drift: return driftPack
         case .still, .dive: return stillPack
         case .groove: return lowSunPack
-        case .furniture, .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin: return stillPack // unused: these worlds play Satie's own bars
+        case .loops, .furniture, .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin: return stillPack // unused: these worlds play Satie's own bars
         }
     }
 
@@ -344,6 +344,7 @@ public enum SatieScore {
         case .drift: return 54.0
         case .still, .dive: return 58.0
         case .groove: return 88.0
+        case .loops: return 60.0
         case .furniture: return 66.0
         case .gymnopedies: return 66.0
         case .gnossiennes: return 56.0
@@ -437,6 +438,9 @@ public enum SatieScore {
         rng: inout SeededRNG,
         navigator: inout ScoreOracleNavigator?
     ) -> ComposedBar {
+        if mode == .loops {
+            return SatieLoops.composeBar(barIndex: barIndex, shift: circadian == .night ? -2 : 0, rng: &rng)
+        }
         if mode == .furniture {
             if navigator != nil {
                 var state = navigator!.furniture
@@ -552,7 +556,7 @@ public enum SatieScore {
         let extraSparse = (intensity == .still)
         let extraDeep   = (intensity == .deep)
         switch mode {
-        case .furniture, .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin:
+        case .loops, .furniture, .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin:
             break // composed by SatieRepertoire before reaching here
         case .focus:
             for (step, rawMidi) in figure.enumerated() {

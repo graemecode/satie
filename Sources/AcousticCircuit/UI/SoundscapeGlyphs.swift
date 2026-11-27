@@ -139,7 +139,7 @@ struct SoundscapeGlyph: View {
                 let dot = Path(ellipseIn: CGRect(x: center.x - dotR, y: center.y - dotR, width: dotR * 2, height: dotR * 2))
                 ctx.fill(dot, with: .color(primary))
 
-            case .furniture, .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin:
+            case .loops, .furniture, .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin:
                 // Satie worlds (Satie Lab only for now): three notes on a gentle line
                 let rises = mode == .gymnopedies
                 for k in 0..<3 {

@@ -61,6 +61,7 @@ public enum VisualPreset: Int, CaseIterable, Identifiable, Sendable {
         case .dive:  return .oculus
         case .drift: return .liquid
         case .groove: return .sunset
+        case .loops: return .horizon
         case .furniture: return .liquid
         case .gymnopedies: return .liquid
         case .gnossiennes: return .oculus
