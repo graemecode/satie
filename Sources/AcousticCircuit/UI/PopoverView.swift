@@ -414,6 +414,7 @@ struct PopoverView: View {
         }
         switch state.focusMode {
         case .focus: return Color(red: 1.00, green: 0.78, blue: 0.52) // Warm cedar tungsten
+        case .lateLight: return Color(red: 1.00, green: 0.70, blue: 0.48)
         case .pulse: return Color(red: 0.62, green: 0.78, blue: 1.00) // Cool architectural indigo
         case .rain:  return Color(red: 0.52, green: 0.82, blue: 0.84) // Kyoto rain sea-glass
         case .drift: return Color(red: 0.92, green: 0.84, blue: 0.74) // Nocturnal lunar pearl

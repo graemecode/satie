@@ -12,6 +12,7 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
     case groove
     // Satie Lab only, until approved. Furniture Music composes new music in Satie's language;
     // the repertoire worlds below play the composers' own pieces and serve as Lab benchmarks.
+    case lateLight
     case loops
     case furniture
     case gymnopedies
@@ -40,6 +41,7 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .dive:  return SatieL10n.string("soundscape.dive.title", fallback: "Deep Dive")
         case .drift: return SatieL10n.string("soundscape.drift.title", fallback: "Gymnopédie")
         case .groove: return SatieL10n.string("soundscape.groove.title", fallback: "Low Sun")
+        case .lateLight: return "Late Light"
         case .loops: return "Loops"
         case .furniture: return "Furniture Music (generated)"
         case .gymnopedies: return "Gymnopédies"
@@ -60,6 +62,7 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .dive:  return SatieL10n.string("soundscape.dive.short", fallback: "DIVE")
         case .drift: return SatieL10n.string("soundscape.drift.short", fallback: "NIGHT")
         case .groove: return SatieL10n.string("soundscape.groove.short", fallback: "GROOVE")
+        case .lateLight: return "LATE"
         case .loops: return "LOOPS"
         case .furniture: return "SATIE"
         case .gymnopedies: return "GYMNO"
@@ -80,6 +83,7 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .dive:  return SatieL10n.string("soundscape.dive.subtitle", fallback: "Meditation · Breath & Bowls")
         case .drift: return SatieL10n.string("soundscape.drift.subtitle", fallback: "Late Night · Piano & Cello")
         case .groove: return SatieL10n.string("soundscape.groove.subtitle", fallback: "Steady Flow · Keys, Bass & Brushes")
+        case .lateLight: return "Late Afternoon · Felt Piano & Vibe"
         case .loops: return "Six piano phrases on unequal loops · never the same"
         case .furniture: return "New music in Satie's language · never the same"
         case .gymnopedies: return "Satie, 1888 · Nos. 1–3, endless"
@@ -1439,7 +1443,7 @@ private final class FocusRenderState: @unchecked Sendable {
             tapeWowMs = 0.8
             figEchoSend = 0.04
             melEchoSend = 0.10
-        case .focus:
+        case .focus, .lateLight:
             preDelayMs = 18.0
             roomDecay = Float(0.83 + 0.03 * spaceBloom)
             roomDampLP = 0.38
@@ -1640,7 +1644,7 @@ private final class FocusRenderState: @unchecked Sendable {
                             bells[nextBellSlot].trigger(event: ev, rng: &noiseRNG, sampleRate: sampleRate)
                             nextBellSlot = (nextBellSlot + 1) % bells.count
                         }
-                    case .focus:
+                    case .focus, .lateLight:
                         // Kankyō Acoustic: Real CC0 Soft Vibraphone + Velvet Felt Piano + Concert Harp glints
                         if sampleBank.isAvailable {
                             let inst: AcousticInstrumentID
@@ -2114,6 +2118,7 @@ private final class FocusRenderState: @unchecked Sendable {
             let modeMakeup: Float
             switch mode {
             case .focus: modeMakeup = 2.80
+            case .lateLight: modeMakeup = 2.80
             case .pulse: modeMakeup = 4.55
             case .rain:  modeMakeup = SoundCandidate.isOn ? 6.07 : 7.49
             case .drift: modeMakeup = 6.06

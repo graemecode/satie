@@ -131,6 +131,7 @@ final class LabModel: ObservableObject {
         case .groove: return "New: a second, 8-bar beatless break halfway between breakdowns; the drums fade back in over a bar after every break instead of snapping on; after 20 minutes every other full section uses lighter 8th-note hats. Try Short break and 25 minutes in."
         case .drift: return "New: its rests keep one soft note on the downbeat instead of going silent, so the piano never drops out."
         case .dive: return "No changes in New for this world."
+        case .lateLight: return "A new piece built like Soft Light: 32 bars in F major at 68 BPM, a descending B♭maj9–Am7–Gm9–Fmaj7 line, a written melody, a continuous arpeggio and strings that swell into the middle. Compare it with Soft Light."
         case .loops: return "Six short piano phrases in Satie's harmony, each repeating on its own loop (17 to 37 seconds), so they drift into new combinations for hours, over a soft floor that never stops. Every few minutes one loop swaps to another phrase. Tell me which phrases you love or would cut."
         case .furniture: return "Your verdict: a knockoff of Gymnopédie. Kept only for comparison. New music composed endlessly in Satie's language: his harmony, voicings, accompaniment and melodic habits, measured from his scores, never one of his pieces (any run that matches his melodies is rewritten). Compare it with the real Gymnopédies below."
         case .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin: return "Benchmark: the composer's own pieces, played endlessly (Lab only, never shipped). Current and New are the same."
@@ -237,7 +238,7 @@ struct LabView: View {
             ScrollView {
             VStack(alignment: .leading, spacing: 6) {
             ForEach(FocusSoundscape.allCases) { mode in
-                if mode == .loops {
+                if mode == .lateLight {
                     Text("New, Lab only").font(.caption).foregroundStyle(.secondary).padding(.top, 8)
                 }
                 if mode == .gymnopedies {

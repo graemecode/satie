@@ -181,6 +181,56 @@ public enum SatieScore {
     // A major pentatonic glints (E6, F#6, A6, B6, C#7, E7)
     private static let softLightGlints: [Int] = [88, 90, 93, 95, 97, 100]
 
+    // MARK: - Late Light (sibling of Soft Light: 32 bars in F major, 68 BPM)
+    // Built like Soft Light (a fixed, written composition; a continuous eighth-note arpeggio; strings that
+    // swell into the middle; gentle variation on later passes) but with its own harmony: a descending
+    // IV–iii–ii–I line (B♭maj9, Am7, Gm9, Fmaj7) instead of Soft Light's I–vi–IV–V, and its own melody.
+
+    private static let llBbM9 = ChordDef(name: "Bbmaj9", root: 46, figure: [58, 65, 69, 72, 74, 72, 69, 65], held: [58, 62, 65, 69], role: .subdominant)
+    private static let llAm7  = ChordDef(name: "Am7",    root: 45, figure: [57, 64, 67, 72, 76, 72, 67, 64], held: [57, 60, 64, 67], role: .mediant)
+    private static let llGm9  = ChordDef(name: "Gm9",    root: 43, figure: [55, 62, 65, 69, 70, 69, 65, 62], held: [55, 58, 62, 65], role: .subdominant)
+    private static let llGm7  = ChordDef(name: "Gm7",    root: 43, figure: [55, 62, 65, 70, 74, 70, 65, 62], held: [55, 58, 62, 65], role: .subdominant)
+    private static let llFM7  = ChordDef(name: "Fmaj7",  root: 41, figure: [53, 60, 64, 69, 72, 69, 64, 60], held: [53, 57, 60, 64], role: .tonic)
+    private static let llCsus = ChordDef(name: "Csus4",  root: 48, figure: [55, 60, 65, 67, 72, 67, 65, 60], held: [55, 60, 65, 67], role: .suspended)
+    private static let llC    = ChordDef(name: "C",      root: 48, figure: [55, 60, 64, 67, 72, 67, 64, 60], held: [55, 60, 64, 67], role: .dominant)
+    private static let llDm9  = ChordDef(name: "Dm9",    root: 38, figure: [50, 57, 64, 65, 69, 65, 64, 57], held: [53, 57, 60, 64], role: .mediant)
+    private static let llBbM7 = ChordDef(name: "Bbmaj7", root: 46, figure: [58, 62, 65, 69, 74, 69, 65, 62], held: [58, 62, 65, 69], role: .subdominant)
+
+    private static let lateLightForm: [ChordDef] = [
+        llBbM9, llAm7, llGm9, llFM7, llBbM9, llAm7, llGm7, llCsus,     // A: the descending line, ending suspended
+        llBbM9, llAm7, llGm9, llFM7, llDm9, llDm9, llBbM7, llC,        // A': the line, then a turn through Dm9
+        llDm9, llAm7, llBbM7, llFM7, llGm9, llAm7, llBbM9, llCsus,     // B: higher, building gently
+        llBbM9, llAm7, llGm9, llFM7, llBbM9, llAm7, llGm7, llFM7,      // A'': settling home
+    ]
+    private static let lateLightClimateB: [ChordDef] = [
+        llDm9, llAm7, llBbM9, llFM7, llGm9, llAm7, llBbM7, llCsus,
+        llBbM9, llFM7, llGm9, llAm7, llDm9, llBbM9, llGm7, llC,
+        llAm7, llDm9, llBbM7, llFM7, llGm9, llBbM9, llAm7, llCsus,
+        llBbM9, llAm7, llDm9, llFM7, llGm9, llAm7, llBbM9, llFM7,
+    ]
+
+    // (beat, MIDI, beats) per bar of the form, written against the chords above
+    private static let lateLightMelody: [[(Double, Int, Double)]] = [
+        [], [], [], [(2, 72, 2)],                                   // C5 pickup
+        [(0, 74, 2), (2, 77, 2)], [(0, 76, 3), (3, 74, 1)],         // D5 F5 | E5 D5
+        [(0, 74, 2), (2, 70, 2)], [(0, 72, 2), (2, 77, 2)],         // D5 B♭4 | C5 F5
+        [(0, 81, 3), (3, 79, 1)], [(0, 76, 4)],                     // A5 G5 | E5
+        [(1, 74, 1), (2, 77, 2)], [(0, 76, 2), (2, 72, 2)],         // D5 F5 | E5 C5
+        [(0, 77, 3), (3, 76, 1)], [(0, 74, 4)],                     // F5 E5 | D5
+        [(0, 70, 2), (2, 74, 2)], [(0, 76, 3)],                     // B♭4 D5 | E5
+        [(0, 81, 2), (2, 77, 2)], [(0, 79, 3), (3, 76, 1)],         // B: A5 F5 | G5 E5
+        [(0, 77, 2), (2, 74, 1), (3, 72, 1)], [(0, 69, 4)],         // F5 D5 C5 | A4
+        [(0, 70, 1), (1, 72, 1), (2, 74, 2)], [(0, 76, 2), (2, 79, 2)], // B♭4 C5 D5 | E5 G5
+        [(0, 81, 3), (3, 77, 1)], [(0, 79, 4)],                     // A5 F5 | G5 (the gentle peak)
+        [(0, 77, 2), (2, 74, 2)], [(0, 72, 3), (3, 76, 1)],         // A'': F5 D5 | C5 E5
+        [(0, 74, 2), (2, 70, 2)], [(0, 72, 4)],                     // D5 B♭4 | C5
+        [(2, 74, 2)], [(0, 72, 2), (2, 69, 2)],                     // D5 | C5 A4
+        [(0, 70, 4)], [(0, 69, 3)],                                 // B♭4 | A4
+    ]
+
+    // F major pentatonic glints (C6, D6, F6, G6, A6, C7)
+    private static let lateLightGlints: [Int] = [84, 86, 89, 91, 93, 96]
+
     // MARK: - Kinetic Pulse (104 BPM D Dorian / F Lydian driving arpeggios)
 
     private static let chordDm9  = ChordDef(name: "Dm9",   root: 38, figure: [50, 57, 60, 64, 69, 64, 60, 57], held: [50, 57, 60, 64], role: .tonic)
@@ -312,6 +362,7 @@ public enum SatieScore {
     }
 
     private static let focusPack = ModeOraclePack(primary: softLightForm, secondary: softLightClimateB, glints: softLightGlints)
+    private static let lateLightPack = ModeOraclePack(primary: lateLightForm, secondary: lateLightClimateB, glints: lateLightGlints)
     private static let pulsePack = ModeOraclePack(primary: pulseForm, secondary: pulseClimateB, glints: dorianGlints)
     private static let rainPack  = ModeOraclePack(primary: rainForm, secondary: rainClimateB, glints: rainGlints)
     private static let driftPack = ModeOraclePack(primary: driftForm, secondary: driftClimateB, glints: driftGlints)
@@ -321,6 +372,7 @@ public enum SatieScore {
     private static func oraclePack(for mode: FocusSoundscape) -> ModeOraclePack {
         switch mode {
         case .focus: return focusPack
+        case .lateLight: return lateLightPack
         case .pulse: return pulsePack
         case .rain:  return rainPack
         case .drift: return driftPack
@@ -339,6 +391,7 @@ public enum SatieScore {
     public static func tempoBPM(for mode: FocusSoundscape) -> Double {
         switch mode {
         case .focus: return 72.0
+        case .lateLight: return 68.0
         case .pulse: return 108.0 // 1.80 beats/s -> exact 8:1 phase-lock with 14.40 Hz beta shimmer
         case .rain:  return 60.0
         case .drift: return 54.0
@@ -369,6 +422,7 @@ public enum SatieScore {
         switch (mode, phase) {
         case (.focus, .night): return -2 // G major warmth at night
         case (.focus, _):      return 0  // Exact A major Soft Light
+        case (.lateLight, .night): return -2 // E♭ major at night
         case (.pulse, .morning): return 2
         case (.pulse, .night):   return -2
         case (.drift, .night):   return -2
@@ -558,7 +612,7 @@ public enum SatieScore {
         switch mode {
         case .loops, .furniture, .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin:
             break // composed by SatieRepertoire before reaching here
-        case .focus:
+        case .focus, .lateLight:
             for (step, rawMidi) in figure.enumerated() {
                 if (section == 0 || section == 3) && (step == 2 || step == 5) { continue }
                 // New: after the first pass, the outer sections breathe a little more
@@ -611,7 +665,7 @@ public enum SatieScore {
             if pass == 0 || rng.nextUnit() >= 0.20 {
                 let melodySlot = corpusIdx % barsPerForm
                 let chordPcs = Set(chord.figure.map { (($0 % 12) + 12) % 12 } + chord.held.map { (($0 % 12) + 12) % 12 })
-                for (beat, written, beats) in softLightMelody[melodySlot] {
+                for (beat, written, beats) in (mode == .lateLight ? lateLightMelody : softLightMelody)[melodySlot] {
                     var melodicNote = written
                     if pass > 0 && corpusIdx != bar {
                         let wPc = ((written % 12) + 12) % 12

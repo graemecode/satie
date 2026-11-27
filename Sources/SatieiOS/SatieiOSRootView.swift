@@ -595,6 +595,7 @@ struct SatieiOSRootView: View {
         }
         switch state.focusMode {
         case .focus: return Color(red: 1.00, green: 0.78, blue: 0.52)
+        case .lateLight: return Color(red: 1.00, green: 0.70, blue: 0.48)
         case .pulse: return Color(red: 0.62, green: 0.78, blue: 1.00)
         case .rain:  return Color(red: 0.52, green: 0.82, blue: 0.84)
         case .still: return Color(red: 0.78, green: 0.82, blue: 0.88)

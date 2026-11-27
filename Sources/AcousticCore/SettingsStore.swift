@@ -55,6 +55,7 @@ public enum VisualPreset: Int, CaseIterable, Identifiable, Sendable {
     public static func paired(for mode: FocusSoundscape) -> VisualPreset {
         switch mode {
         case .focus: return .circuit
+        case .lateLight: return .circuit
         case .pulse: return .phosphor
         case .rain:  return .ecology
         case .still: return .horizon

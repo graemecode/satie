@@ -38,7 +38,7 @@ struct SoundscapeGlyph: View {
             let ir = r * 0.62
 
             switch mode {
-            case .focus:
+            case .focus, .lateLight:
                 // FOCUS (Soft Light): Precision Dieter Rams optical aperture — clean concentric ring, 4 hairline compass ticks, poised center point
                 let ringR = ir * 0.76
                 let innerRing = Path(ellipseIn: CGRect(x: center.x - ringR, y: center.y - ringR, width: ringR * 2, height: ringR * 2))

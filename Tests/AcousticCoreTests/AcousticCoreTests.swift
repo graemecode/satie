@@ -952,6 +952,7 @@ struct AcousticCoreTests {
             (.still, [2, 4, 6, 7, 9, 11, 1], 3),   // D pentatonic sus / quartal (max hold = 3)
             (.drift, [2, 4, 6, 7, 9, 11, 1], 3),   // D Major / G Lydian (max hold = 3)
             (.groove, [2, 4, 5, 7, 9, 11, 0], 2),  // Low Sun: D Dorian (max hold = 2)
+            (.lateLight, [5, 7, 9, 10, 0, 2, 4], 2), // Late Light: F major (max hold = 2)
         ]
 
         for (mode, keyPCs, maxHold) in diatonicKeys {
