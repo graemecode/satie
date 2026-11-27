@@ -43,6 +43,8 @@ private struct OculusEmblem: View {
             return Color(red: 0.56, green: 0.78, blue: 0.72) // Courtyard jade
         case FocusSoundscape.drift.rawValue:
             return Color(red: 0.84, green: 0.62, blue: 0.38) // Nocturne candlelight amber
+        case FocusSoundscape.groove.rawValue:
+            return Color(red: 1.00, green: 0.66, blue: 0.42) // Low amber sun
         default:
             return Color(red: 0.72, green: 0.84, blue: 0.98) // Soft Light silver-sky
         }

@@ -139,6 +139,32 @@ struct SoundscapeGlyph: View {
                 let dot = Path(ellipseIn: CGRect(x: center.x - dotR, y: center.y - dotR, width: dotR * 2, height: dotR * 2))
                 ctx.fill(dot, with: .color(primary))
 
+            case .groove:
+                // GROOVE (Low Sun): half sun resting on the horizon, three short rays, and a beat of dashes below
+                let horizonY = center.y + ir * 0.18
+                let sunR = ir * 0.52
+                var sun = Path()
+                sun.addArc(center: CGPoint(x: center.x, y: horizonY), radius: sunR, startAngle: .degrees(180), endAngle: .degrees(360), clockwise: false)
+                ctx.stroke(sun, with: .color(primary), style: strokeStyle)
+                var horizon = Path()
+                horizon.move(to: CGPoint(x: center.x - ir * 0.92, y: horizonY))
+                horizon.addLine(to: CGPoint(x: center.x + ir * 0.92, y: horizonY))
+                ctx.stroke(horizon, with: .color(primary), style: strokeStyle)
+                for deg in [-135.0, -90.0, -45.0] {
+                    let rad = deg * .pi / 180.0
+                    var ray = Path()
+                    ray.move(to: CGPoint(x: center.x + CGFloat(cos(rad)) * sunR * 1.28, y: horizonY + CGFloat(sin(rad)) * sunR * 1.28))
+                    ray.addLine(to: CGPoint(x: center.x + CGFloat(cos(rad)) * sunR * 1.62, y: horizonY + CGFloat(sin(rad)) * sunR * 1.62))
+                    ctx.stroke(ray, with: .color(secondary), style: thinStyle)
+                }
+                let beatY = horizonY + ir * 0.36
+                for (x0, w) in [(-0.62, 0.30), (-0.18, 0.14), (0.10, 0.30), (0.54, 0.14)] {
+                    var dash = Path()
+                    dash.move(to: CGPoint(x: center.x + ir * CGFloat(x0), y: beatY))
+                    dash.addLine(to: CGPoint(x: center.x + ir * CGFloat(x0 + w), y: beatY))
+                    ctx.stroke(dash, with: .color(secondary), style: thinStyle)
+                }
+
             case .drift:
                 // NIGHT (Gymnopédie): Exact mathematical crescent (true circle-circle intersection) + 2 subtle stars
                 let R = ir * 0.88

@@ -22,6 +22,7 @@
 		08C5191472BEF0EC020B94AC /* libAcousticCore.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 0333BA3ED9C772EC44D4F50C /* libAcousticCore.a */; };
 		0996992D2EBAF3393EA57CF9 /* SatieL10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70131DB0063D98F949E97F24 /* SatieL10n.swift */; };
 		09B4FDDDF92F85648245D900 /* RingBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A19E78A66174C598734FA64 /* RingBuffer.swift */; };
+		0AE36DC377F84153255FD488 /* GrooveInstruments.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52412A268A8E494D463140CB /* GrooveInstruments.swift */; };
 		0C9FC705036B5859D64CD2DE /* SatieAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50B6185739CEC5D87D662EC /* SatieAppIntents.swift */; };
 		0FB32FB3169D4AFB9DD8BF53 /* Log.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D7F0DD8AEB2D15C2A63885 /* Log.swift */; };
 		104149677B130DC0463F7F2E /* HarmonicFactorOracle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C62579D60BAAB6B4EFCB6FBD /* HarmonicFactorOracle.swift */; };
@@ -62,6 +63,7 @@
 		3379C8B91C41B5AABEE47AEA /* Samples in Resources */ = {isa = PBXBuildFile; fileRef = 207AD2FDDD6C7BB0B3E43E70 /* Samples */; };
 		34CD5C08899FB62C4B1EAE27 /* SatieL10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70131DB0063D98F949E97F24 /* SatieL10n.swift */; };
 		361756963F28B602B8259B42 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2081B71872082F0D71876F09 /* SettingsStore.swift */; };
+		37569F8E76C006D33EBF2C4D /* GrooveInstruments.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52412A268A8E494D463140CB /* GrooveInstruments.swift */; };
 		37877166FFA2E3CD064AAF2D /* DSPPrimitives.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97835604CF2371330F57FCF8 /* DSPPrimitives.swift */; };
 		39D848C2D3F191D1B2107DF0 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 9A33A2C51CABCFB6BEF4E27F /* Metal.framework */; };
 		3AA0571285D968694038B28B /* SoundscapeGlyphs.swift in Sources */ = {isa = PBXBuildFile; fileRef = C59C66190E52376DA2CF8F48 /* SoundscapeGlyphs.swift */; };
@@ -112,7 +114,9 @@
 		6CFABD9C631E46077F82AB59 /* SatieScore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9F0E70D2C1A26D3B9E6EF9D /* SatieScore.swift */; };
 		6EFF1E59AB6A36C0A5D0567A /* AppShortcuts.strings in Resources */ = {isa = PBXBuildFile; fileRef = 501143801EBA23F5838A7E3D /* AppShortcuts.strings */; };
 		6F132D5EDC40C3C1B920EE58 /* SatieAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50B6185739CEC5D87D662EC /* SatieAppIntents.swift */; };
+		70469D2524BE7BBFC27FEE9B /* LowSunScore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97BC08A968466E6385E2023 /* LowSunScore.swift */; };
 		73E1C7249B08C1C467FA9B40 /* WatchConnectivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 5F772CBA73D9F9B09CE098B0 /* WatchConnectivity.framework */; };
+		7792A4A33AFDDDCE7482FD6B /* GrooveInstruments.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52412A268A8E494D463140CB /* GrooveInstruments.swift */; };
 		78456BF410969CBAC063C441 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 71A2B62B6AD05A4D5D72E2F1 /* Localizable.strings */; };
 		785168A5AAD12BF55B6AC5FB /* HarmonicFactorOracle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C62579D60BAAB6B4EFCB6FBD /* HarmonicFactorOracle.swift */; };
 		786F0F0221D310BA3EDA86F3 /* StudioLifecycleMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BEE7BA98A1F7854BC616FB /* StudioLifecycleMachine.swift */; };
@@ -133,6 +137,7 @@
 		86EACB981EA9A68DD4B08582 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 21174110F87B50E245729D03 /* Accelerate.framework */; };
 		897F2844FA9CD7B81E9B73B1 /* libAcousticCoreVision.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 7F4B6DD8C3A696F90ACD1DA8 /* libAcousticCoreVision.a */; };
 		898ED33F6537DFC8C50EBC32 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 00D042F2C3F30E94ECF157F5 /* AVFoundation.framework */; };
+		8A003DC4EB49CEE54AE76A19 /* LowSunScore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97BC08A968466E6385E2023 /* LowSunScore.swift */; };
 		8AF02306C92BCFB85C2F921F /* StudioLifecycleMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BEE7BA98A1F7854BC616FB /* StudioLifecycleMachine.swift */; };
 		8B053BBAC23AC6368F9A79EB /* Assets-iOS.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2A490AF6FFA4F5D06E03972 /* Assets-iOS.xcassets */; };
 		90C08ECE0D10603637885662 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 71A2B62B6AD05A4D5D72E2F1 /* Localizable.strings */; };
@@ -150,6 +155,7 @@
 		9A4A80C973BDC2375FA0D221 /* AppShortcuts.strings in Resources */ = {isa = PBXBuildFile; fileRef = 501143801EBA23F5838A7E3D /* AppShortcuts.strings */; };
 		9E12D4B251D445E20899AC80 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 00BEA76C32250875AAF7523A /* WidgetKit.framework */; };
 		9EEDF69E2FF56864F086473C /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 5BC0F50041072BA8E97BAEFE /* InfoPlist.strings */; };
+		A13524D2F9C1790D1A98A465 /* GrooveInstruments.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52412A268A8E494D463140CB /* GrooveInstruments.swift */; };
 		A149D0FBA086A4F7E51850FC /* HarmonicFactorOracle.swift in Sources */ = {isa = PBXBuildFile; fileRef = C62579D60BAAB6B4EFCB6FBD /* HarmonicFactorOracle.swift */; };
 		A33671CE9BC09B2975645162 /* GlobalHotKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 399F9D5D17214E97E233F23E /* GlobalHotKeys.swift */; };
 		A583A54C4CC4ECF45FCF7C63 /* StoreKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B088A28104E37FB1C43B26EA /* StoreKit.framework */; };
@@ -164,6 +170,7 @@
 		B3CC37EA33D793375C4C612B /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = C537788CBA3DD2FB791D233D /* main.swift */; };
 		B443CE73E1B2DCB8E1BC8303 /* SatieAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50B6185739CEC5D87D662EC /* SatieAppIntents.swift */; };
 		B5309E3D305D483D57F8ADE3 /* ServiceManagement.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 72EC84C2CB6EADBE4C0A7780 /* ServiceManagement.framework */; };
+		B5345B1604C1C6FF4D4B0ADF /* LowSunScore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97BC08A968466E6385E2023 /* LowSunScore.swift */; };
 		B623F6BD4CE9343C7355179C /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 629495FE49834D6D71731C80 /* SwiftUI.framework */; };
 		B6766E9D227EE92C9388CB33 /* ModularAlchemy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40CC447EB9A17B2B2E70A325 /* ModularAlchemy.swift */; };
 		B832B1D7789EB4370CEBC85D /* FocusSoundEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4FA21DBE3D9F0F3D9E6307C /* FocusSoundEngine.swift */; };
@@ -172,6 +179,7 @@
 		BBF4879AB72201A4EE5BDA5B /* HRVResonanceController.swift in Sources */ = {isa = PBXBuildFile; fileRef = C74EED44BDF3E6BFCC048C56 /* HRVResonanceController.swift */; };
 		BD610A83FD38B644F9F19AE0 /* RingBuffer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A19E78A66174C598734FA64 /* RingBuffer.swift */; };
 		C0B58F408CC04DFB3E98A79A /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E54F49B63B355BED408C30E8 /* QuartzCore.framework */; };
+		C0DF518BE94C5C28027ADBBB /* LowSunScore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E97BC08A968466E6385E2023 /* LowSunScore.swift */; };
 		C1634E9C78BAF524C96402AB /* AppIntents.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FAE4363C458D97FB616C5E7D /* AppIntents.framework */; };
 		C27B8AB861B5A50A67E7AA49 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 5BC0F50041072BA8E97BAEFE /* InfoPlist.strings */; };
 		C488B2DFAFA75BA649EB8376 /* StudioLifecycleMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9BEE7BA98A1F7854BC616FB /* StudioLifecycleMachine.swift */; };
@@ -330,6 +338,7 @@
 		440ED3310416F607260F337C /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
 		47505F9072573CD3569E517B /* SatieWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SatieWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4BAAE580701A189444B0BECF /* DeepMeditationEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepMeditationEngine.swift; sourceTree = "<group>"; };
+		52412A268A8E494D463140CB /* GrooveInstruments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrooveInstruments.swift; sourceTree = "<group>"; };
 		552D75C3516D06F467950E1E /* libAcousticCoreTV.a */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = archive.ar; path = libAcousticCoreTV.a; sourceTree = BUILT_PRODUCTS_DIR; };
 		580EB8163EF6BCA63D33E30A /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		5E4904B6DEFC775766DA2BDE /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -387,6 +396,7 @@
 		DFF0CFC2804B8A275E4867CF /* SatieiOSState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SatieiOSState.swift; sourceTree = "<group>"; };
 		E54F49B63B355BED408C30E8 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		E6A77F0F102AD2689782C533 /* StudioWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioWindowController.swift; sourceTree = "<group>"; };
+		E97BC08A968466E6385E2023 /* LowSunScore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LowSunScore.swift; sourceTree = "<group>"; };
 		EC8E104331B3F39C4E04B1C7 /* MenuBarIconView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarIconView.swift; sourceTree = "<group>"; };
 		ECF78C003BD8651395C98184 /* MenuBarPositioner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarPositioner.swift; sourceTree = "<group>"; };
 		EE4EC741486CA48BAB308ED7 /* SatieWidgetsBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SatieWidgetsBundle.swift; sourceTree = "<group>"; };
@@ -727,8 +737,10 @@
 				4BAAE580701A189444B0BECF /* DeepMeditationEngine.swift */,
 				97835604CF2371330F57FCF8 /* DSPPrimitives.swift */,
 				C4FA21DBE3D9F0F3D9E6307C /* FocusSoundEngine.swift */,
+				52412A268A8E494D463140CB /* GrooveInstruments.swift */,
 				C62579D60BAAB6B4EFCB6FBD /* HarmonicFactorOracle.swift */,
 				C74EED44BDF3E6BFCC048C56 /* HRVResonanceController.swift */,
+				E97BC08A968466E6385E2023 /* LowSunScore.swift */,
 				40CC447EB9A17B2B2E70A325 /* ModularAlchemy.swift */,
 				C36E1A9803E13EA8DAD1C9C2 /* PhysicalInstruments.swift */,
 				7A19E78A66174C598734FA64 /* RingBuffer.swift */,
@@ -789,7 +801,7 @@
 			path = Renderer;
 			sourceTree = "<group>";
 		};
-		"TEMP_D9338F4F-CBD3-4D97-99B5-8AA8B317F6BC" /* Resources */ = {
+		"TEMP_DF5E549B-98DD-4F34-82D8-1631DA643B11" /* Resources */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -1216,9 +1228,11 @@
 				D93B9DDB8D481A116962FDBA /* DeepMeditationEngine.swift in Sources */,
 				ED6D81940E85BF1372B5DD0A /* FocusSoundEngine.swift in Sources */,
 				2E3AE4798A666582E1EEE326 /* GlobalHotKeys.swift in Sources */,
+				A13524D2F9C1790D1A98A465 /* GrooveInstruments.swift in Sources */,
 				1CE7FB9B3C057BA28673D8E7 /* HRVResonanceController.swift in Sources */,
 				104149677B130DC0463F7F2E /* HarmonicFactorOracle.swift in Sources */,
 				ED56ABE00CF954D43C198428 /* Log.swift in Sources */,
+				8A003DC4EB49CEE54AE76A19 /* LowSunScore.swift in Sources */,
 				D4E55D31EBA9DA4B71DF5144 /* MenuBarPositioner.swift in Sources */,
 				ED3149DB4BDBE6D2185C10D6 /* ModularAlchemy.swift in Sources */,
 				1E7B6A2E044AFC90E8E4133F /* NowPlayingBridge.swift in Sources */,
@@ -1253,9 +1267,11 @@
 				633CD7A5B44E799A66077676 /* DeepMeditationEngine.swift in Sources */,
 				B832B1D7789EB4370CEBC85D /* FocusSoundEngine.swift in Sources */,
 				CE5AA71BE36C2A6F23FDC897 /* GlobalHotKeys.swift in Sources */,
+				7792A4A33AFDDDCE7482FD6B /* GrooveInstruments.swift in Sources */,
 				BBF4879AB72201A4EE5BDA5B /* HRVResonanceController.swift in Sources */,
 				A149D0FBA086A4F7E51850FC /* HarmonicFactorOracle.swift in Sources */,
 				0FB32FB3169D4AFB9DD8BF53 /* Log.swift in Sources */,
+				B5345B1604C1C6FF4D4B0ADF /* LowSunScore.swift in Sources */,
 				E166ECE20D67B2D3AA895F97 /* MenuBarPositioner.swift in Sources */,
 				7DB0EFD0A5D9BC872E7B7F65 /* ModularAlchemy.swift in Sources */,
 				98BE43CBA4E938FAE33764A7 /* NowPlayingBridge.swift in Sources */,
@@ -1311,9 +1327,11 @@
 				4DC6CAF3ABA7E263D95151F7 /* DeepMeditationEngine.swift in Sources */,
 				082699013F74504DC81EF9FA /* FocusSoundEngine.swift in Sources */,
 				074A3E10A6E0DF5FAE439508 /* GlobalHotKeys.swift in Sources */,
+				0AE36DC377F84153255FD488 /* GrooveInstruments.swift in Sources */,
 				46DE0ED3D4254C4BED2204AB /* HRVResonanceController.swift in Sources */,
 				785168A5AAD12BF55B6AC5FB /* HarmonicFactorOracle.swift in Sources */,
 				AF9C4239355A6EFBFEE96523 /* Log.swift in Sources */,
+				70469D2524BE7BBFC27FEE9B /* LowSunScore.swift in Sources */,
 				15AD72A36372CF5C1D168156 /* MenuBarPositioner.swift in Sources */,
 				B6766E9D227EE92C9388CB33 /* ModularAlchemy.swift in Sources */,
 				1475188A488C4E885C0F0CBD /* NowPlayingBridge.swift in Sources */,
@@ -1349,9 +1367,11 @@
 				F3DECC5069DBA21C852C461B /* DeepMeditationEngine.swift in Sources */,
 				F7E9D0F1215B0549CFE3E09F /* FocusSoundEngine.swift in Sources */,
 				A33671CE9BC09B2975645162 /* GlobalHotKeys.swift in Sources */,
+				37569F8E76C006D33EBF2C4D /* GrooveInstruments.swift in Sources */,
 				06B0FF9A6EA299956E1A842F /* HRVResonanceController.swift in Sources */,
 				24EF081CCFC664866AA5C3AC /* HarmonicFactorOracle.swift in Sources */,
 				4464853CE68804ED8466913D /* Log.swift in Sources */,
+				C0DF518BE94C5C28027ADBBB /* LowSunScore.swift in Sources */,
 				E79CD6D5A6BE472DFEC7D1EB /* MenuBarPositioner.swift in Sources */,
 				85269D8A0357038C638C293F /* ModularAlchemy.swift in Sources */,
 				79EDE79CED644678A5474F13 /* NowPlayingBridge.swift in Sources */,

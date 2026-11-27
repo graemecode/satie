@@ -417,7 +417,7 @@ final class StudioNSWindow: NSWindow {
             }
         }
         switch chars.lowercased() {
-        case "1", "2", "3", "4", "5", "6": AppState.shared.selectFocusMode(number: Int(chars) ?? 0); return
+        case "1", "2", "3", "4", "5", "6", "7": AppState.shared.selectFocusMode(number: Int(chars) ?? 0); return
         case " ": AppState.shared.togglePlayOrStartFocus(); return
         case "m": AppState.shared.toggleSystemMute(); return
         default: break

@@ -898,6 +898,84 @@ fragment float4 horizonFragment(FullscreenOut in [[stage_in]],
 }
 
 // ============================================================================
+// PRESET 07: LOW SUN — AMBER SUN ON THE HORIZON, BANDED BY THE GROOVE
+// ============================================================================
+// A large low sun half-set on a calm horizon. The lower half of the disc is cut by
+// horizontal bands whose gaps open on each beat and drift down through the bar; the
+// glow follows the bass, and the sea below breaks the reflection into slow shimmer lines.
+fragment float4 sunsetFragment(FullscreenOut in [[stage_in]],
+                               constant AcousticUniforms& u [[buffer(0)]],
+                               constant float2* waveLR [[buffer(1)]],
+                               texture2d<float> blueNoiseTex [[texture(1)]]) {
+    float aspect = u.resolution.x / max(1.0, u.resolution.y);
+    float2 center = (aspect < 1.0) ? u.coreCenter : float2(0.5, 0.52);
+    float2 p = minDimCoord(in.uv, center, aspect);
+    float isNight = clamp(u.breathDepth.z, 0.0, 1.0);
+    float playing = u.isPlaying;
+    float t = u.time * (0.30 + playing * 0.40);
+
+    // Dusk sky: deep teal-indigo overhead warming to apricot at the horizon (dimmer after 8 PM)
+    float skyT = smoothstep(-0.62, 0.0, p.y);
+    float3 zenith = mix(float3(0.030, 0.050, 0.085), float3(0.020, 0.022, 0.040), isNight * 0.7);
+    float3 low    = mix(float3(0.42, 0.20, 0.13), float3(0.24, 0.10, 0.07), isNight * 0.7);
+    float3 col = mix(zenith, low, skyT * skyT);
+
+    float energy = mix(0.18 + 0.06 * sin(u.time * 0.4), clamp(u.energy * 1.2 + u.bass * 0.4, 0.0, 1.4), playing);
+    float beat = clamp(u.beat, 0.0, 1.0) * playing;
+
+    // Sun disc, sitting on the horizon (p.y < 0 is above)
+    float sunR = 0.215 + u.bass * 0.018 * playing;
+    float2 sp = float2(p.x, p.y + 0.004);
+    float d = length(sp);
+    float above = smoothstep(0.004, -0.004, p.y);
+    float disc = smoothstep(sunR + 0.003, sunR - 0.003, d) * above;
+
+    // Bands across the lower half of the disc: they slide down through each bar and open on the beat
+    float bandZone = smoothstep(-sunR * 0.62, -sunR * 0.05, p.y);
+    float bandCoord = (p.y + sunR) / sunR;                 // 0 at top of disc, 1 at horizon
+    float slide = fract(u.barPhase) * playing;
+    float stripes = fract(bandCoord * 7.0 - slide);
+    float gap = (0.10 + 0.26 * bandCoord * bandCoord) * (0.85 + 0.35 * beat);
+    float cut = smoothstep(gap - 0.03, gap + 0.03, stripes);
+    float sunMask = disc * mix(1.0, cut, bandZone);
+
+    // Disc color: pale gold at the crown to deep amber at the horizon
+    float3 sunTop = mix(float3(1.00, 0.86, 0.58), float3(0.98, 0.70, 0.42), isNight * 0.6);
+    float3 sunLow = mix(float3(0.98, 0.42, 0.22), float3(0.78, 0.26, 0.14), isNight * 0.6);
+    float3 sunCol = mix(sunTop, sunLow, smoothstep(-sunR, 0.0, p.y));
+    col = mix(col, sunCol, sunMask);
+
+    // Halo and wide atmospheric glow follow the music's energy
+    float halo = exp(-max(0.0, d - sunR) * 9.0) * above;
+    float wide = exp(-(p.x * p.x) / 0.30 - (p.y * p.y) / 0.020);
+    col += float3(0.95, 0.48, 0.24) * halo * (0.16 + energy * 0.22);
+    col += float3(0.70, 0.30, 0.18) * wide * (0.10 + energy * 0.10);
+
+    // Horizon filament
+    float horizon = exp(-abs(p.y) * 320.0);
+    col += float3(1.00, 0.78, 0.55) * horizon * (0.30 + u.treble * 0.30 * playing);
+
+    // Sea: dark water with the sun reflected as broken horizontal shimmer lines
+    float below = smoothstep(-0.002, 0.010, p.y);
+    float py = max(0.0005, p.y);
+    float wIdx = clamp(in.uv.x * 255.0, 0.0, 254.0);
+    int wi = int(wIdx);
+    float wave = mix(waveLR[wi].x + waveLR[wi].y, waveLR[wi + 1].x + waveLR[wi + 1].y, fract(wIdx)) * 0.5;
+    float3 sea = mix(float3(0.030, 0.040, 0.060), float3(0.016, 0.018, 0.026), smoothstep(0.0, 0.5, py));
+    col = mix(col, sea, below);
+    float depth = 0.05 / (py + 0.02);
+    float rows = sin(depth * 26.0 + t * 1.4 + gradNoise(float2(p.x * 5.0, depth * 2.0 + t * 0.2)) * 2.4 + wave * 3.0 * playing);
+    float shimmer = smoothstep(0.35, 0.95, rows);
+    float columnW = sunR * (0.85 + py * 0.7);
+    float column = exp(-(p.x * p.x) / (columnW * columnW)) * exp(-py * 9.0);
+    col += sunLow * shimmer * column * below * (0.55 + energy * 0.35);
+
+    // Fine grain so the gradients never band
+    float edrMask = clamp(sunMask * 0.35 + horizon * 0.6, 0.0, 0.8);
+    return finalizeDisplayColor(col, edrMask, 0.0065, in.position.xy, u, blueNoiseTex);
+}
+
+// ============================================================================
 // PRESET 06: OCULUS — JAMES TURRELL ATEN REIGN / SKYSPACE + BOWL CAUSTICS
 // ============================================================================
 // Four recessed architectural plaster tiers bathed in indirect cove light,

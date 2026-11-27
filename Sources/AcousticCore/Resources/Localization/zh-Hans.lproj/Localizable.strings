@@ -17,6 +17,9 @@
 "soundscape.drift.title" = "吉诺佩蒂";
 "soundscape.drift.short" = "夜晚";
 "soundscape.drift.subtitle" = "深夜 · 钢琴与大提琴";
+"soundscape.groove.title" = "低垂的太阳";
+"soundscape.groove.short" = "律动";
+"soundscape.groove.subtitle" = "稳定心流 · 电钢琴、贝斯与鼓刷";
 "visual.circuit.title" = "01 回路";
 "visual.circuit.short" = "01 回路";
 "visual.circuit.clean" = "回路";
@@ -35,6 +38,9 @@
 "visual.oculus.title" = "06 天窗";
 "visual.oculus.short" = "06 天窗";
 "visual.oculus.clean" = "天窗";
+"visual.sunset.title" = "07 低垂的太阳";
+"visual.sunset.short" = "07 低垂的太阳";
+"visual.sunset.clean" = "低垂的太阳";
 "sensitivity.calm" = "柔和";
 "sensitivity.balanced" = "均衡";
 "sensitivity.vivid" = "鲜明";

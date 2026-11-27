@@ -17,6 +17,9 @@
 "soundscape.drift.title" = "짐노페디";
 "soundscape.drift.short" = "밤";
 "soundscape.drift.subtitle" = "늦은 밤 · 피아노 & 첼로";
+"soundscape.groove.title" = "낮은 해";
+"soundscape.groove.short" = "그루브";
+"soundscape.groove.subtitle" = "꾸준한 몰입 · 일렉트릭 피아노, 베이스 & 브러시";
 "visual.circuit.title" = "01 회로";
 "visual.circuit.short" = "01 회로";
 "visual.circuit.clean" = "회로";
@@ -35,6 +38,9 @@
 "visual.oculus.title" = "06 오큘러스";
 "visual.oculus.short" = "06 오큘러스";
 "visual.oculus.clean" = "오큘러스";
+"visual.sunset.title" = "07 낮은 해";
+"visual.sunset.short" = "07 낮은 해";
+"visual.sunset.clean" = "낮은 해";
 "sensitivity.calm" = "차분함";
 "sensitivity.balanced" = "균형";
 "sensitivity.vivid" = "선명함";

@@ -9,6 +9,7 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
     case still
     case dive
     case drift
+    case groove
 
     public var id: String { rawValue }
 
@@ -20,6 +21,7 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .still: return SatieL10n.string("soundscape.still.title", fallback: "Still")
         case .dive:  return SatieL10n.string("soundscape.dive.title", fallback: "Deep Dive")
         case .drift: return SatieL10n.string("soundscape.drift.title", fallback: "Gymnopédie")
+        case .groove: return SatieL10n.string("soundscape.groove.title", fallback: "Low Sun")
         }
     }
 
@@ -31,6 +33,7 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .still: return SatieL10n.string("soundscape.still.short", fallback: "STILL")
         case .dive:  return SatieL10n.string("soundscape.dive.short", fallback: "DIVE")
         case .drift: return SatieL10n.string("soundscape.drift.short", fallback: "NIGHT")
+        case .groove: return SatieL10n.string("soundscape.groove.short", fallback: "GROOVE")
         }
     }
 
@@ -42,6 +45,7 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .still: return SatieL10n.string("soundscape.still.subtitle", fallback: "Deep Reading · Zero Melody")
         case .dive:  return SatieL10n.string("soundscape.dive.subtitle", fallback: "Meditation · Breath & Bowls")
         case .drift: return SatieL10n.string("soundscape.drift.subtitle", fallback: "Late Night · Piano & Cello")
+        case .groove: return SatieL10n.string("soundscape.groove.subtitle", fallback: "Steady Flow · Keys, Bass & Brushes")
         }
     }
 }
@@ -349,7 +353,9 @@ public struct ScoreTelemetry: Equatable, Sendable {
     public static let chordLabels: [String] = [
         "A MAJ", "F# MIN", "D MAJ", "E SUS", "E MAJ", "B MIN", "C# MIN", "E 6", "A 6",
         "D MIN9", "F MAJ7", "C ADD9", "G 6", "A MIN7",
-        "G MAJ7", "D MAJ7", "E MIN9", "A 9SUS"
+        "G MAJ7", "D MAJ7", "E MIN9", "A 9SUS",
+        "D SUS2", "B MIN11", "G ADD9", "A SUS4", "E MIN11", "F MAJ7#11",
+        "G 6/9", "F MAJ9", "C 6/9", "A MIN11", "E MIN7"
     ]
 
     public var chordLabel: String {
@@ -377,6 +383,17 @@ public struct ScoreTelemetry: Equatable, Sendable {
         case "Dmaj7": return 15
         case "Em9":   return 16
         case "A9sus": return 17
+        case "Dsus2": return 18
+        case "Bm11":  return 19
+        case "Gadd9": return 20
+        case "Asus4": return 21
+        case "Em11":  return 22
+        case "Fmaj7#11": return 23
+        case "G6/9":  return 24
+        case "Fmaj9": return 25
+        case "C6/9":  return 26
+        case "Am11":  return 27
+        case "Em7":   return 28
         default:      return 0
         }
     }
@@ -387,7 +404,7 @@ public struct ScoreTelemetry: Equatable, Sendable {
 /// Pre-allocated fixed-capacity bar event slot stored inline so the audio render thread
 /// reads upcoming bars with zero Swift Array/Set allocations, zero locks, and zero sorting.
 struct PrecomposedBarSlot: Sendable {
-    static let maxBells = 32
+    static let maxBells = 72 // Low Sun bars carry drums, bass and comping
     static let maxSustained = 16
 
     var barIndex: Int = 0
@@ -1080,6 +1097,16 @@ private final class FocusRenderState: @unchecked Sendable {
     private var velvetBrown = VelvetBrownNoise()
     private var rainEngine = PhysicalRainEngine()
     private var grooveEngine = HypnoticGrooveEngine()
+    private var drumKit = GrooveDrumKit()
+    private var bassGuitar = FlatwoundBass()
+    private var electricPiano = SuitcaseElectricPiano()
+    private var drumTopLpL = CytomicSVF(cutoffHz: 8000, q: 0.6)
+    private var grooveMudL = GrooveBiquad()
+    private var grooveMudR = GrooveBiquad()
+    private var groovePresenceL = GrooveBiquad()
+    private var groovePresenceR = GrooveBiquad()
+    private var groovePresenceRate: Double = 0
+    private var drumTopLpR = CytomicSVF(cutoffHz: 8000, q: 0.6)
     private var deepMeditation: DeepMeditationEngine
     private var masterBus = AudiophileMasterBus()
 
@@ -1136,6 +1163,12 @@ private final class FocusRenderState: @unchecked Sendable {
         courtyardRain.reset()
         velvetBrown.reset()
         grooveEngine.reset()
+        drumKit.reset()
+        bassGuitar.reset()
+        electricPiano.reset()
+        drumTopLpL.reset(); drumTopLpR.reset()
+        groovePresenceL.reset(); groovePresenceR.reset()
+        grooveMudL.reset(); grooveMudR.reset()
         deepMeditation.reset()
         masterBus.clear()
         strHpL.reset(); strHpR.reset()
@@ -1164,6 +1197,9 @@ private final class FocusRenderState: @unchecked Sendable {
             samplerVoices[i].active = false
         }
         grooveEngine.reset()
+        drumKit.reset()
+        bassGuitar.reset()
+        electricPiano.reset()
         deepMeditation.reset()
         dryTransitionGain = 0.0 // ramps smoothly 0 -> 1 over ~220ms while reverb/Beads carry the tail
         clockSec = 0
@@ -1370,6 +1406,16 @@ private final class FocusRenderState: @unchecked Sendable {
             tapeWowMs = 1.45
             figEchoSend = 0.14
             melEchoSend = 0.20
+        case .groove:
+            preDelayMs = 16.0
+            roomDecay = Float(0.80 + 0.03 * spaceBloom)
+            roomDampLP = 0.36
+            roomWet = 0.22
+            erMix = 0.28
+            tapeToneHz = 3800.0
+            tapeWowMs = 1.0
+            figEchoSend = 0.10
+            melEchoSend = 0.22
         case .still, .dive:
             preDelayMs = 28.0
             roomDecay = Float(0.89 + 0.03 * spaceBloom)
@@ -1494,8 +1540,10 @@ private final class FocusRenderState: @unchecked Sendable {
                 let relTime = clockSec - currentBarStartSec
                 while barBellCursor < currentBar.bellCount && currentBar.bells[barBellCursor].at <= relTime {
                     let ev = currentBar.bells[barBellCursor]
-                    let evKindCode: Int = (ev.kind == .melody) ? 1 : (ev.kind == .glint ? 2 : 0)
-                    visualRing.recordNote(midi: ev.midi, pan: ev.pan, velocity: ev.velocity, kind: evKindCode, clockSec: clockSec)
+                    let evKindCode: Int = (ev.kind == .melody) ? 1 : (ev.kind == .glint ? 2 : (ev.kind == .bass ? 3 : 0))
+                    if ev.kind != .drum {
+                        visualRing.recordNote(midi: ev.midi, pan: ev.pan, velocity: ev.velocity, kind: evKindCode, clockSec: clockSec)
+                    }
                     let root = currentBar.rootMidi
                     switch mode {
                     case .focus:
@@ -1513,7 +1561,7 @@ private final class FocusRenderState: @unchecked Sendable {
                                 inst = .piano
                                 felt = false
                                 scale = 1.65
-                            case .glint:
+                            case .glint, .comp, .bass, .drum:
                                 inst = .harp
                                 felt = false
                                 scale = 1.95
@@ -1639,6 +1687,44 @@ private final class FocusRenderState: @unchecked Sendable {
                             glassBowls[nextBowlSlot].trigger(event: ev, rng: &noiseRNG)
                             nextBowlSlot = (nextBowlSlot + 1) % glassBowls.count
                         }
+
+                    case .groove:
+                        // Low Sun: electric piano comping, flatwound bass, synthesized kit, vibe motif, harp ostinato
+                        switch ev.kind {
+                        case .drum:
+                            if let drum = GrooveDrum(rawValue: ev.midi) {
+                                let g: Float
+                                switch drum {
+                                case .kick: g = 0.45
+                                case .snare: g = 0.48
+                                case .ghostSnare: g = 0.36
+                                case .rim: g = 0.30
+                                case .shaker: g = 0.36
+                                case .tightHat: g = 0.28
+                                case .openHat: g = 0.26
+                                }
+                                drumKit.trigger(drum, velocity: ev.velocity, gain: g * intGrooveScale, pan: ev.pan, rng: &noiseRNG, sampleRate: sampleRate)
+                            }
+                        case .bass:
+                            bassGuitar.pluck(midi: ev.midi, duration: ev.duration, velocity: ev.velocity, gain: 0.40, rng: &noiseRNG, sampleRate: sampleRate)
+                        case .comp, .figure:
+                            electricPiano.trigger(midi: ev.midi, duration: ev.duration, velocity: ev.velocity, gain: 0.21, pan: ev.pan, rng: &noiseRNG, sampleRate: sampleRate)
+                        case .melody, .glint:
+                            if sampleBank.isAvailable {
+                                let inst: AcousticInstrumentID = ev.kind == .melody ? .vibe : .harp
+                                _ = samplerVoices[nextSamplerSlot].trigger(
+                                    bank: sampleBank, instrument: inst, midi: ev.midi, rootMidi: root,
+                                    velocity: ev.velocity, duration: ev.duration,
+                                    level: ev.level * (inst == .vibe ? 1.5 : 2.0), pan: ev.pan,
+                                    feltMuffle: false, justSweeten: false, sustainedLayer: false,
+                                    rng: &noiseRNG, sampleRate: sampleRate
+                                )
+                                nextSamplerSlot = (nextSamplerSlot + 1) % samplerVoices.count
+                            } else {
+                                bells[nextBellSlot].trigger(event: ev, rng: &noiseRNG, sampleRate: sampleRate)
+                                nextBellSlot = (nextBellSlot + 1) % bells.count
+                            }
+                        }
                     }
                     barBellCursor += 1
                 }
@@ -1710,6 +1796,12 @@ private final class FocusRenderState: @unchecked Sendable {
             for g in 0..<glassBowls.count where glassBowls[g].active {
                 let (sL, sR) = glassBowls[g].step(dt: dt, sineTable: bank.sineTable)
                 melL += sL; melR += sR
+            }
+
+            if mode == .groove {
+                // Suitcase electric piano with a slow, shallow autopan
+                let (eL, eR) = electricPiano.step(dt: dt, tremHz: 4.6, tremDepth: 0.10, rng: &noiseRNG, sampleRate: sampleRate)
+                figL += eL; figR += eR
             }
 
             // Mutable Instruments Rings 56-mode physical resonator -> 3D Binaural Sonic Gyroscope!
@@ -1824,6 +1916,19 @@ private final class FocusRenderState: @unchecked Sendable {
                 betaSheenR = (1.0 - sheenDepth * waveR) * sheenNorm
             }
 
+            if mode == .groove {
+                let kit = drumKit.step(dt: dt, rng: &noiseRNG)
+                let bass = bassGuitar.step(rng: &noiseRNG, sampleRate: sampleRate)
+                // Kick and bass stay mono and dry; tops are softened above ~9 kHz
+                pulseSub = kit.kick + bass * 0.9
+                percL = drumTopLpL.lowpass(kit.topL)
+                percR = drumTopLpR.lowpass(kit.topR)
+                // ~2 dB of kick ducking on pad, strings and reverb
+                sidechainGain = 1.0 - 0.21 * min(1.0, drumKit.kickEnv * 3.2) * intGrooveScale
+                filtPadL *= sidechainGain
+                filtPadR *= sidechainGain
+            }
+
             // Independent Acoustic Masking Bed:
             // - Rain & Glass and the Rain masking bed now use asynchronous multi-grain StochasticRainField
             //   (zero 18.5s loop seams, -9.5 dB 3.1 kHz ear-canal scoop)
@@ -1876,8 +1981,21 @@ private final class FocusRenderState: @unchecked Sendable {
                 sampleRate: sampleRate
             )
 
-            let mixL = dryL + wetL * roomWet * sidechainGain * (mode == .pulse ? betaPadGainL : 1.0)
-            let mixR = dryR + wetR * roomWet * sidechainGain * (mode == .pulse ? betaPadGainR : 1.0)
+            var mixL = dryL + wetL * roomWet * sidechainGain * (mode == .pulse ? betaPadGainL : 1.0)
+            var mixR = dryR + wetR * roomWet * sidechainGain * (mode == .pulse ? betaPadGainR : 1.0)
+            if mode == .groove {
+                // Presence shelf (+5 dB above ~1.4 kHz): the keys and kit otherwise sit too dark
+                if groovePresenceRate != sampleRate {
+                    groovePresenceRate = sampleRate
+                    groovePresenceL = .shelf(1400, gainDB: 5.0, high: true, sampleRate: sampleRate)
+                    groovePresenceR = .shelf(1400, gainDB: 5.0, high: true, sampleRate: sampleRate)
+                    grooveMudL = .peaking(280, gainDB: -2.5, q: 0.9, sampleRate: sampleRate)
+                    grooveMudR = .peaking(280, gainDB: -2.5, q: 0.9, sampleRate: sampleRate)
+                }
+                // ...and a broad dip at 280 Hz where the keys and bass pile up
+                mixL = grooveMudL.process(groovePresenceL.process(mixL))
+                mixR = grooveMudR.process(groovePresenceR.process(mixR))
+            }
 
             // 6. Audiophile Master Bus (24dB/oct Elliptical Sub-Monoizer + M/S Air + Tube Polish + RMS Optical Glue + Lookahead Limiter)
             // Mode-matched gain calibration (~ -18.5 to -16.0 dBFS RMS across all 4 modes at 75% volume)
@@ -1887,13 +2005,14 @@ private final class FocusRenderState: @unchecked Sendable {
             case .pulse: modeMakeup = 4.55
             case .rain:  modeMakeup = 7.49
             case .drift: modeMakeup = 6.06
+            case .groove: modeMakeup = 1.9
             case .still: modeMakeup = 7.61
             case .dive:  modeMakeup = 6.3
             }
             var (finalL, finalR) = masterBus.process(
                 mixL, mixR,
                 airCeilingHz: airCeilingHz,
-                stereoWidthBoost: (mode == .drift || mode == .still) ? 0.15 : (mode == .pulse ? 0.24 : 0.11),
+                stereoWidthBoost: (mode == .drift || mode == .still) ? 0.15 : ((mode == .pulse || mode == .groove) ? 0.24 : 0.11),
                 outputGain: modeMakeup * masterEnv * smoothVol * arcGainScale,
                 sampleRate: sampleRate
             )

@@ -295,7 +295,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             if mods.isEmpty {
                 switch chars {
-                case "1", "2", "3", "4", "5", "6": AppState.shared.selectFocusMode(number: Int(chars) ?? 0); return true
+                case "1", "2", "3", "4", "5", "6", "7": AppState.shared.selectFocusMode(number: Int(chars) ?? 0); return true
                 case "m": AppState.shared.toggleSystemMute(); return true
                 default: break
                 }

@@ -110,6 +110,7 @@ private final class TVMetalView: MTKView, MTKViewDelegate {
     private let blueNoiseTex: MTLTexture
     private let oculusPipe: MTLRenderPipelineState
     private let horizonPipe: MTLRenderPipelineState
+    private let sunsetPipe: MTLRenderPipelineState
     private let circuitBgPipe: MTLRenderPipelineState
     private let circuitRibbonPipe: MTLRenderPipelineState
     private let ecologyBgPipe: MTLRenderPipelineState
@@ -149,6 +150,7 @@ private final class TVMetalView: MTKView, MTKViewDelegate {
         }
         self.oculusPipe = makePipe("fullscreenVertex", "oculusFragment")
         self.horizonPipe = makePipe("fullscreenVertex", "horizonFragment")
+        self.sunsetPipe = makePipe("fullscreenVertex", "sunsetFragment")
         self.circuitBgPipe = makePipe("fullscreenVertex", "circuitBackgroundFragment")
         self.circuitRibbonPipe = makePipe("circuitRibbonVertex", "circuitRibbonFragment", additive: true)
         self.ecologyBgPipe = makePipe("fullscreenVertex", "ecologyFieldFragment")
@@ -230,8 +232,8 @@ private final class TVMetalView: MTKView, MTKViewDelegate {
             enc.setFragmentBuffer(uBuf, offset: 0, index: 0)
             enc.setFragmentTexture(blueNoiseTex, index: 1)
             enc.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
-        case .horizon:
-            enc.setRenderPipelineState(horizonPipe)
+        case .horizon, .sunset:
+            enc.setRenderPipelineState(state.preset == .sunset ? sunsetPipe : horizonPipe)
             enc.setFragmentBuffer(uBuf, offset: 0, index: 0)
             enc.setFragmentBuffer(wBuf, offset: 0, index: 1)
             enc.setFragmentTexture(blueNoiseTex, index: 1)

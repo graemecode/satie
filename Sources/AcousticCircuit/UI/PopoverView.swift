@@ -419,6 +419,7 @@ struct PopoverView: View {
         case .drift: return Color(red: 0.92, green: 0.84, blue: 0.74) // Nocturnal lunar pearl
         case .still: return Color(red: 0.78, green: 0.82, blue: 0.88) // Pure obsidian mist
         case .dive:  return Color(red: 0.62, green: 0.88, blue: 0.94) // Iridescent opalescent prism
+        case .groove: return Color(red: 1.00, green: 0.66, blue: 0.42) // Low amber sun
         }
     }
 

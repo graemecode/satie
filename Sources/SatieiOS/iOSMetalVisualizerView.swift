@@ -62,6 +62,7 @@ final class SharediOSMetalPipelines {
     let liquidUpdatePipeline: MTLRenderPipelineState
     let liquidDisplayPipeline: MTLRenderPipelineState
     let horizonPipeline: MTLRenderPipelineState
+    let sunsetPipeline: MTLRenderPipelineState
     let oculusPipeline: MTLRenderPipelineState
 
     private init() {
@@ -126,6 +127,7 @@ final class SharediOSMetalPipelines {
         self.liquidUpdatePipeline = makePipeline(vertex: "fullscreenVertex", fragment: "liquidUpdateFragment", pixelFormat: .rgba16Float)
         self.liquidDisplayPipeline = makePipeline(vertex: "fullscreenVertex", fragment: "liquidDisplayFragment")
         self.horizonPipeline = makePipeline(vertex: "fullscreenVertex", fragment: "horizonFragment")
+        self.sunsetPipeline = makePipeline(vertex: "fullscreenVertex", fragment: "sunsetFragment")
         self.oculusPipeline = makePipeline(vertex: "fullscreenVertex", fragment: "oculusFragment")
     }
 }
@@ -424,9 +426,9 @@ final class iOSAcousticMetalView: MTKView, MTKViewDelegate {
                 pingIndex = nextIndex
             }
 
-        case .horizon, .oculus:
+        case .horizon, .oculus, .sunset:
             if let enc = cmd.makeRenderCommandEncoder(descriptor: renderPassDesc) {
-                enc.setRenderPipelineState(preset == .horizon ? pipelines.horizonPipeline : pipelines.oculusPipeline)
+                enc.setRenderPipelineState(preset == .horizon ? pipelines.horizonPipeline : (preset == .sunset ? pipelines.sunsetPipeline : pipelines.oculusPipeline))
                 enc.setFragmentBuffer(uBuf, offset: 0, index: 0)
                 enc.setFragmentBuffer(wBuf, offset: 0, index: 1)
                 enc.setFragmentTexture(pipelines.blueNoiseTexture, index: 1)

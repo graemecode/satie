@@ -31,6 +31,12 @@ public enum ScoredBellKind: Sendable, Equatable {
     case figure
     case melody
     case glint
+    /// Low Sun: electric-piano comping chord tone
+    case comp
+    /// Low Sun: plucked bass note
+    case bass
+    /// Low Sun: drum hit; `midi` is the General MIDI percussion note (see `GrooveDrum`)
+    case drum
 }
 
 public enum ScoredSustainKind: Sendable, Equatable {
@@ -262,6 +268,32 @@ public enum SatieScore {
     ]
     private static let stillGlints: [Int] = [74, 76, 78, 81, 83, 86]
 
+    // MARK: - Low Sun (88 BPM D Dorian groove: electric piano, flatwound bass, brushed kit)
+    // Dorian i–IV color with a Mixolydian bVII and rootless voicings. All original; the playlist
+    // informed only the overall tempo, mode and chord-quality statistics, never a progression.
+
+    private static let lsDm9  = ChordDef(name: "Dm9",  root: 38, figure: [50, 57, 60, 64, 65, 69, 72, 64], held: [53, 57, 60, 64], role: .tonic)
+    private static let lsG69  = ChordDef(name: "G6/9", root: 43, figure: [55, 59, 62, 64, 69, 64, 62, 59], held: [59, 62, 64, 69], role: .subdominant)
+    private static let lsFma9 = ChordDef(name: "Fmaj9", root: 41, figure: [53, 57, 60, 64, 67, 64, 60, 57], held: [57, 60, 64, 67], role: .mediant)
+    private static let lsC69  = ChordDef(name: "C6/9", root: 36, figure: [48, 55, 57, 62, 64, 62, 57, 55], held: [52, 55, 57, 62], role: .suspended)
+    private static let lsAm11 = ChordDef(name: "Am11", root: 45, figure: [57, 60, 64, 67, 69, 67, 64, 62], held: [55, 60, 62, 64], role: .dominant)
+    private static let lsEm7  = ChordDef(name: "Em7",  root: 40, figure: [52, 55, 59, 62, 64, 62, 59, 55], held: [55, 59, 62, 64], role: .mediant)
+
+    private static let lowSunForm: [ChordDef] = [
+        lsDm9, lsDm9, lsG69, lsG69, lsDm9, lsDm9, lsG69, lsG69,
+        lsFma9, lsFma9, lsC69, lsC69, lsDm9, lsDm9, lsAm11, lsAm11,
+        lsDm9, lsDm9, lsG69, lsG69, lsFma9, lsFma9, lsG69, lsG69,
+        lsEm7, lsEm7, lsFma9, lsFma9, lsG69, lsG69, lsAm11, lsAm11,
+    ]
+    private static let lowSunClimateB: [ChordDef] = [
+        lsAm11, lsAm11, lsDm9, lsDm9, lsFma9, lsFma9, lsC69, lsC69,
+        lsG69, lsG69, lsDm9, lsDm9, lsEm7, lsEm7, lsFma9, lsFma9,
+        lsDm9, lsDm9, lsC69, lsC69, lsG69, lsG69, lsAm11, lsAm11,
+        lsFma9, lsFma9, lsEm7, lsEm7, lsDm9, lsDm9, lsG69, lsG69,
+    ]
+    // D minor pentatonic glints, an octave above the electric piano
+    private static let lowSunGlints: [Int] = [74, 77, 79, 81, 84, 86]
+
     // MARK: - Precomputed Multi-Climate Factor Oracles (64-bar corpus per world, built once in O(m))
 
     private struct ModeOraclePack: Sendable {
@@ -284,6 +316,7 @@ public enum SatieScore {
     private static let rainPack  = ModeOraclePack(primary: rainForm, secondary: rainClimateB, glints: rainGlints)
     private static let driftPack = ModeOraclePack(primary: driftForm, secondary: driftClimateB, glints: driftGlints)
     private static let stillPack = ModeOraclePack(primary: stillForm, secondary: stillClimateB, glints: stillGlints)
+    private static let lowSunPack = ModeOraclePack(primary: lowSunForm, secondary: lowSunClimateB, glints: lowSunGlints)
 
     private static func oraclePack(for mode: FocusSoundscape) -> ModeOraclePack {
         switch mode {
@@ -292,6 +325,7 @@ public enum SatieScore {
         case .rain:  return rainPack
         case .drift: return driftPack
         case .still, .dive: return stillPack
+        case .groove: return lowSunPack
         }
     }
 
@@ -308,6 +342,7 @@ public enum SatieScore {
         case .rain:  return 60.0
         case .drift: return 54.0
         case .still, .dive: return 58.0
+        case .groove: return 88.0
         }
     }
 
@@ -329,6 +364,8 @@ public enum SatieScore {
         case (.pulse, .night):   return -2
         case (.drift, .night):   return -2
         case (.still, .night):   return -2
+        case (.groove, .morning): return 2  // E Dorian
+        case (.groove, .night):   return -2 // C Dorian
         default:               return 0
         }
     }
@@ -691,6 +728,13 @@ public enum SatieScore {
                 ))
             }
 
+        case .groove:
+            lowSunBar(
+                barIndex: barIndex, bar: bar, pass: pass, section: section, spb: spb, barLen: barLen,
+                chord: chord, shift: shift, glints: glints, intensity: intensity,
+                cyc5: cyc5, cyc7: cyc7, cyc13: cyc13, rng: &rng, bells: &bells
+            )
+
         case .still, .dive:
             // Zero-ego Study / Deep Reading: strictly non-resolving suspended pentatonic clouds,
             // zero melody hook, ultra-gentle harmonic presence so prefrontal cortex stays 100% on text/code
@@ -726,7 +770,7 @@ public enum SatieScore {
         }
 
         // Sustained layers: warm bass, wide stereo pad, and 3-player wooden-body strings
-        if bar % 2 == 0 {
+        if bar % 2 == 0 && mode != .groove { // Low Sun has its own plucked bass line
             let bassScale: Double = (mode == .rain) ? 0.55 : (mode == .pulse ? 1.15 : 1.0)
             sustained.append(ScoredSustainEvent(
                 kind: .bass,
@@ -738,7 +782,7 @@ public enum SatieScore {
             ))
         }
 
-        let padScale: Double = (mode == .rain) ? 0.85 : (mode == .drift ? 1.15 : 1.0)
+        let padScale: Double = (mode == .rain) ? 0.85 : (mode == .drift ? 1.15 : (mode == .groove ? 0.75 : 1.0))
         for rawMidi in chord.held {
             sustained.append(ScoredSustainEvent(
                 kind: .pad,
@@ -756,7 +800,7 @@ public enum SatieScore {
             let swell = 0.5 * (softLightStringSwell[pairStart] + softLightStringSwell[min(pairStart + 1, barsPerForm - 1)])
             let (high, low) = stringNotes(for: chord, inMiddle: inMiddle)
             let strDur = Double(pairChanges ? 1 : 2) * barLen
-            let strScale: Double = (mode == .rain) ? 0.55 : (mode == .drift ? 1.25 : 1.0)
+            let strScale: Double = (mode == .rain) ? 0.55 : (mode == .drift ? 1.25 : (mode == .groove ? (inMiddle ? 0.5 : 0.0) : 1.0))
             sustained.append(ScoredSustainEvent(
                 kind: .strings,
                 at: 0.0,

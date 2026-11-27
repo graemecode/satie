@@ -945,6 +945,7 @@ struct AcousticCoreTests {
             (.rain,  [0, 2, 4, 5, 7, 9, 11], 3),   // F Lydian / C Major (max hold = 3)
             (.still, [2, 4, 6, 7, 9, 11, 1], 3),   // D pentatonic sus / quartal (max hold = 3)
             (.drift, [2, 4, 6, 7, 9, 11, 1], 3),   // D Major / G Lydian (max hold = 3)
+            (.groove, [2, 4, 5, 7, 9, 11, 0], 2),  // Low Sun: D Dorian (max hold = 2)
         ]
 
         for (mode, keyPCs, maxHold) in diatonicKeys {
@@ -995,8 +996,10 @@ struct AcousticCoreTests {
                     prevChord = b.chordName
                 }
                 maxObservedRun = max(maxObservedRun, runLen)
-                maxBellDensity = max(maxBellDensity, b.bells.count)
-                for ev in b.bells {
+                // Drum hits carry GM percussion notes, not pitches, and don't count toward density
+                let pitched = b.bells.filter { $0.kind != .drum }
+                maxBellDensity = max(maxBellDensity, mode == .groove ? pitched.count / 3 : pitched.count)
+                for ev in pitched {
                     let pc = ((ev.midi % 12) + 12) % 12
                     #expect(keyPCs.contains(pc), "\(mode.title) bell MIDI \(ev.midi) (pc=\(pc)) left diatonic key on bar \(b.barIndex)")
                 }

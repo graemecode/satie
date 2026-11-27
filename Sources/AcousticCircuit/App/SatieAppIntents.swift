@@ -2,7 +2,7 @@ import AcousticCore
 import AppIntents
 import Foundation
 
-/// AppIntents representation of Satie's six audiovisual worlds for Shortcuts, Siri, Spotlight,
+/// AppIntents representation of Satie's seven audiovisual worlds for Shortcuts, Siri, Spotlight,
 /// Action Button, and Apple Focus Filters on macOS 15+ and iOS 18+.
 enum SoundscapeAppEnum: String, AppEnum, CaseIterable, Sendable {
     case focus
@@ -11,6 +11,7 @@ enum SoundscapeAppEnum: String, AppEnum, CaseIterable, Sendable {
     case still
     case dive
     case drift
+    case groove
 
     static let typeDisplayRepresentation = TypeDisplayRepresentation(name: "Soundscape")
 
@@ -20,7 +21,8 @@ enum SoundscapeAppEnum: String, AppEnum, CaseIterable, Sendable {
         .rain:  DisplayRepresentation(title: "Rain & Glass", subtitle: "Kyoto rain · singing glass"),
         .still: DisplayRepresentation(title: "Still", subtitle: "Deep reading · zero melody"),
         .dive:  DisplayRepresentation(title: "Deep Dive", subtitle: "Meditation · breath & bowls"),
-        .drift: DisplayRepresentation(title: "Gymnopédie", subtitle: "Late night · piano & cello")
+        .drift: DisplayRepresentation(title: "Gymnopédie", subtitle: "Late night · piano & cello"),
+        .groove: DisplayRepresentation(title: "Low Sun", subtitle: "Steady flow · keys, bass & brushes")
     ]
 
     var soundscape: FocusSoundscape {
@@ -31,6 +33,7 @@ enum SoundscapeAppEnum: String, AppEnum, CaseIterable, Sendable {
         case .still: return .still
         case .dive:  return .dive
         case .drift: return .drift
+        case .groove: return .groove
         }
     }
 }

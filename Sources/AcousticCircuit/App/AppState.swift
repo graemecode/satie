@@ -342,7 +342,7 @@ final class AppState: ObservableObject {
         if isFocusPlaying { syncNowPlaying() }
     }
 
-    /// Number keys and the View menu: choose a soundscape by position (1 = Focus … 6 = Night).
+    /// Number keys and the View menu: choose a soundscape by position (1 = Focus … 7 = Low Sun).
     func selectFocusMode(number: Int) {
         let all = FocusSoundscape.allCases
         guard (1...all.count).contains(number) else { return }

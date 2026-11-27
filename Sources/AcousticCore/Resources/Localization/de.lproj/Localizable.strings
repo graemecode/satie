@@ -17,6 +17,9 @@
 "soundscape.drift.title" = "Gymnopédie";
 "soundscape.drift.short" = "NACHT";
 "soundscape.drift.subtitle" = "Späte Nacht · Klavier & Cello";
+"soundscape.groove.title" = "Tiefe Sonne";
+"soundscape.groove.short" = "GROOVE";
+"soundscape.groove.subtitle" = "Stetiger Flow · E-Piano, Bass & Besen";
 "visual.circuit.title" = "01 Schaltkreis";
 "visual.circuit.short" = "01 Kreis";
 "visual.circuit.clean" = "Kreis";
@@ -35,6 +38,9 @@
 "visual.oculus.title" = "06 Okulus";
 "visual.oculus.short" = "06 Okulus";
 "visual.oculus.clean" = "Okulus";
+"visual.sunset.title" = "07 Tiefe Sonne";
+"visual.sunset.short" = "07 Tiefe Sonne";
+"visual.sunset.clean" = "Tiefe Sonne";
 "sensitivity.calm" = "Ruhig";
 "sensitivity.balanced" = "Ausgewogen";
 "sensitivity.vivid" = "Lebhaft";

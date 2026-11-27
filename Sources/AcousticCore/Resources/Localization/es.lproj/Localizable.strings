@@ -17,6 +17,9 @@
 "soundscape.drift.title" = "Gymnopédie";
 "soundscape.drift.short" = "NOCHE";
 "soundscape.drift.subtitle" = "Medianoche · Piano y violonchelo";
+"soundscape.groove.title" = "Sol bajo";
+"soundscape.groove.short" = "GROOVE";
+"soundscape.groove.subtitle" = "Flujo constante · Piano eléctrico, bajo y escobillas";
 "visual.circuit.title" = "01 El Circuito";
 "visual.circuit.short" = "01 Circuito";
 "visual.circuit.clean" = "Circuito";
@@ -35,6 +38,9 @@
 "visual.oculus.title" = "06 Óculo";
 "visual.oculus.short" = "06 Óculo";
 "visual.oculus.clean" = "Óculo";
+"visual.sunset.title" = "07 Sol bajo";
+"visual.sunset.short" = "07 Sol bajo";
+"visual.sunset.clean" = "Sol bajo";
 "sensitivity.calm" = "Suave";
 "sensitivity.balanced" = "Equilibrado";
 "sensitivity.vivid" = "Intenso";

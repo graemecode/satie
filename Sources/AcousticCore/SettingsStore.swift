@@ -11,6 +11,7 @@ public enum VisualPreset: Int, CaseIterable, Identifiable, Sendable {
     case liquid = 3
     case horizon = 4
     case oculus = 5
+    case sunset = 6
 
     public var id: Int { rawValue }
 
@@ -22,6 +23,7 @@ public enum VisualPreset: Int, CaseIterable, Identifiable, Sendable {
         case .liquid:   return SatieL10n.string("visual.liquid.title", fallback: "04 Nocturne Silk")
         case .horizon:  return SatieL10n.string("visual.horizon.title", fallback: "05 Horizon")
         case .oculus:   return SatieL10n.string("visual.oculus.title", fallback: "06 Oculus")
+        case .sunset:   return SatieL10n.string("visual.sunset.title", fallback: "07 Low Sun")
         }
     }
 
@@ -33,6 +35,7 @@ public enum VisualPreset: Int, CaseIterable, Identifiable, Sendable {
         case .liquid:   return SatieL10n.string("visual.liquid.short", fallback: "04 Nocturne")
         case .horizon:  return SatieL10n.string("visual.horizon.short", fallback: "05 Horizon")
         case .oculus:   return SatieL10n.string("visual.oculus.short", fallback: "06 Oculus")
+        case .sunset:   return SatieL10n.string("visual.sunset.short", fallback: "07 Low Sun")
         }
     }
 
@@ -44,6 +47,7 @@ public enum VisualPreset: Int, CaseIterable, Identifiable, Sendable {
         case .liquid:   return SatieL10n.string("visual.liquid.clean", fallback: "Nocturne")
         case .horizon:  return SatieL10n.string("visual.horizon.clean", fallback: "Horizon")
         case .oculus:   return SatieL10n.string("visual.oculus.clean", fallback: "Oculus")
+        case .sunset:   return SatieL10n.string("visual.sunset.clean", fallback: "Low Sun")
         }
     }
 
@@ -56,6 +60,7 @@ public enum VisualPreset: Int, CaseIterable, Identifiable, Sendable {
         case .still: return .horizon
         case .dive:  return .oculus
         case .drift: return .liquid
+        case .groove: return .sunset
         }
     }
 }

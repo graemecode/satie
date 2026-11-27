@@ -17,6 +17,9 @@
 "soundscape.drift.title" = "Gymnopédie";
 "soundscape.drift.short" = "NIGHT";
 "soundscape.drift.subtitle" = "Late Night · Piano & Cello";
+"soundscape.groove.title" = "Low Sun";
+"soundscape.groove.short" = "GROOVE";
+"soundscape.groove.subtitle" = "Steady Flow · Keys, Bass & Brushes";
 "visual.circuit.title" = "01 The Circuit";
 "visual.circuit.short" = "01 Circuit";
 "visual.circuit.clean" = "Circuit";
@@ -35,6 +38,9 @@
 "visual.oculus.title" = "06 Oculus";
 "visual.oculus.short" = "06 Oculus";
 "visual.oculus.clean" = "Oculus";
+"visual.sunset.title" = "07 Low Sun";
+"visual.sunset.short" = "07 Low Sun";
+"visual.sunset.clean" = "Low Sun";
 "sensitivity.calm" = "Calm";
 "sensitivity.balanced" = "Balanced";
 "sensitivity.vivid" = "Vivid";

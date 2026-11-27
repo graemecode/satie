@@ -17,6 +17,9 @@
 "soundscape.drift.title" = "ジムノペディ";
 "soundscape.drift.short" = "夜想";
 "soundscape.drift.subtitle" = "深夜 · ピアノとチェロ";
+"soundscape.groove.title" = "低い太陽";
+"soundscape.groove.short" = "グルーヴ";
+"soundscape.groove.subtitle" = "安定したフロー · エレピ、ベース、ブラシ";
 "visual.circuit.title" = "01 回路";
 "visual.circuit.short" = "01 回路";
 "visual.circuit.clean" = "回路";
@@ -35,6 +38,9 @@
 "visual.oculus.title" = "06 天窓";
 "visual.oculus.short" = "06 天窓";
 "visual.oculus.clean" = "天窓";
+"visual.sunset.title" = "07 低い太陽";
+"visual.sunset.short" = "07 低い太陽";
+"visual.sunset.clean" = "低い太陽";
 "sensitivity.calm" = "穏やか";
 "sensitivity.balanced" = "標準";
 "sensitivity.vivid" = "鮮明";
