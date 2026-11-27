@@ -131,6 +131,8 @@ public struct ScoreOracleNavigator: Sendable {
     private var recentIndices: [Int] = []
     /// Position in a Satie repertoire world (Gymnopédies, Gnossiennes)
     public var repertoire = RepertoireCursor()
+    /// State of the Furniture Music composer
+    public var furniture = FurnitureState()
 
     public init() {}
 
@@ -143,6 +145,7 @@ public struct ScoreOracleNavigator: Sendable {
         self.recentChords.removeAll(keepingCapacity: true)
         self.recentIndices.removeAll(keepingCapacity: true)
         self.repertoire = RepertoireCursor()
+        self.furniture = FurnitureState()
     }
 
     public mutating func nextCorpusIndex(

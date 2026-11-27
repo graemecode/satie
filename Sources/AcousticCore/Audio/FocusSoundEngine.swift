@@ -10,7 +10,9 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
     case dive
     case drift
     case groove
-    // Satie Lab only, until approved: worlds made from Satie's own pieces
+    // Satie Lab only, until approved. Furniture Music composes new music in Satie's language;
+    // the repertoire worlds below play the composers' own pieces and serve as Lab benchmarks.
+    case furniture
     case gymnopedies
     case gnossiennes
     case sarabandes
@@ -25,6 +27,9 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
 
     public var isLabOnly: Bool { !Self.shipping.contains(self) }
 
+    /// Worlds played on the open piano with the concert-room sound (Furniture Music and the repertoire).
+    public var isPianoWorld: Bool { self == .furniture || SatieRepertoire.collection(for: self) != nil }
+
     public var title: String {
         switch self {
         case .focus: return SatieL10n.string("soundscape.focus.title", fallback: "Soft Light")
@@ -34,6 +39,7 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .dive:  return SatieL10n.string("soundscape.dive.title", fallback: "Deep Dive")
         case .drift: return SatieL10n.string("soundscape.drift.title", fallback: "Gymnopédie")
         case .groove: return SatieL10n.string("soundscape.groove.title", fallback: "Low Sun")
+        case .furniture: return "Furniture Music"
         case .gymnopedies: return "Gymnopédies"
         case .gnossiennes: return "Gnossiennes"
         case .sarabandes: return "Sarabandes"
@@ -52,6 +58,7 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .dive:  return SatieL10n.string("soundscape.dive.short", fallback: "DIVE")
         case .drift: return SatieL10n.string("soundscape.drift.short", fallback: "NIGHT")
         case .groove: return SatieL10n.string("soundscape.groove.short", fallback: "GROOVE")
+        case .furniture: return "SATIE"
         case .gymnopedies: return "GYMNO"
         case .gnossiennes: return "GNOSS"
         case .sarabandes: return "SARABANDE"
@@ -70,6 +77,7 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .dive:  return SatieL10n.string("soundscape.dive.subtitle", fallback: "Meditation · Breath & Bowls")
         case .drift: return SatieL10n.string("soundscape.drift.subtitle", fallback: "Late Night · Piano & Cello")
         case .groove: return SatieL10n.string("soundscape.groove.subtitle", fallback: "Steady Flow · Keys, Bass & Brushes")
+        case .furniture: return "New music in Satie's language · never the same"
         case .gymnopedies: return "Satie, 1888 · Nos. 1–3, endless"
         case .gnossiennes: return "Satie, 1890 · Nos. 1–3, endless"
         case .sarabandes: return "Satie, 1887 · Nos. 1–3, endless"
@@ -1416,7 +1424,7 @@ private final class FocusRenderState: @unchecked Sendable {
         let melEchoSend: Float
 
         switch mode {
-        case .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin:
+        case .furniture, .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin:
             // A quiet concert room: long, soft tail, almost no echo
             preDelayMs = 22.0
             roomDecay = Float(0.88 + 0.03 * spaceBloom)
@@ -1607,7 +1615,7 @@ private final class FocusRenderState: @unchecked Sendable {
                     }
                     let root = currentBar.rootMidi
                     switch mode {
-                    case .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin:
+                    case .furniture, .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin:
                         // The composer's own notes on an open piano (accompaniment softer than the melody), with a faint
                         // electric-piano sheen on the melody for a modern, synthetic edge
                         if sampleBank.isAvailable {
@@ -1880,7 +1888,7 @@ private final class FocusRenderState: @unchecked Sendable {
                 melL += sL; melR += sR
             }
 
-            if mode == .groove || SatieRepertoire.collection(for: mode) != nil {
+            if mode == .groove || mode.isPianoWorld {
                 // Suitcase electric piano with a slow, shallow autopan
                 let (eL, eR) = electricPiano.step(dt: dt, tremHz: 4.6, tremDepth: 0.10, rng: &noiseRNG, sampleRate: sampleRate)
                 figL += eL; figR += eR
@@ -1927,7 +1935,7 @@ private final class FocusRenderState: @unchecked Sendable {
             let cloudDens: Double = (mode == .drift || mode == .still) ? 5.8 : (mode == .rain ? 7.2 : 6.5)
             let cloudShim: Double = (mode == .rain) ? 0.36 : (mode == .pulse ? 0.12 : (mode == .drift ? 0.18 : (mode == .still ? 0.14 : 0.28)))
             let cloudRev: Double  = (mode == .drift || mode == .still) ? 0.48 : (mode == .focus ? 0.34 : 0.28)
-            let isSatieWorld = SatieRepertoire.collection(for: mode) != nil
+            let isSatieWorld = mode.isPianoWorld
             let cloudSub: Double  = isSatieWorld ? 0.0 : ((mode == .pulse) ? 0.36 : ((mode == .drift || mode == .still) ? 0.30 : 0.14))
             let baseCloudWet: Float = (mode == .drift || mode == .still) ? 0.34 : (mode == .rain ? 0.30 : (mode == .pulse ? 0.16 : 0.24))
             // The Satie worlds keep the granular cloud faint: the piano should sound like a piano
@@ -2106,7 +2114,7 @@ private final class FocusRenderState: @unchecked Sendable {
             case .rain:  modeMakeup = SoundCandidate.isOn ? 6.07 : 7.49
             case .drift: modeMakeup = 6.06
             case .groove: modeMakeup = 1.9
-            case .gymnopedies, .gnossiennes, .sarabandes: modeMakeup = 3.8
+            case .furniture, .gymnopedies, .gnossiennes, .sarabandes: modeMakeup = 3.8
             case .debussy: modeMakeup = 3.27
             case .faure: modeMakeup = 3.53
             case .scriabin: modeMakeup = 3.13

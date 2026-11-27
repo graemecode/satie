@@ -131,7 +131,8 @@ final class LabModel: ObservableObject {
         case .groove: return "New: a second, 8-bar beatless break halfway between breakdowns; the drums fade back in over a bar after every break instead of snapping on; after 20 minutes every other full section uses lighter 8th-note hats. Try Short break and 25 minutes in."
         case .drift: return "New: its rests keep one soft note on the downbeat instead of going silent, so the piano never drops out."
         case .dive: return "No changes in New for this world."
-        case .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin: return "A new world made from the composer's own notes, played endlessly (Lab only). Current and New are the same."
+        case .furniture: return "New music composed endlessly in Satie's language: his harmony, voicings, accompaniment and melodic habits, measured from his scores, never one of his pieces (any run that matches his melodies is rewritten). Compare it with the real Gymnopédies below."
+        case .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin: return "Benchmark: the composer's own pieces, played endlessly (Lab only, never shipped). Current and New are the same."
         }
     }
 
@@ -236,7 +237,10 @@ struct LabView: View {
             VStack(alignment: .leading, spacing: 6) {
             ForEach(FocusSoundscape.allCases) { mode in
                 if mode == FocusSoundscape.allCases.first(where: { $0.isLabOnly }) {
-                    Text("From the repertoire (Lab only)").font(.caption).foregroundStyle(.secondary).padding(.top, 8)
+                    Text("New, Lab only").font(.caption).foregroundStyle(.secondary).padding(.top, 8)
+                }
+                if mode == .gymnopedies {
+                    Text("Benchmarks: the real pieces").font(.caption).foregroundStyle(.secondary).padding(.top, 8)
                 }
                 Button { lab.select(mode) } label: {
                     HStack(alignment: .top) {

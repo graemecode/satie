@@ -326,7 +326,7 @@ public enum SatieScore {
         case .drift: return driftPack
         case .still, .dive: return stillPack
         case .groove: return lowSunPack
-        case .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin: return stillPack // unused: these worlds play Satie's own bars
+        case .furniture, .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin: return stillPack // unused: these worlds play Satie's own bars
         }
     }
 
@@ -344,6 +344,7 @@ public enum SatieScore {
         case .drift: return 54.0
         case .still, .dive: return 58.0
         case .groove: return 88.0
+        case .furniture: return 66.0
         case .gymnopedies: return 66.0
         case .gnossiennes: return 56.0
         case .sarabandes: return 54.0
@@ -436,6 +437,22 @@ public enum SatieScore {
         rng: inout SeededRNG,
         navigator: inout ScoreOracleNavigator?
     ) -> ComposedBar {
+        if mode == .furniture {
+            if navigator != nil {
+                var state = navigator!.furniture
+                let composed = SatieLanguage.composeBar(barIndex: barIndex, intensity: intensity, rng: &rng, state: &state)
+                navigator!.furniture = state
+                return composed
+            }
+            // Callers without a navigator (tests): replay the walk from the start
+            var state = FurnitureState()
+            var walkRNG = SeededRNG(seed: 42)
+            var last: ComposedBar? = nil
+            for b in 0...max(0, barIndex) {
+                last = SatieLanguage.composeBar(barIndex: b, intensity: intensity, rng: &walkRNG, state: &state)
+            }
+            return last!
+        }
         if let collection = SatieRepertoire.collection(for: mode) {
             var cursor = navigator?.repertoire ?? SatieRepertoire.statelessCursor(collection: collection, barIndex: barIndex)
             let composed = SatieRepertoire.composeBar(mode: mode, collection: collection, barIndex: barIndex,
@@ -535,7 +552,7 @@ public enum SatieScore {
         let extraSparse = (intensity == .still)
         let extraDeep   = (intensity == .deep)
         switch mode {
-        case .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin:
+        case .furniture, .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin:
             break // composed by SatieRepertoire before reaching here
         case .focus:
             for (step, rawMidi) in figure.enumerated() {
