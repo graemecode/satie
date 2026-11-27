@@ -36,6 +36,27 @@ extension SatieScore {
         [(0, 2, 0), (2, 3, 0), (7, 2, 7), (10, 4, 0), (14, 2, 10)],
     ]
 
+    /// 0 = beatless, 1 = light, 2 = full
+    static func lowSunEnergy(barIndex: Int, intensity: SoundIntensity) -> Int {
+        let pass = barIndex / barsPerForm
+        let section = (barIndex % barsPerForm) / 8
+        let arcPass = pass % 4
+        var energy: Int
+        if barIndex < 8 {
+            energy = barIndex < 4 ? 0 : 1 // intro: keys and bass first, then a light kit
+        } else if pass % 12 == 11 && section >= 2 {
+            energy = 0 // beatless breakdown, 16 bars every ~17 minutes
+        } else if SoundCandidate.isOn && pass % 12 == 5 && section == 3 {
+            energy = 0 // New: a second, shorter beatless stretch (8 bars) halfway between breakdowns
+        } else if arcPass == 0 || (arcPass == 3 && section == 3) {
+            energy = 1
+        } else {
+            energy = 2
+        }
+        if intensity == .still { energy = min(energy, 1) }
+        return energy
+    }
+
     static func lowSunBar(
         barIndex: Int,
         bar: Int,
@@ -65,20 +86,10 @@ extension SatieScore {
 
         // Energy: 0 = beatless, 1 = light, 2 = full
         let sectionSerial = barIndex / 8
-        let arcPass = pass % 4
-        var energy: Int
-        if barIndex < 8 {
-            energy = barIndex < 4 ? 0 : 1 // intro: keys and bass first, then a light kit
-        } else if pass % 12 == 11 && section >= 2 {
-            energy = 0 // beatless breakdown, 16 bars every ~17 minutes
-        } else if SoundCandidate.isOn && pass % 12 == 5 && section == 3 {
-            energy = 0 // New: a second, shorter beatless stretch (8 bars) halfway between breakdowns
-        } else if arcPass == 0 || (arcPass == 3 && section == 3) {
-            energy = 1
-        } else {
-            energy = 2
-        }
-        if intensity == .still { energy = min(energy, 1) }
+        let energy = lowSunEnergy(barIndex: barIndex, intensity: intensity)
+        // New: after the intro or a beatless stretch the kit fades back in across its first bar
+        let drumsReturning = SoundCandidate.isOn && energy > 0 && barIndex > 0 && lowSunEnergy(barIndex: barIndex - 1, intensity: intensity) == 0
+        func drumFade(_ step: Int) -> Double { drumsReturning ? 0.45 + 0.55 * Double(step) / 15.0 : 1.0 }
         let deep = intensity == .deep
 
         let patternSeed = (sectionSerial &* 2654435761) & 0x7fffffff
@@ -94,12 +105,12 @@ extension SatieScore {
             for step in kick {
                 let v = step == 0 ? 0.92 : 0.74
                 bells.append(ScoredBellEvent(kind: .drum, at: max(0, stepTime(step) + drift), midi: GrooveDrum.kick.rawValue,
-                                             duration: 0.3, velocity: v * rng.between(0.92, 1.0), level: 1.0, pan: 0))
+                                             duration: 0.3, velocity: v * rng.between(0.92, 1.0) * drumFade(step), level: 1.0, pan: 0))
             }
             let backbeat: GrooveDrum = energy == 2 ? .snare : .rim
             for step in [4, 12] {
                 bells.append(ScoredBellEvent(kind: .drum, at: stepTime(step) + snareLate + drift, midi: backbeat.rawValue,
-                                             duration: 0.2, velocity: rng.between(0.78, 0.9), level: 1.0, pan: 0.08))
+                                             duration: 0.2, velocity: rng.between(0.78, 0.9) * drumFade(step), level: 1.0, pan: 0.08))
             }
             if energy == 2 {
                 // Ghost notes before the backbeat, varied per bar
@@ -115,7 +126,7 @@ extension SatieScore {
             for step in hatSteps {
                 if isResetBar && step >= 8 { continue }
                 let accent = hatAccent[step]
-                let v = accent * rng.between(0.82, 1.0) * (energy == 2 ? 0.8 : 0.7)
+                let v = accent * rng.between(0.82, 1.0) * (energy == 2 ? 0.8 : 0.7) * drumFade(step)
                 let kind: GrooveDrum = (step % 4 == 2 && energy == 2 && deep) ? .tightHat : .shaker
                 bells.append(ScoredBellEvent(kind: .drum, at: stepTime(step) + drift, midi: kind.rawValue,
                                              duration: 0.08, velocity: v, level: 1.0, pan: step % 2 == 0 ? -0.42 : 0.44))

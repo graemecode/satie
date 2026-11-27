@@ -203,6 +203,8 @@ final class StudioSampleBank: @unchecked Sendable {
 struct AcousticSamplerVoice: @unchecked Sendable {
     var active: Bool = false
     var instrument: AcousticInstrumentID = .piano
+    /// Share of the recording's own stereo image (0 = mono). Low piano notes are mono so the bass stays centered.
+    var naturalWidth: Float = 0.55
     var isSustainedLayer: Bool = false
     private var zone: DecodedSampleZone?
     private var readPos: Double = 0
@@ -232,6 +234,7 @@ struct AcousticSamplerVoice: @unchecked Sendable {
         feltMuffle: Bool = false,
         justSweeten: Bool = false,
         sustainedLayer: Bool = false,
+        narrowLow: Bool = false,
         rng: inout FastNoiseRNG,
         sampleRate: Double = 48_000.0
     ) -> Bool {
@@ -240,6 +243,14 @@ struct AcousticSamplerVoice: @unchecked Sendable {
         }
         self.zone = z
         self.instrument = instrument
+        if instrument == .piano && midi < 50 {
+            self.naturalWidth = 0.0
+        } else if narrowLow {
+            // The repertoire worlds keep the piano's own stereo image modest and even across the keyboard
+            self.naturalWidth = midi < 62 ? 0.32 : 0.45
+        } else {
+            self.naturalWidth = 0.55
+        }
         self.isSustainedLayer = sustainedLayer
         self.active = true
         self.age = 0
@@ -365,8 +376,9 @@ struct AcousticSamplerVoice: @unchecked Sendable {
         let gain = env * level
         // Blend 55% natural stereo recording width + 45% panned center placement
         let mono = 0.5 * (fL + fR)
-        let outL = (fL * 0.55 + mono * panL * 0.65) * gain
-        let outR = (fR * 0.55 + mono * panR * 0.65) * gain
+        let fold = mono * (0.55 - naturalWidth)
+        let outL = (fL * naturalWidth + fold + mono * panL * 0.65) * gain
+        let outR = (fR * naturalWidth + fold + mono * panR * 0.65) * gain
         return (outL, outR)
     }
 }

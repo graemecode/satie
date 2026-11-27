@@ -266,14 +266,14 @@ final class SatieiOSState: ObservableObject {
 
     /// Swipe on the stage: move to the neighboring soundscape (and its visual) without starting or stopping playback.
     func stepFocusMode(forward: Bool) {
-        let all = FocusSoundscape.allCases
+        let all = FocusSoundscape.shipping
         guard let idx = all.firstIndex(of: focusMode) else { return }
         performHaptic()
         focusMode = all[(idx + (forward ? 1 : all.count - 1)) % all.count]
     }
 
     func cycleFocusMode(forward: Bool = true) {
-        let all = FocusSoundscape.allCases
+        let all = FocusSoundscape.shipping
         guard let idx = all.firstIndex(of: focusMode) else { return }
         let next = all[(idx + (forward ? 1 : all.count - 1)) % all.count]
         if isFocusPlaying {

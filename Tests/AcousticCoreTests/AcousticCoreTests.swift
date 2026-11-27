@@ -220,8 +220,8 @@ struct AcousticCoreTests {
         #expect(reloaded.miniHUDOrigin == NSPoint(x: 420, y: 180))
         #expect(reloaded.studioFrame == NSRect(x: 100, y: 120, width: 1280, height: 820))
 
-        let pairedWorlds = Set(FocusSoundscape.allCases.map { VisualPreset.paired(for: $0) })
-        #expect(pairedWorlds.count == FocusSoundscape.allCases.count)
+        let pairedWorlds = Set(FocusSoundscape.shipping.map { VisualPreset.paired(for: $0) })
+        #expect(pairedWorlds.count == FocusSoundscape.shipping.count)
 
         // Verify shared App Group widget snapshot round-trips cleanly
         #expect(SatieWidgetSnapshot.appGroupID == "group.com.strangechances.Satie")
@@ -448,12 +448,15 @@ struct AcousticCoreTests {
                 circadian: .afternoon,
                 frames: frames,
                 ducked: false,
-                warmupFrames: 48_000,
+                // Repertoire worlds open as the composer wrote them (often a single quiet line), so measure them
+                // after a 20 s lead-in rather than in their first seconds
+                warmupFrames: SatieRepertoire.collection(for: mode) != nil ? 48_000 * 20 : 48_000,
                 seed: 42
             )
             let elapsed = CFAbsoluteTimeGetCurrent() - t0
-            // Rendered 1s warmup + 6s = 7s of 48 kHz stereo audio
-            let cpuPct = (elapsed / (testSeconds + 1.0)) * 100.0
+            // Rendered 1s warmup (20s for repertoire worlds) + 6s of 48 kHz stereo audio
+            let warmupSeconds = SatieRepertoire.collection(for: mode) != nil ? 20.0 : 1.0
+            let cpuPct = (elapsed / (testSeconds + warmupSeconds)) * 100.0
 
             var sumSq: Double = 0
             var peak: Float = 0
@@ -505,7 +508,10 @@ struct AcousticCoreTests {
             #expect(dc < 0.004, "Mode \(mode.title) has excessive DC offset (\(dc))")
             #expect(rmsDB > -22.0 && rmsDB < -12.0, "Mode \(mode.title) loudness out of calibrated -18..-15 dBFS window (\(rmsDB) dBFS)")
             // Deep Dive intentionally injects post-matrix pure L/R binaural beats (110..165 Hz), so subCorr is lower by design
-            if mode != .dive {
+            // Only meaningful when there is bass to measure: some repertoire pieces open with no bass at all
+            // (Clair de lune's left hand starts above middle C), leaving only room noise ~55 dB down
+            let subRmsDB = 10.0 * log10(max(1e-12, 0.5 * (subEL + subER) / Double(frames)))
+            if mode != .dive && subRmsDB > -45.0 {
                 #expect(subCorr > 0.975, "Mode \(mode.title) sub-bass (<110 Hz) is not strictly mono (\(subCorr))")
             }
             #expect(midCorr > 0.05 && midCorr < 0.92, "Mode \(mode.title) mid/high stereo imaging out of lush range (\(midCorr))")

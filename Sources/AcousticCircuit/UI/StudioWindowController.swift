@@ -192,7 +192,7 @@ struct StudioContentView: View {
 
             // Primary Soundscape Worlds Pill (FOCUS · PULSE · RAIN · STILL · NIGHT)
             HStack(spacing: 2) {
-                ForEach(FocusSoundscape.allCases) { mode in
+                ForEach(FocusSoundscape.shipping) { mode in
                     let selected = (state.focusMode == mode)
                     Button {
                         withAnimation(reduceMotion ? nil : .spring(response: 0.26, dampingFraction: 0.82)) {

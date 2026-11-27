@@ -287,7 +287,7 @@ struct SatieTVRootView: View {
                         Label(state.isPlaying ? SatieL10n.string("common.pause") : SatieL10n.string("common.play"), systemImage: state.isPlaying ? "pause.fill" : "play.fill")
                             .font(.system(size: 18, weight: .semibold, design: .monospaced))
                     }
-                    ForEach(FocusSoundscape.allCases) { mode in
+                    ForEach(FocusSoundscape.shipping) { mode in
                         Button(mode.shortLabel) {
                             state.select(mode)
                         }

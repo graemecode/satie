@@ -55,6 +55,7 @@ final class LabModel: ObservableObject {
     @Published var playing = false
     @Published var timeOfDay: CircadianPhase = .afternoon { didSet { engine.setCircadianPhase(timeOfDay) } }
     @Published var telemetry = ScoreTelemetry.empty
+    @Published var pieceTitle = ""
     @Published var levelDB: Float = -80
     @Published var listened: TimeInterval = 0
     @Published var notes: [LabNote] = []
@@ -101,6 +102,7 @@ final class LabModel: ObservableObject {
         if engine.isPlaying { listened += now.timeIntervalSince(lastTick) }
         lastTick = now
         telemetry = engine.scoreTelemetry
+        pieceTitle = engine.currentPieceTitle
         playing = engine.isPlaying
         let rms = ring.recentRMS(frameCount: 9600)
         levelDB = rms > 0 ? 20 * log10(rms) : -80
@@ -109,6 +111,7 @@ final class LabModel: ObservableObject {
     var bar: Int { telemetry.pass * 32 + telemetry.barInForm }
 
     var sectionLabel: String {
+        if !pieceTitle.isEmpty { return pieceTitle }
         guard world == .groove else { return "Pass \(telemetry.pass + 1), section \(telemetry.barInForm / 8 + 1) of 4" }
         let pass = telemetry.pass, section = telemetry.barInForm / 8
         if bar < 4 { return "Intro: keys only" }
@@ -121,12 +124,14 @@ final class LabModel: ObservableObject {
     /// What the New version changes in each world, so you know what to listen for.
     var whatsNew: String {
         switch world {
-        case .focus: return "New: the full melody plays on the first pass and every fourth pass; in between it only surfaces in fragments. The arpeggio breathes a little more outside the climax. Try Second or Third pass."
+        case .focus: return "New: the full melody plays on the first pass and every fourth pass; in between it continues as a quiet whisper, so it never snaps back in. The arpeggio breathes a little more outside the climax. Try Second or Third pass."
         case .pulse: return "New: after the first pass the arpeggio rotates between full, open and sparse by section, and every third pass ends with an 8-bar breath. The fast pad tremolo fades after 20 minutes. Try Third pass and 25 minutes in."
         case .rain: return "New: the rain is a real, audible bed (it was ~30 dB under the instruments) and the pad is a little fuller, so it swells half as much (6.3 → 3.3 LU)."
         case .still: return "New: about every 4 minutes, a soft two-note glow rises and fades, so it never goes fully static."
-        case .groove: return "New: a second, 8-bar beatless break halfway between breakdowns, and after 20 minutes every other full section uses lighter 8th-note hats. Try Short break and 25 minutes in."
-        case .drift, .dive: return "No changes in New for this world."
+        case .groove: return "New: a second, 8-bar beatless break halfway between breakdowns; the drums fade back in over a bar after every break instead of snapping on; after 20 minutes every other full section uses lighter 8th-note hats. Try Short break and 25 minutes in."
+        case .drift: return "New: its rests keep one soft note on the downbeat instead of going silent, so the piano never drops out."
+        case .dive: return "No changes in New for this world."
+        case .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin: return "A new world made from the composer's own notes, played endlessly (Lab only). Current and New are the same."
         }
     }
 
@@ -134,6 +139,9 @@ final class LabModel: ObservableObject {
     var jumps: [(String, Int)] {
         let perMinute = 60.0 / SatieScore.secondsPerBar(for: world)
         let minutes = { (m: Double) in Int(m * perMinute) }
+        if SatieRepertoire.collection(for: world) != nil {
+            return SatieRepertoire.pieceStarts(for: world).map { ($0.0, max(1, $0.1)) }
+        }
         switch world {
         case .groove:
             return [("Start", 0), ("Full groove", 40), ("Light section", 128), ("Short break", 5 * 32 + 22),
@@ -173,7 +181,7 @@ final class LabModel: ObservableObject {
         guard !text.isEmpty || !draftTags.isEmpty || draftRating != nil else { return }
         let note = LabNote(
             time: Date(), build: build, world: world.rawValue, worldTitle: world.title,
-            bar: bar, markedBar: markedBar, section: sectionLabel, chord: telemetry.chordLabel,
+            bar: bar, markedBar: markedBar, section: sectionLabel, chord: pieceTitle.isEmpty ? telemetry.chordLabel : pieceTitle,
             listenedSeconds: Int(listened), timeOfDay: timeOfDay.label, version: useNew ? "new" : "current",
             rating: draftRating, tags: draftTags.sorted(), note: text
         )
@@ -224,7 +232,12 @@ struct LabView: View {
     private var worldColumn: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Worlds").font(.headline).padding(.bottom, 4)
+            ScrollView {
+            VStack(alignment: .leading, spacing: 6) {
             ForEach(FocusSoundscape.allCases) { mode in
+                if mode == FocusSoundscape.allCases.first(where: { $0.isLabOnly }) {
+                    Text("From the repertoire (Lab only)").font(.caption).foregroundStyle(.secondary).padding(.top, 8)
+                }
                 Button { lab.select(mode) } label: {
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 1) {
@@ -242,7 +255,8 @@ struct LabView: View {
                 }
                 .buttonStyle(.plain)
             }
-            Spacer()
+            }
+            }
             Picker("Time of day", selection: $lab.timeOfDay) {
                 ForEach([CircadianPhase.morning, .afternoon, .night], id: \.self) { Text($0.label).tag($0) }
             }
@@ -265,7 +279,7 @@ struct LabView: View {
                 .help("Play or pause (⌘P)")
                 VStack(alignment: .leading, spacing: 3) {
                     Text(lab.world.title).font(.title2).fontWeight(.semibold)
-                    Text("\(lab.sectionLabel) · bar \(lab.bar + 1) · \(lab.telemetry.chordLabel)")
+                    Text(lab.pieceTitle.isEmpty ? "\(lab.sectionLabel) · bar \(lab.bar + 1) · \(lab.telemetry.chordLabel)" : "\(lab.pieceTitle) · bar \(lab.bar + 1)")
                         .foregroundStyle(.secondary)
                     Text("Listened \(Self.clock(lab.listened))").font(.caption).foregroundStyle(.secondary).monospacedDigit()
                 }

@@ -326,6 +326,7 @@ public enum SatieScore {
         case .drift: return driftPack
         case .still, .dive: return stillPack
         case .groove: return lowSunPack
+        case .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin: return stillPack // unused: these worlds play Satie's own bars
         }
     }
 
@@ -343,6 +344,12 @@ public enum SatieScore {
         case .drift: return 54.0
         case .still, .dive: return 58.0
         case .groove: return 88.0
+        case .gymnopedies: return 66.0
+        case .gnossiennes: return 56.0
+        case .sarabandes: return 54.0
+        case .debussy: return 60.0
+        case .faure: return 56.0
+        case .scriabin: return 50.0
         }
     }
 
@@ -429,6 +436,13 @@ public enum SatieScore {
         rng: inout SeededRNG,
         navigator: inout ScoreOracleNavigator?
     ) -> ComposedBar {
+        if let collection = SatieRepertoire.collection(for: mode) {
+            var cursor = navigator?.repertoire ?? SatieRepertoire.statelessCursor(collection: collection, barIndex: barIndex)
+            let composed = SatieRepertoire.composeBar(mode: mode, collection: collection, barIndex: barIndex,
+                                                      intensity: intensity, rng: &rng, cursor: &cursor)
+            navigator?.repertoire = cursor
+            return composed
+        }
         let bar = ((barIndex % barsPerForm) + barsPerForm) % barsPerForm
         let pass = max(0, barIndex / barsPerForm)
         let section = bar / 8
@@ -521,6 +535,8 @@ public enum SatieScore {
         let extraSparse = (intensity == .still)
         let extraDeep   = (intensity == .deep)
         switch mode {
+        case .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin:
+            break // composed by SatieRepertoire before reaching here
         case .focus:
             for (step, rawMidi) in figure.enumerated() {
                 if (section == 0 || section == 3) && (step == 2 || step == 5) { continue }
@@ -567,8 +583,11 @@ public enum SatieScore {
             // Sparse lyrical melody (20% dropout, 12% octave lift, and Factor Oracle chord-tone harmonization on Pass 1+)
             // New: the full melody plays on the first pass and returns every fourth pass; in between,
             // only about one 4-bar phrase in three carries it, so the tune surfaces rather than loops.
+            // Between full statements the melody keeps going as a whisper (about 12 dB down) rather than
+            // stopping, so it never snaps back in.
             let melodyPhraseOn = !candidate || pass == 0 || pass % 4 == 0 || ((bar / 4 + pass) % 3 == 0)
-            if melodyPhraseOn && (pass == 0 || rng.nextUnit() >= 0.20) {
+            let melodyScale = melodyPhraseOn ? 1.0 : 0.25
+            if pass == 0 || rng.nextUnit() >= 0.20 {
                 let melodySlot = corpusIdx % barsPerForm
                 let chordPcs = Set(chord.figure.map { (($0 % 12) + 12) % 12 } + chord.held.map { (($0 % 12) + 12) % 12 })
                 for (beat, written, beats) in softLightMelody[melodySlot] {
@@ -595,14 +614,14 @@ public enum SatieScore {
                     let lifted = (pass > 0 && melodicNote < 80 && rng.nextUnit() < 0.12) ? melodicNote + 12 : melodicNote
                     let midi = lifted + shift
                     allowed.insert(((midi % 12) + 12) % 12)
-                    let velocity = rng.between(0.88, 1.0)
+                    let velocity = rng.between(0.88, 1.0) * (melodyPhraseOn ? 1.0 : 0.6)
                     bells.append(ScoredBellEvent(
                         kind: .melody,
                         at: beat * spb + rng.between(0.0, 0.012),
                         midi: midi,
                         duration: beats * spb,
                         velocity: velocity,
-                        level: 0.185 * velocity,
+                        level: 0.185 * velocity * melodyScale,
                         pan: 0.16
                     ))
                 }
@@ -709,11 +728,13 @@ public enum SatieScore {
 
         case .drift:
             // Gymnopédie / Sakamoto '12' felt piano: authentic Japanese Ma (間) negative space + luminous phrases
-            if !maSilenceWindow {
-                let stepsToPlay = (section == 0 || section == 3) ? [0, 4] : [0, 3, 6]
+            // New: a rest (Ma) keeps one soft note on the downbeat instead of going silent
+            let driftRest = maSilenceWindow && candidate
+            if !maSilenceWindow || driftRest {
+                let stepsToPlay = driftRest ? [0] : ((section == 0 || section == 3) ? [0, 4] : [0, 3, 6])
                 for step in stepsToPlay where step < figure.count {
-                    if pass > 0 && rng.nextUnit() < 0.24 { continue }
-                    let velocity = rng.between(0.62, 0.88)
+                    if pass > 0 && !driftRest && rng.nextUnit() < 0.24 { continue }
+                    let velocity = rng.between(0.62, 0.88) * (driftRest ? 0.55 : 1.0)
                     let at = Double(step) * 0.5 * spb + rng.between(-0.010, 0.022)
                     let octaveLift = (pass > 0 && step > 0 && rng.nextUnit() < 0.16) ? 12 : 0
                     let midi = figure[step] + shift + octaveLift

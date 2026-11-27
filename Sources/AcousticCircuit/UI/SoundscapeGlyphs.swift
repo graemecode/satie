@@ -139,6 +139,19 @@ struct SoundscapeGlyph: View {
                 let dot = Path(ellipseIn: CGRect(x: center.x - dotR, y: center.y - dotR, width: dotR * 2, height: dotR * 2))
                 ctx.fill(dot, with: .color(primary))
 
+            case .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin:
+                // Satie worlds (Satie Lab only for now): three notes on a gentle line
+                let rises = mode == .gymnopedies
+                for k in 0..<3 {
+                    let fx: Double = -0.5 + 0.5 * Double(k)
+                    let fy: Double = rises ? (0.25 - 0.25 * Double(k)) : (k == 1 ? 0.2 : -0.2)
+                    let x: CGFloat = center.x + ir * CGFloat(fx)
+                    let y: CGFloat = center.y + ir * CGFloat(fy)
+                    let dr: CGFloat = max(1.6, size * 0.05)
+                    let dot = Path(ellipseIn: CGRect(x: x - dr, y: y - dr, width: dr * 2, height: dr * 2))
+                    ctx.fill(dot, with: .color(primary))
+                }
+
             case .groove:
                 // GROOVE (Low Sun): half sun resting on the horizon, three short rays, and a beat of dashes below
                 let horizonY = center.y + ir * 0.18

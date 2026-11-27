@@ -217,7 +217,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         viewMenu.addItem(fsItem)
 
         viewMenu.addItem(.separator())
-        for (index, mode) in FocusSoundscape.allCases.enumerated() {
+        for (index, mode) in FocusSoundscape.shipping.enumerated() {
             let item = NSMenuItem(title: mode.title, action: #selector(menuSelectSoundscape(_:)), keyEquivalent: "\(index + 1)")
             item.keyEquivalentModifierMask = [.command]
             item.target = self
@@ -511,7 +511,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let soundItem = NSMenuItem(title: SatieL10n.string("menu.soundscape"), action: nil, keyEquivalent: "")
         let soundMenu = NSMenu()
-        for mode in FocusSoundscape.allCases {
+        for mode in FocusSoundscape.shipping {
             let sItem = NSMenuItem(title: mode.title, action: #selector(menuToggleSoundscape(_:)), keyEquivalent: "")
             sItem.target = self
             sItem.representedObject = mode.rawValue

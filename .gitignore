@@ -4,3 +4,8 @@
 build/
 *.xcuserdata
 *.xcworkspace
+
+# Satie Lab: third-party score files and personal listening notes stay local
+Lab/sources/**/*.mid
+Lab/sources/*.mid
+Lab/feedback.jsonl

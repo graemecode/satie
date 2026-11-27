@@ -119,7 +119,7 @@ struct PopoverView: View {
 
             // 2. Five Iconic Circular Geometric Soundscape Worlds (FOCUS · PULSE · RAIN · STILL · NIGHT)
             HStack(spacing: 0) {
-                ForEach(FocusSoundscape.allCases) { mode in
+                ForEach(FocusSoundscape.shipping) { mode in
                     let isSelected = (state.focusMode == mode)
                     let isActive = state.isFocusPlaying && (state.focusMode == mode)
                     Button {
@@ -420,6 +420,7 @@ struct PopoverView: View {
         case .still: return Color(red: 0.78, green: 0.82, blue: 0.88) // Pure obsidian mist
         case .dive:  return Color(red: 0.62, green: 0.88, blue: 0.94) // Iridescent opalescent prism
         case .groove: return Color(red: 1.00, green: 0.66, blue: 0.42) // Low amber sun
+        case .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin: return Color(red: 0.86, green: 0.82, blue: 0.94)
         }
     }
 

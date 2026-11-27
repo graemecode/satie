@@ -272,7 +272,7 @@ struct SatieiOSRootView: View {
         VStack(spacing: isRegularCanvas ? 24 : 22) {
             // Six Iconic Circular Geometric Soundscape Worlds (FOCUS · PULSE · RAIN · STILL · DIVE · NIGHT)
             HStack(spacing: 0) {
-                ForEach(FocusSoundscape.allCases) { mode in
+                ForEach(FocusSoundscape.shipping) { mode in
                     soundscapeButton(mode: mode, glyphSize: isRegularCanvas ? 52 : 44)
                 }
             }
@@ -301,7 +301,7 @@ struct SatieiOSRootView: View {
     private var compactLandscapeDock: some View {
         HStack(spacing: 16) {
             HStack(spacing: 6) {
-                ForEach(FocusSoundscape.allCases) { mode in
+                ForEach(FocusSoundscape.shipping) { mode in
                     soundscapeButton(mode: mode, glyphSize: 40)
                 }
             }
@@ -601,6 +601,7 @@ struct SatieiOSRootView: View {
         case .dive:  return Color(red: 0.62, green: 0.88, blue: 0.94)
         case .drift: return Color(red: 0.92, green: 0.84, blue: 0.74)
         case .groove: return Color(red: 1.00, green: 0.66, blue: 0.42)
+        case .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin: return Color(red: 0.86, green: 0.82, blue: 0.94)
         }
     }
 }

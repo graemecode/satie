@@ -115,7 +115,7 @@ struct VisionOculusSkyspaceView: View {
                 .buttonStyle(.borderedProminent)
                 .buttonBorderShape(.circle)
 
-                ForEach(FocusSoundscape.allCases) { mode in
+                ForEach(FocusSoundscape.shipping) { mode in
                     Button(mode.shortLabel) {
                         state.select(mode)
                     }

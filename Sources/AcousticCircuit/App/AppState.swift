@@ -335,7 +335,7 @@ final class AppState: ObservableObject {
 
     /// Move to the neighboring soundscape (and its visual) without starting or stopping playback.
     func stepFocusMode(forward: Bool) {
-        let all = FocusSoundscape.allCases
+        let all = FocusSoundscape.shipping
         guard let idx = all.firstIndex(of: focusMode) else { return }
         performHaptic()
         focusMode = all[(idx + (forward ? 1 : all.count - 1)) % all.count]
@@ -344,13 +344,13 @@ final class AppState: ObservableObject {
 
     /// Number keys and the View menu: choose a soundscape by position (1 = Focus … 7 = Low Sun).
     func selectFocusMode(number: Int) {
-        let all = FocusSoundscape.allCases
+        let all = FocusSoundscape.shipping
         guard (1...all.count).contains(number) else { return }
         startFocusSound(all[number - 1])
     }
 
     func cycleFocusMode(forward: Bool = true) {
-        let all = FocusSoundscape.allCases
+        let all = FocusSoundscape.shipping
         guard let idx = all.firstIndex(of: focusMode) else { return }
         let nextIdx = (idx + (forward ? 1 : all.count - 1)) % all.count
         let next = all[nextIdx]

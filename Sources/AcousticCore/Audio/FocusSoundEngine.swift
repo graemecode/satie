@@ -10,8 +10,20 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
     case dive
     case drift
     case groove
+    // Satie Lab only, until approved: worlds made from Satie's own pieces
+    case gymnopedies
+    case gnossiennes
+    case sarabandes
+    case debussy
+    case faure
+    case scriabin
 
     public var id: String { rawValue }
+
+    /// Worlds shown in the apps. Lab-only worlds are left out until they are approved.
+    public static let shipping: [FocusSoundscape] = [.focus, .pulse, .rain, .still, .dive, .drift, .groove]
+
+    public var isLabOnly: Bool { !Self.shipping.contains(self) }
 
     public var title: String {
         switch self {
@@ -22,6 +34,12 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .dive:  return SatieL10n.string("soundscape.dive.title", fallback: "Deep Dive")
         case .drift: return SatieL10n.string("soundscape.drift.title", fallback: "Gymnopédie")
         case .groove: return SatieL10n.string("soundscape.groove.title", fallback: "Low Sun")
+        case .gymnopedies: return "Gymnopédies"
+        case .gnossiennes: return "Gnossiennes"
+        case .sarabandes: return "Sarabandes"
+        case .debussy: return "Clair de Lune"
+        case .faure: return "Pavane"
+        case .scriabin: return "Préludes"
         }
     }
 
@@ -34,6 +52,12 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .dive:  return SatieL10n.string("soundscape.dive.short", fallback: "DIVE")
         case .drift: return SatieL10n.string("soundscape.drift.short", fallback: "NIGHT")
         case .groove: return SatieL10n.string("soundscape.groove.short", fallback: "GROOVE")
+        case .gymnopedies: return "GYMNO"
+        case .gnossiennes: return "GNOSS"
+        case .sarabandes: return "SARABANDE"
+        case .debussy: return "DEBUSSY"
+        case .faure: return "FAURÉ"
+        case .scriabin: return "SCRIABIN"
         }
     }
 
@@ -46,6 +70,12 @@ public enum FocusSoundscape: String, CaseIterable, Identifiable, Sendable {
         case .dive:  return SatieL10n.string("soundscape.dive.subtitle", fallback: "Meditation · Breath & Bowls")
         case .drift: return SatieL10n.string("soundscape.drift.subtitle", fallback: "Late Night · Piano & Cello")
         case .groove: return SatieL10n.string("soundscape.groove.subtitle", fallback: "Steady Flow · Keys, Bass & Brushes")
+        case .gymnopedies: return "Satie, 1888 · Nos. 1–3, endless"
+        case .gnossiennes: return "Satie, 1890 · Nos. 1–3, endless"
+        case .sarabandes: return "Satie, 1887 · Nos. 1–3, endless"
+        case .debussy: return "Debussy · Clair de lune, Rêverie, Bruyères, Arabesque"
+        case .faure: return "Fauré · Pavane, Après un rêve, Berceuse"
+        case .scriabin: return "Scriabin · Préludes Op. 16 and Op. 11"
         }
     }
 }
@@ -418,6 +448,7 @@ struct PrecomposedBarSlot: Sendable {
     var macroFilterHorizon: Double = 0.75
     var macroSpaceBloom: Double = 0.55
     var macroResonance: Double = 0.45
+    var repertoirePiece: Int = -1
 
     var bellCount: Int = 0
     var bells: [ScoredBellEvent]
@@ -443,6 +474,7 @@ struct PrecomposedBarSlot: Sendable {
         macroFilterHorizon = composed.macroFilterHorizon
         macroSpaceBloom = composed.macroSpaceBloom
         macroResonance = composed.macroResonance
+        repertoirePiece = composed.corpusIndex >= 1000 ? composed.corpusIndex / 1000 - 1 : -1
 
         let sortedBells = composed.bells.sorted { $0.at < $1.at }
         bellCount = min(Self.maxBells, sortedBells.count)
@@ -580,6 +612,11 @@ public final class FocusSoundEngine: @unchecked Sendable {
         let swapped = ((packed >> 22) & 1) != 0
         let progQ = Float((packed >> 24) & 0xFF) / 255.0
         return ScoreTelemetry(barInForm: bar, pass: pass, chordIndex: chordIdx, didSwapFigure: swapped, barProgress: progQ)
+    }
+
+    /// In a repertoire world, the title of the piece now playing (e.g. "Clair de lune"); empty otherwise.
+    public var currentPieceTitle: String {
+        SatieRepertoire.pieceTitle(at: renderState.repertoirePieceAtom.load(ordering: .relaxed))
     }
 
     public func snapshotVisualMusicalFrame() -> VisualMusicalFrame {
@@ -1045,6 +1082,7 @@ private final class FocusRenderState: @unchecked Sendable {
     let scoreResetAtom = Atomic<Int>(0)
     let softReseedAtom = Atomic<Int>(0)
     let telemetryPackedAtom = Atomic<UInt64>(0)
+    let repertoirePieceAtom = Atomic<Int>(-1)
 
     let barQueue = LockFreeBarQueue()
     let visualRing = VisualNoteRing()
@@ -1113,6 +1151,9 @@ private final class FocusRenderState: @unchecked Sendable {
     private var groovePresenceL = GrooveBiquad()
     private var groovePresenceR = GrooveBiquad()
     private var groovePresenceRate: Double = 0
+    private var satiePresenceL = GrooveBiquad()
+    private var satiePresenceR = GrooveBiquad()
+    private var satiePresenceRate: Double = 0
     private var drumTopLpR = CytomicSVF(cutoffHz: 8000, q: 0.6)
     private var deepMeditation: DeepMeditationEngine
     private var masterBus = AudiophileMasterBus()
@@ -1224,6 +1265,7 @@ private final class FocusRenderState: @unchecked Sendable {
             hasCurrentBar = true
             barBellCursor = 0
             barSustainCursor = 0
+            repertoirePieceAtom.store(currentBar.repertoirePiece, ordering: .relaxed)
             if currentBar.chordIndex != lastVisualChordIdx {
                 lastVisualChordIdx = currentBar.chordIndex
                 visualRing.recordChordChange(clockSec: clockSec)
@@ -1373,6 +1415,17 @@ private final class FocusRenderState: @unchecked Sendable {
         let melEchoSend: Float
 
         switch mode {
+        case .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin:
+            // A quiet concert room: long, soft tail, almost no echo
+            preDelayMs = 22.0
+            roomDecay = Float(0.88 + 0.03 * spaceBloom)
+            roomDampLP = 0.30
+            roomWet = 0.30
+            erMix = 0.30
+            tapeToneHz = 3200.0
+            tapeWowMs = 0.8
+            figEchoSend = 0.04
+            melEchoSend = 0.10
         case .focus:
             preDelayMs = 18.0
             roomDecay = Float(0.83 + 0.03 * spaceBloom)
@@ -1553,6 +1606,27 @@ private final class FocusRenderState: @unchecked Sendable {
                     }
                     let root = currentBar.rootMidi
                     switch mode {
+                    case .gymnopedies, .gnossiennes, .sarabandes, .debussy, .faure, .scriabin:
+                        // The composer's own notes on an open piano (accompaniment softer than the melody), with a faint
+                        // electric-piano sheen on the melody for a modern, synthetic edge
+                        if sampleBank.isAvailable {
+                            let isMelody = ev.kind == .melody
+                            _ = samplerVoices[nextSamplerSlot].trigger(
+                                bank: sampleBank, instrument: .piano, midi: ev.midi, rootMidi: root,
+                                velocity: ev.velocity, duration: ev.duration,
+                                level: ev.level * (isMelody ? 1.7 : (ev.kind == .bass ? 1.6 : 1.45)), pan: ev.pan,
+                                feltMuffle: false, justSweeten: false, sustainedLayer: false, narrowLow: true,
+                                rng: &noiseRNG, sampleRate: sampleRate
+                            )
+                            nextSamplerSlot = (nextSamplerSlot + 1) % samplerVoices.count
+                            if isMelody && ev.duration > 0.45 {
+                                electricPiano.trigger(midi: ev.midi, duration: ev.duration, velocity: ev.velocity * 0.75,
+                                                      gain: 0.05, pan: 0.22, rng: &noiseRNG, sampleRate: sampleRate)
+                            }
+                        } else {
+                            bells[nextBellSlot].trigger(event: ev, rng: &noiseRNG, sampleRate: sampleRate)
+                            nextBellSlot = (nextBellSlot + 1) % bells.count
+                        }
                     case .focus:
                         // Kankyō Acoustic: Real CC0 Soft Vibraphone + Velvet Felt Piano + Concert Harp glints
                         if sampleBank.isAvailable {
@@ -1805,7 +1879,7 @@ private final class FocusRenderState: @unchecked Sendable {
                 melL += sL; melR += sR
             }
 
-            if mode == .groove {
+            if mode == .groove || SatieRepertoire.collection(for: mode) != nil {
                 // Suitcase electric piano with a slow, shallow autopan
                 let (eL, eR) = electricPiano.step(dt: dt, tremHz: 4.6, tremDepth: 0.10, rng: &noiseRNG, sampleRate: sampleRate)
                 figL += eL; figR += eR
@@ -1852,9 +1926,11 @@ private final class FocusRenderState: @unchecked Sendable {
             let cloudDens: Double = (mode == .drift || mode == .still) ? 5.8 : (mode == .rain ? 7.2 : 6.5)
             let cloudShim: Double = (mode == .rain) ? 0.36 : (mode == .pulse ? 0.12 : (mode == .drift ? 0.18 : (mode == .still ? 0.14 : 0.28)))
             let cloudRev: Double  = (mode == .drift || mode == .still) ? 0.48 : (mode == .focus ? 0.34 : 0.28)
-            let cloudSub: Double  = (mode == .pulse) ? 0.36 : ((mode == .drift || mode == .still) ? 0.30 : 0.14)
+            let isSatieWorld = SatieRepertoire.collection(for: mode) != nil
+            let cloudSub: Double  = isSatieWorld ? 0.0 : ((mode == .pulse) ? 0.36 : ((mode == .drift || mode == .still) ? 0.30 : 0.14))
             let baseCloudWet: Float = (mode == .drift || mode == .still) ? 0.34 : (mode == .rain ? 0.30 : (mode == .pulse ? 0.16 : 0.24))
-            let cloudWet: Float = baseCloudWet * intCloudScale
+            // The Satie worlds keep the granular cloud faint: the piano should sound like a piano
+            let cloudWet: Float = baseCloudWet * intCloudScale * (isSatieWorld ? 0.45 : 1.0)
             let (beadsL, beadsR) = beads.process(
                 cloudInL, cloudInR,
                 densityHz: cloudDens,
@@ -2008,6 +2084,17 @@ private final class FocusRenderState: @unchecked Sendable {
                 mixL = grooveMudL.process(groovePresenceL.process(mixL))
                 mixR = grooveMudR.process(groovePresenceR.process(mixR))
             }
+            if isSatieWorld {
+                // The upright piano samples were recorded very softly and sound dark; lift the presence so
+                // Satie's melody sings (+6 dB above ~1.8 kHz)
+                if satiePresenceRate != sampleRate {
+                    satiePresenceRate = sampleRate
+                    satiePresenceL = .shelf(1800, gainDB: 6.0, high: true, sampleRate: sampleRate)
+                    satiePresenceR = .shelf(1800, gainDB: 6.0, high: true, sampleRate: sampleRate)
+                }
+                mixL = satiePresenceL.process(mixL)
+                mixR = satiePresenceR.process(mixR)
+            }
 
             // 6. Audiophile Master Bus (24dB/oct Elliptical Sub-Monoizer + M/S Air + Tube Polish + RMS Optical Glue + Lookahead Limiter)
             // Mode-matched gain calibration (~ -18.5 to -16.0 dBFS RMS across all 4 modes at 75% volume)
@@ -2018,6 +2105,10 @@ private final class FocusRenderState: @unchecked Sendable {
             case .rain:  modeMakeup = SoundCandidate.isOn ? 6.07 : 7.49
             case .drift: modeMakeup = 6.06
             case .groove: modeMakeup = 1.9
+            case .gymnopedies, .gnossiennes, .sarabandes: modeMakeup = 3.8
+            case .debussy: modeMakeup = 3.27
+            case .faure: modeMakeup = 3.53
+            case .scriabin: modeMakeup = 3.13
             case .still: modeMakeup = 7.61
             case .dive:  modeMakeup = 6.3
             }
