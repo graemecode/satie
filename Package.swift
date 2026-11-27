@@ -48,6 +48,12 @@ let package = Package(
                 .linkedFramework("ServiceManagement")
             ]
         ),
+        // Developer-only sound design studio (never shipped). Run: scripts/lab.sh
+        .executableTarget(
+            name: "SatieLab",
+            dependencies: ["AcousticCore"],
+            path: "Sources/SatieLab"
+        ),
         .testTarget(
             name: "AcousticCoreTests",
             dependencies: ["AcousticCore"],

@@ -753,6 +753,13 @@ public final class FocusSoundEngine: @unchecked Sendable {
         renderState.softReseedAtom.store(1, ordering: .releasing)
     }
 
+    /// Continue from absolute bar `bar` with the same seed (Satie Lab uses this to jump to a section).
+    public func jumpToBar(_ bar: Int) {
+        let phase = CircadianPhase(rawValue: renderState.circadianAtom.load(ordering: .acquiring)) ?? .afternoon
+        refillScoreQueueFromStart(mode: currentMode, circadian: phase, seed: producerSeed, startBar: max(0, bar))
+        renderState.softReseedAtom.store(1, ordering: .releasing)
+    }
+
     public func triggerSessionChime() {
         renderState.chimeTriggerAtom.store(1, ordering: .releasing)
     }
